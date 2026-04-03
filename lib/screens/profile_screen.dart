@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../models/lesson_model.dart';
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -42,6 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final user = await ApiClient.getMe();
       final lessons = await ApiClient.getLessons();
+      if (!mounted) return;
       setState(() {
         _user = user;
         _lessons = lessons
@@ -58,8 +60,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       _showErr(e.toString().replaceAll('Exception: ', ''));
     }
+    if (!mounted) return;
     setState(() => _loading = false);
   }
 
@@ -77,10 +81,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'busyTimes': List<String>.from(_busyTimes),
       };
       await ApiClient.updateProfile(body);
+      if (!mounted) return;
       _showMsg('Profil guncellendi!');
     } catch (e) {
+      if (!mounted) return;
       _showErr(e.toString().replaceAll('Exception: ', ''));
     }
+    if (!mounted) return;
     setState(() => _loading = false);
   }
 
@@ -99,98 +106,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final wideLayout = MediaQuery.sizeOf(context).width >= 1100;
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _load,
-        child: CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 140,
-              pinned: true,
-              backgroundColor: cs.primary,
-              actions: [
-                IconButton(
-                  icon: Icon(Icons.logout, color: cs.onPrimary),
-                  onPressed: _logout,
-                  tooltip: 'Cikis Yap',
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                title: Text('Profil',
-                    style: TextStyle(color: cs.onPrimary)),
-                background: Container(
-                  color: cs.primary,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: cs.onPrimary.withAlpha(50),
-                            child: Icon(Icons.person,
-                                size: 36, color: cs.onPrimary),
-                          ),
-                          if (_user?['email'] != null)
-                            Text(_user!['email'],
-                                style: TextStyle(
-                                    color: cs.onPrimary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Profile Section
-            SliverToBoxAdapter(child: _buildProfileSection(cs)),
-            // Lessons Section header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Derslerim',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSurface)),
-                    FilledButton.icon(
-                      onPressed: _showAddLessonDialog,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Ders Ekle'),
-                      style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8)),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: wideLayout ? 1180 : double.infinity),
+            child: CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: wideLayout ? 164 : 140,
+                  pinned: true,
+                  backgroundColor: cs.primary,
+                  actions: [
+                    IconButton(
+                      icon: Icon(Icons.logout, color: cs.onPrimary),
+                      onPressed: _logout,
+                      tooltip: 'Cikis Yap',
                     ),
                   ],
-                ),
-              ),
-            ),
-            // Lessons list
-            _lessons.isEmpty
-                ? SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Text('Henuz ders eklenmedi',
-                            style: TextStyle(color: cs.outline)),
+                  flexibleSpace: FlexibleSpaceBar(
+                    title: Text('Profil', style: TextStyle(color: cs.onPrimary)),
+                    background: Container(
+                      color: cs.primary,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircleAvatar(
+                                radius: 30,
+                                backgroundColor: cs.onPrimary.withAlpha(50),
+                                child: Icon(Icons.person, size: 36, color: cs.onPrimary),
+                              ),
+                              if (_user?['email'] != null)
+                                Text(
+                                  _user!['email'],
+                                  style: TextStyle(color: cs.onPrimary, fontSize: 12),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  )
-                : SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => _lessonTile(_lessons[i]),
-                      childCount: _lessons.length,
+                  ),
+                ),
+                SliverToBoxAdapter(child: _buildProfileSection(cs)),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Derslerim',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _showAddLessonDialog,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Ders Ekle'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-            const SliverToBoxAdapter(child: SizedBox(height: 32)),
-          ],
+                ),
+                _lessons.isEmpty
+                    ? SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Text(
+                              'Henuz ders eklenmedi',
+                              style: TextStyle(color: cs.outline),
+                            ),
+                          ),
+                        ),
+                      )
+                    : SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (ctx, i) => _lessonTile(_lessons[i]),
+                          childCount: _lessons.length,
+                        ),
+                      ),
+                const SliverToBoxAdapter(child: SizedBox(height: 32)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -222,40 +236,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _gpaCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return null;
-                          final d = double.tryParse(v);
-                          if (d == null || d < 0 || d > 4) {
-                            return '0-4 arasi';
-                          }
-                          return null;
-                        },
-                        decoration: const InputDecoration(
-                          labelText: 'GPA (0-4)',
-                          prefixIcon: Icon(Icons.grade_outlined),
-                          border: OutlineInputBorder(),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stacked = constraints.maxWidth < 520;
+                    if (stacked) {
+                      return Column(
+                        children: [
+                          TextFormField(
+                            controller: _gpaCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return null;
+                              final d = double.tryParse(v);
+                              if (d == null || d < 0 || d > 4) {
+                                return '0-4 arasi';
+                              }
+                              return null;
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'GPA (0-4)',
+                              prefixIcon: Icon(Icons.grade_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _semesterCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Donem',
+                              prefixIcon: Icon(Icons.event_note_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _gpaCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return null;
+                              final d = double.tryParse(v);
+                              if (d == null || d < 0 || d > 4) {
+                                return '0-4 arasi';
+                              }
+                              return null;
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'GPA (0-4)',
+                              prefixIcon: Icon(Icons.grade_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _semesterCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Donem',
-                          prefixIcon: Icon(Icons.event_note_outlined),
-                          border: OutlineInputBorder(),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _semesterCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Donem',
+                              prefixIcon: Icon(Icons.event_note_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -304,9 +359,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text('Mesgul Saatler',
                 style: TextStyle(color: cs.onSurfaceVariant)),
             TextButton.icon(
-              icon: const Icon(Icons.add, size: 16),
+              icon: const Icon(Icons.calendar_month, size: 16),
               label: const Text('Ekle'),
-              onPressed: _showAddBusyTime,
+              onPressed: _showAddBusyTimeCalendar,
             ),
           ],
         ),
@@ -330,35 +385,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _showAddBusyTime() async {
-    final ctrl = TextEditingController();
-    await showDialog<void>(
+  Future<void> _showAddBusyTimeCalendar() async {
+    final DateTime? date = await showDatePicker(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Mesgul Saat Ekle'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            labelText: 'Ornek: Pazartesi 09:00-11:00',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Iptal')),
-          FilledButton(
-            onPressed: () {
-              if (ctrl.text.isNotEmpty) {
-                setState(() => _busyTimes.add(ctrl.text.trim()));
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Ekle'),
-          ),
-        ],
-      ),
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Mesgul Oldugunuz Gunu Secin',
     );
+
+    if (date == null) return;
+
+    if (!mounted) return;
+    final TimeOfDay? timeStart = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+      helpText: 'Baslangic Saati',
+    );
+
+    if (timeStart == null) return;
+
+    if (!mounted) return;
+    final TimeOfDay? timeEnd = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: timeStart.hour + 1, minute: timeStart.minute),
+      helpText: 'Bitis Saati',
+    );
+
+    if (timeEnd == null) return;
+
+    final String dayName = DateFormat('EEEE', 'tr_TR').format(date);
+    final String formattedDate = DateFormat('dd.MM.yyyy').format(date);
+    final String busyTime = "$dayName ($formattedDate) ${timeStart.format(context)}-${timeEnd.format(context)}";
+
+    setState(() {
+      _busyTimes.add(busyTime);
+    });
   }
 
   Widget _lessonTile(Lesson lesson) {

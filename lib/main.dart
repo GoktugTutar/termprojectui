@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'core/api_client.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_scaffold.dart';
@@ -23,9 +24,7 @@ class App extends StatelessWidget {
         ),
       ),
       initialRoute: '/',
-      routes: {
-        '/': (_) => const _Splash(),
-      },
+      routes: {'/': (_) => const _Splash()},
     );
   }
 }
@@ -41,6 +40,7 @@ class _SplashState extends State<_Splash> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) return;
     _check();
   }
 
@@ -49,15 +49,23 @@ class _SplashState extends State<_Splash> {
     if (!mounted) return;
     if (token != null) {
       Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const MainScaffold()));
+        context,
+        MaterialPageRoute(builder: (_) => const MainScaffold()),
+      );
     } else {
       Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return const AuthScreen();
+    }
+
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.primary,
@@ -67,11 +75,14 @@ class _SplashState extends State<_Splash> {
           children: [
             Icon(Icons.school_rounded, size: 80, color: cs.onPrimary),
             const SizedBox(height: 16),
-            Text('Ders Takip',
-                style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: cs.onPrimary)),
+            Text(
+              'Ders Takip',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: cs.onPrimary,
+              ),
+            ),
             const SizedBox(height: 32),
             CircularProgressIndicator(color: cs.onPrimary),
           ],

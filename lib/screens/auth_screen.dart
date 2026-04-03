@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import 'main_scaffold.dart';
@@ -9,34 +10,46 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab;
+class _AuthScreenState extends State<AuthScreen> {
   final _loginKey = GlobalKey<FormState>();
   final _registerKey = GlobalKey<FormState>();
 
-  final _loginEmail = TextEditingController();
-  final _loginPass = TextEditingController();
+  final _loginEmail = TextEditingController(text: 'demo@derstakip.app');
+  final _loginPass = TextEditingController(text: 'password123');
+  
+  // Register Controllers
+  final _regName = TextEditingController();
   final _regEmail = TextEditingController();
+  final _regDept = TextEditingController();
+  final _regYear = TextEditingController();
+  final _regGpa = TextEditingController();
   final _regPass = TextEditingController();
   final _regPassConfirm = TextEditingController();
+
+  late final PageController _pageController;
 
   bool _loading = false;
   bool _loginObscure = true;
   bool _regObscure = true;
+  bool _darkMode = true;
+  int _pageIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
+    _pageController = PageController(viewportFraction: 0.82, initialPage: 0);
   }
 
   @override
   void dispose() {
-    _tab.dispose();
+    _pageController.dispose();
     _loginEmail.dispose();
     _loginPass.dispose();
+    _regName.dispose();
     _regEmail.dispose();
+    _regDept.dispose();
+    _regYear.dispose();
+    _regGpa.dispose();
     _regPass.dispose();
     _regPassConfirm.dispose();
     super.dispose();
@@ -47,11 +60,15 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _loading = true);
     try {
       final token = await ApiClient.login(
-          _loginEmail.text.trim(), _loginPass.text.trim());
+        _loginEmail.text.trim(),
+        _loginPass.text.trim(),
+      );
       await ApiClient.saveToken(token);
       if (!mounted) return;
       Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const MainScaffold()));
+        context,
+        MaterialPageRoute(builder: (_) => const MainScaffold()),
+      );
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -64,11 +81,15 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _loading = true);
     try {
       final token = await ApiClient.register(
-          _regEmail.text.trim(), _regPass.text.trim());
+        _regEmail.text.trim(),
+        _regPass.text.trim(),
+      );
       await ApiClient.saveToken(token);
       if (!mounted) return;
       Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const MainScaffold()));
+        context,
+        MaterialPageRoute(builder: (_) => const MainScaffold()),
+      );
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -77,87 +98,249 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    final palette = _palette;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: palette.panel,
+        content: Text(msg, style: TextStyle(color: palette.text)),
+      ),
+    );
   }
+
+  void _goTo(int index) {
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  _AuthPalette get _palette =>
+      _darkMode ? _AuthPalette.dark() : _AuthPalette.light();
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width >= 980;
+    final palette = _palette;
+
     return Scaffold(
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 32),
-              // Logo / Header
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer,
-                        shape: BoxShape.circle,
+      backgroundColor: palette.backgroundStart,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    palette.backgroundStart,
+                    palette.backgroundMid,
+                    palette.backgroundEnd,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: _darkMode
+                      ? const Alignment(0.15, -0.3)
+                      : const Alignment(0.0, -0.15),
+                  radius: 1.0,
+                  colors: [
+                    palette.glow.withAlpha(_darkMode ? 50 : 70),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _ModeSwitch(
+                        darkMode: _darkMode,
+                        palette: palette,
+                        onChanged: (value) {
+                          setState(() => _darkMode = value);
+                        },
                       ),
-                      child: Icon(Icons.school_rounded,
-                          size: 56, color: cs.primary),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Ders Takip',
-                        style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: cs.primary)),
-                    const SizedBox(height: 4),
-                    Text('Akilli Ders Planlayici',
-                        style: TextStyle(fontSize: 14, color: cs.outline)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 40),
-              // Tab bar
-              Container(
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TabBar(
-                  controller: _tab,
-                  indicator: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    ],
                   ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  labelColor: cs.onPrimary,
-                  unselectedLabelColor: cs.onSurfaceVariant,
-                  dividerColor: Colors.transparent,
-                  tabs: const [
-                    Tab(text: 'Giris Yap'),
-                    Tab(text: 'Kayit Ol'),
-                  ],
                 ),
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                height: 380,
-                child: TabBarView(
-                  controller: _tab,
-                  children: [_buildLogin(), _buildRegister()],
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Center(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final maxWidth = wide ? 1320.0 : 860.0;
+                        final frameHeight = (constraints.maxHeight - 70)
+                            .clamp(480.0, wide ? 620.0 : 720.0);
+
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: maxWidth),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                height: frameHeight,
+                                child: PageView(
+                                  controller: _pageController,
+                                  onPageChanged: (index) {
+                                    setState(() => _pageIndex = index);
+                                  },
+                                  padEnds: true,
+                                  children: [
+                                    _buildFrame(
+                                      title: 'Sign In',
+                                      subtitle:
+                                          'Hesabina gir ve haftalik programina ulas.',
+                                      palette: palette,
+                                      child: _buildLoginForm(palette),
+                                      footer: Align(
+                                        alignment: Alignment.bottomRight,
+                                        child: TextButton.icon(
+                                          onPressed: () => _goTo(1),
+                                          iconAlignment: IconAlignment.end,
+                                          icon: const Icon(
+                                            Icons.arrow_outward_rounded,
+                                            size: 18,
+                                          ),
+                                          label: const Text('Sign Up'),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: palette.accent,
+                                            textStyle: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    _buildFrame(
+                                      title: 'Sign Up',
+                                      subtitle:
+                                          'Yeni hesap olustur ve takibe basla.',
+                                      palette: palette,
+                                      child: _buildRegisterForm(palette),
+                                      footer: Align(
+                                        alignment: Alignment.bottomLeft,
+                                        child: TextButton.icon(
+                                          onPressed: () => _goTo(0),
+                                          icon: const Icon(
+                                            Icons.arrow_back_rounded,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            'Back to Sign In',
+                                          ),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: palette.accent,
+                                            textStyle: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _AuthPager(
+                                currentIndex: _pageIndex,
+                                palette: palette,
+                                onTap: _goTo,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFrame({
+    required String title,
+    required String subtitle,
+    required _AuthPalette palette,
+    required Widget child,
+    required Widget footer,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(38),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              width: 840,
+              constraints: const BoxConstraints(minHeight: 470),
+              padding: const EdgeInsets.all(30),
+              decoration: BoxDecoration(
+                color: palette.panel.withAlpha(_darkMode ? 215 : 185),
+                borderRadius: BorderRadius.circular(38),
+                border: Border.all(color: palette.border, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.shadow,
+                    blurRadius: 30,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
               ),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w900,
+                      height: 0.95,
+                      color: palette.text,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.5,
+                      color: palette.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Expanded(child: SingleChildScrollView(child: child)),
+                  const SizedBox(height: 12),
+                  footer,
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLogin() {
-    final cs = Theme.of(context).colorScheme;
+  Widget _buildLoginForm(_AuthPalette palette) {
     return Form(
       key: _loginKey,
       child: Column(
@@ -170,8 +353,9 @@ class _AuthScreenState extends State<AuthScreen>
             keyboardType: TextInputType.emailAddress,
             validator: (v) =>
                 v == null || !v.contains('@') ? 'Gecerli e-posta girin' : null,
+            palette: palette,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           _field(
             controller: _loginPass,
             label: 'Sifre',
@@ -179,88 +363,178 @@ class _AuthScreenState extends State<AuthScreen>
             obscure: _loginObscure,
             suffixIcon: IconButton(
               icon: Icon(
-                  _loginObscure ? Icons.visibility_off : Icons.visibility),
+                _loginObscure ? Icons.visibility_off : Icons.visibility,
+                color: palette.accent,
+              ),
               onPressed: () => setState(() => _loginObscure = !_loginObscure),
             ),
             validator: (v) =>
                 v == null || v.length < 6 ? 'En az 6 karakter' : null,
+            palette: palette,
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 22),
           FilledButton(
             onPressed: _loading ? null : _login,
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: palette.accent,
+              foregroundColor: _darkMode
+                  ? Colors.white
+                  : palette.backgroundStart,
+              padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
             child: _loading
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: cs.onPrimary))
-                : const Text('Giris Yap', style: TextStyle(fontSize: 16)),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Sign In',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRegister() {
-    final cs = Theme.of(context).colorScheme;
+  Widget _buildRegisterForm(_AuthPalette palette) {
     return Form(
       key: _registerKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _field(
-            controller: _regEmail,
-            label: 'E-posta',
-            icon: Icons.email_outlined,
-            keyboardType: TextInputType.emailAddress,
-            validator: (v) =>
-                v == null || !v.contains('@') ? 'Gecerli e-posta girin' : null,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Sol Sütun
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionTitle('Kişisel Bilgiler', palette),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: _regName,
+                      label: 'Ad Soyad',
+                      icon: Icons.person_outline,
+                      palette: palette,
+                    ),
+                    const SizedBox(height: 12),
+                    _field(
+                      controller: _regEmail,
+                      label: 'E-posta',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                      palette: palette,
+                    ),
+                    const SizedBox(height: 12),
+                    _field(
+                      controller: _regDept,
+                      label: 'Bölüm',
+                      icon: Icons.account_balance_outlined,
+                      palette: palette,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 30),
+              // Sağ Sütun
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionTitle('Okul Bilgileri', palette),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _field(
+                            controller: _regYear,
+                            label: 'Sınıf',
+                            icon: Icons.school_outlined,
+                            palette: palette,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _field(
+                            controller: _regGpa,
+                            label: 'GPA',
+                            icon: Icons.star_outline,
+                            palette: palette,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _field(
+                      controller: _regPass,
+                      label: 'Sifre',
+                      icon: Icons.lock_outline,
+                      obscure: _regObscure,
+                      palette: palette,
+                    ),
+                    const SizedBox(height: 12),
+                    _field(
+                      controller: _regPassConfirm,
+                      label: 'Sifre Tekrar',
+                      icon: Icons.lock_clock_outlined,
+                      obscure: _regObscure,
+                      validator: (v) => v != _regPass.text ? 'Sifreler eslesmiyor' : null,
+                      palette: palette,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _field(
-            controller: _regPass,
-            label: 'Sifre',
-            icon: Icons.lock_outline,
-            obscure: _regObscure,
-            suffixIcon: IconButton(
-              icon:
-                  Icon(_regObscure ? Icons.visibility_off : Icons.visibility),
-              onPressed: () => setState(() => _regObscure = !_regObscure),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _loading ? null : _register,
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.accent,
+                foregroundColor: _darkMode ? Colors.white : palette.backgroundStart,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: _loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text(
+                      'Kayıt Ol ve Başla',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    ),
             ),
-            validator: (v) =>
-                v == null || v.length < 6 ? 'En az 6 karakter' : null,
-          ),
-          const SizedBox(height: 12),
-          _field(
-            controller: _regPassConfirm,
-            label: 'Sifre Tekrar',
-            icon: Icons.lock_outline,
-            obscure: _regObscure,
-            validator: (v) =>
-                v != _regPass.text ? 'Sifreler eslesmiyor' : null,
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _loading ? null : _register,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: _loading
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: cs.onPrimary))
-                : const Text('Kayit Ol', style: TextStyle(fontSize: 16)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, _AuthPalette palette) {
+    return SizedBox(
+      height: 28, 
+      child: Text(
+        title,
+        style: TextStyle(
+          color: palette.accent,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
@@ -269,6 +543,7 @@ class _AuthScreenState extends State<AuthScreen>
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    required _AuthPalette palette,
     TextInputType? keyboardType,
     bool obscure = false,
     Widget? suffixIcon,
@@ -279,13 +554,247 @@ class _AuthScreenState extends State<AuthScreen>
       keyboardType: keyboardType,
       obscureText: obscure,
       validator: validator,
+      style: TextStyle(color: palette.text, fontWeight: FontWeight.w600, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
+        labelStyle: TextStyle(color: palette.muted, fontSize: 13),
+        prefixIcon: Icon(icon, color: palette.accent, size: 20),
         suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
+        fillColor: palette.inputFill,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: palette.accent, width: 1.3),
+        ),
       ),
     );
   }
+}
+
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({
+    required this.darkMode,
+    required this.palette,
+    required this.onChanged,
+  });
+
+  final bool darkMode;
+  final _AuthPalette palette;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: palette.panel.withAlpha(180),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ModePill(
+            selected: !darkMode,
+            label: 'Light',
+            palette: palette,
+            onTap: () => onChanged(false),
+          ),
+          const SizedBox(width: 6),
+          _ModePill(
+            selected: darkMode,
+            label: 'Dark',
+            palette: palette,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModePill extends StatelessWidget {
+  const _ModePill({
+    required this.selected,
+    required this.label,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String label;
+  final _AuthPalette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? palette.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected
+                ? (_AuthPalette.dark().accent == palette.accent
+                    ? Colors.white
+                    : palette.backgroundStart)
+                : palette.text,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthPager extends StatelessWidget {
+  const _AuthPager({
+    required this.currentIndex,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final int currentIndex;
+  final _AuthPalette palette;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: palette.panel.withAlpha(110),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _PagerDot(
+            active: currentIndex == 0,
+            palette: palette,
+            onTap: () => onTap(0),
+          ),
+          const SizedBox(width: 18),
+          _PagerDot(
+            active: currentIndex == 1,
+            palette: palette,
+            onTap: () => onTap(1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PagerDot extends StatelessWidget {
+  const _PagerDot({
+    required this.active,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final bool active;
+  final _AuthPalette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        width: active ? 70 : 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: active ? palette.pagerActive : palette.pagerInactive,
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthPalette {
+  const _AuthPalette({
+    required this.backgroundStart,
+    required this.backgroundMid,
+    required this.backgroundEnd,
+    required this.panel,
+    required this.text,
+    required this.muted,
+    required this.accent,
+    required this.border,
+    required this.inputFill,
+    required this.shadow,
+    required this.glow,
+    required this.pagerActive,
+    required this.pagerInactive,
+  });
+
+  factory _AuthPalette.dark() {
+    return const _AuthPalette(
+      backgroundStart: Color(0xFF0D0B11),
+      backgroundMid: Color(0xFF09070B),
+      backgroundEnd: Color(0xFF050507),
+      panel: Color(0xC1141319),
+      text: Color(0xFFF5F1F8),
+      muted: Color(0xFFB5AFC0),
+      accent: Color(0xFFE85CFF),
+      border: Color(0xFF1F2E88),
+      inputFill: Color(0x80131218),
+      shadow: Color(0xFF000000),
+      glow: Color(0xFFE85CFF),
+      pagerActive: Color(0xFFE85CFF),
+      pagerInactive: Color(0x66FFFFFF),
+    );
+  }
+
+  factory _AuthPalette.light() {
+    return const _AuthPalette(
+      backgroundStart: Color(0xFFEAF6DE),
+      backgroundMid: Color(0xFFE6F2D9),
+      backgroundEnd: Color(0xFFDDECCB),
+      panel: Color(0xE8F4F9EC),
+      text: Color(0xFF13342F),
+      muted: Color(0xFF4E6762),
+      accent: Color(0xFFB391F5),
+      border: Color(0xFF86A39D),
+      inputFill: Color(0xCCF7FBF2),
+      shadow: Color(0xFF9FB3A2),
+      glow: Color(0xB4EAF8D8),
+      pagerActive: Color(0xFFFA6D72),
+      pagerInactive: Color(0x667A8B84),
+    );
+  }
+
+  final Color backgroundStart;
+  final Color backgroundMid;
+  final Color backgroundEnd;
+  final Color panel;
+  final Color text;
+  final Color muted;
+  final Color accent;
+  final Color border;
+  final Color inputFill;
+  final Color shadow;
+  final Color glow;
+  final Color pagerActive;
+  final Color pagerInactive;
 }
