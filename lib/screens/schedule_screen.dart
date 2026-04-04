@@ -29,7 +29,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   void initState() {
     super.initState();
     _fabAnim = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 250));
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
     _loadToday();
   }
 
@@ -41,16 +43,25 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   Future<void> _loadToday() async {
     setState(() => _loading = true);
+    WeeklySchedule? plan;
+    List<ChecklistItem> checklist = [];
+
+    try {
+      final schedule = await ApiClient.getSchedule();
+      plan = WeeklySchedule.fromJson(schedule);
+    } catch (_) {}
+
     try {
       final items = await ApiClient.getTodayChecklist();
-      if (!mounted) return;
-      setState(() {
-        _todayChecklist =
-            items.map((i) => ChecklistItem.fromJson(i)).toList();
-      });
+      checklist = items.map((i) => ChecklistItem.fromJson(i)).toList();
     } catch (_) {}
+
     if (!mounted) return;
-    setState(() => _loading = false);
+    setState(() {
+      _plan = plan;
+      _todayChecklist = checklist;
+      _loading = false;
+    });
   }
 
   Future<void> _generateWeekly() async {
@@ -71,60 +82,14 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   Future<void> _showDailyUpdateDialog() async {
     _closeFab();
-    double? hours;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        final ctrl = TextEditingController();
-        return AlertDialog(
-          title: const Text('Gunluk Guncelleme'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Bugun kac saat calisabilirsiniz?'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: ctrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Serbest Saat',
-                  suffixText: 'saat',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('Iptal')),
-            FilledButton(
-              onPressed: () {
-                hours = double.tryParse(ctrl.text);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Guncelle'),
-            ),
-          ],
-        );
-      },
-    );
-    if (hours == null) return;
     setState(() => _loading = true);
     try {
-      final data = await ApiClient.dailyUpdate(hours!);
-      final slots = (data['slots'] as List)
-          .map((s) => DailySlot.fromJson(s as Map<String, dynamic>))
-          .toList();
+      final data = await ApiClient.dailyUpdate();
       if (!mounted) return;
       setState(() {
-        _plan = WeeklySchedule(
-          generatedAt: DateTime.now().toIso8601String(),
-          weekStart: data['date'] as String,
-          slots: slots,
-        );
+        _plan = WeeklySchedule.fromJson(data);
       });
-      _showMsg('Gunluk plan guncellendi!');
+      _showMsg('Program kalan gunler icin yeniden hesaplandi!');
     } catch (e) {
       if (!mounted) return;
       _showErr(e.toString().replaceAll('Exception: ', ''));
@@ -135,28 +100,23 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   Future<void> _createChecklist() async {
     _closeFab();
-    if (_plan == null) {
-      _showErr('Once haftalik plan olusturun');
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final hasPlannedLesson =
+        _plan?.slots.any(
+          (slot) => slot.day == today && !slot.isEmpty && !slot.isBusy,
+        ) ??
+        false;
+
+    if (!hasPlannedLesson) {
+      _showErr(
+        'Bugun icin planlanmis ders yok, bu yuzden kontrol listesi olusturulamiyor.',
+      );
       return;
     }
-    final today =
-        DateTime.now().toIso8601String().substring(0, 10);
-    final todaySlots =
-        _plan!.slots.where((s) => s.day == today).toList();
-    if (todaySlots.isEmpty) {
-      _showErr('Bugun icin plan yok');
-      return;
-    }
+
     setState(() => _loading = true);
     try {
-      final slots = todaySlots
-          .map((s) => {
-                'lessonId': s.lessonId,
-                'lessonName': s.lessonName,
-                'hours': s.hours,
-              })
-          .toList();
-      await ApiClient.createChecklist(slots);
+      await ApiClient.createChecklist(const []);
       await _loadToday();
       if (!mounted) return;
       _showMsg('Kontrol listesi olusturuldu!');
@@ -182,11 +142,12 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     _fabAnim.reverse();
   }
 
-  void _showMsg(String m) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(m)));
+  void _showMsg(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   void _showErr(String m) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: _errorSnackBarBgColor));
+    SnackBar(content: Text(m), backgroundColor: _errorSnackBarBgColor),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -205,10 +166,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
             background: Container(color: _appBarBgColor),
           ),
         ),
-        if (wideLayout)
-          SliverToBoxAdapter(
-            child: _buildDesktopActions(cs),
-          ),
+        if (wideLayout) SliverToBoxAdapter(child: _buildDesktopActions(cs)),
         if (_todayChecklist.isNotEmpty) ...[
           _sectionHeader('Bugunku Kontrol Listesi'),
           SliverList(
@@ -229,7 +187,11 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.calendar_today_outlined, size: 64, color: cs.outline),
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 64,
+                    color: cs.outline,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Henuz plan yok',
@@ -246,9 +208,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               ),
             ),
           ),
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 100),
-        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
 
@@ -370,8 +330,10 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           child: AnimatedRotation(
             turns: _fabOpen ? 0.125 : 0,
             duration: const Duration(milliseconds: 250),
-            child: Icon(_fabOpen ? Icons.close : Icons.add,
-                color: _fabOpen ? cs.onError : cs.onPrimary),
+            child: Icon(
+              _fabOpen ? Icons.close : Icons.add,
+              color: _fabOpen ? cs.onError : cs.onPrimary,
+            ),
           ),
         ),
       ],
@@ -390,16 +352,16 @@ class _ScheduleScreenState extends State<ScheduleScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withAlpha(30),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2))
+                  color: Colors.black.withAlpha(30),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
               ],
             ),
             child: Text(label, style: const TextStyle(fontSize: 12)),
@@ -446,8 +408,10 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
         leading: Icon(statusIcon, color: statusColor),
-        title: Text(item.lessonName,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(
+          item.lessonName,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
         subtitle: Text('${item.plannedHours} saat planli'),
         trailing: item.status == 'pending'
             ? TextButton(
@@ -464,8 +428,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   Future<void> _showSubmitDialog(ChecklistItem item) async {
     String status = 'completed';
-    final ctrl = TextEditingController(
-        text: item.plannedHours.toString());
+    final ctrl = TextEditingController(text: item.plannedHours.toString());
 
     await showDialog<void>(
       context: context,
@@ -480,8 +443,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               const SizedBox(height: 12),
               TextField(
                 controller: ctrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Gercek Calisma (saat)',
                   border: OutlineInputBorder(),
@@ -489,32 +453,54 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               ),
               const SizedBox(height: 12),
               const Text('Durum:'),
-              ...[
-                ('completed', 'Tamamlandi'),
-                ('early', 'Erken Bitti'),
-                ('incomplete', 'Eksik Kaldi'),
-                ('not_done', 'Yapilmadi'),
-              ].map((e) => RadioListTile<String>(
-                    dense: true,
-                    title: Text(e.$2),
-                    value: e.$1,
-                    groupValue: status,
-                    onChanged: (v) => setS(() => status = v!),
-                  )),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: status,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'completed',
+                    child: Text('Tamamlandi'),
+                  ),
+                  DropdownMenuItem(value: 'early', child: Text('Erken Bitti')),
+                  DropdownMenuItem(
+                    value: 'incomplete',
+                    child: Text('Eksik Kaldi'),
+                  ),
+                  DropdownMenuItem(value: 'not_done', child: Text('Yapilmadi')),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setS(() => status = v);
+                  }
+                },
+              ),
             ],
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Iptal')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Iptal'),
+            ),
             FilledButton(
               onPressed: () async {
+                final actualHours = double.tryParse(
+                  ctrl.text.trim().replaceAll(',', '.'),
+                );
+                final needsHours =
+                    status == 'completed' || status == 'incomplete';
+
+                if (needsHours && (actualHours == null || actualHours <= 0)) {
+                  _showErr('Lutfen gecerli bir calisma suresi girin.');
+                  return;
+                }
+
                 Navigator.pop(ctx);
                 setState(() => _loading = true);
                 try {
                   await ApiClient.submitChecklist({
                     'lessonId': item.lessonId,
-                    'actualHours': double.tryParse(ctrl.text),
+                    'actualHours': actualHours,
                     'status': status,
                   });
                   await _loadToday();
@@ -538,31 +524,34 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   SliverToBoxAdapter _sectionHeader(String title) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Text(title,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
 
   Widget _buildVisualSchedule(ColorScheme cs) {
     final daysLabels = ['Pzt', 'Sal', 'Car', 'Per', 'Cum', 'Cmt', 'Paz'];
-    final hours = List.generate(13, (i) => '${(i + 8).toString().padLeft(2, '0')}:00');
+    final hours = List.generate(
+      14,
+      (i) => '${(i + 8).toString().padLeft(2, '0')}:00',
+    );
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
-    
-    final grid = List.generate(13, (_) => List<DailySlot?>.generate(7, (_) => null));
-    if (_plan == null) return const SizedBox.shrink();
-    
-    final byDay = _plan!.byDay;
-    final dayKeys = byDay.keys.toList()..sort();
 
-    for (int d = 0; d < dayKeys.length && d < 7; d++) {
-      final slots = byDay[dayKeys[d]]!;
-      for (int h = 0; h < slots.length && h < 13; h++) {
-        grid[h][d] = slots[h];
-      }
+    final grid = List.generate(
+      14,
+      (_) => List<DailySlot?>.generate(7, (_) => null),
+    );
+    if (_plan == null) return const SizedBox.shrink();
+
+    for (final slot in _plan!.slots) {
+      if (slot.isEmpty) continue;
+      if (slot.dayIndex < 0 || slot.dayIndex >= 7) continue;
+      if (slot.hourIndex < 0 || slot.hourIndex >= 14) continue;
+      grid[slot.hourIndex][slot.dayIndex] = slot;
     }
 
     return Padding(
@@ -575,18 +564,40 @@ class _ScheduleScreenState extends State<ScheduleScreen>
             constraints: const BoxConstraints(minWidth: 600),
             child: Table(
               border: TableBorder.all(color: cs.outlineVariant, width: 0.5),
-              columnWidths: const {
-                0: FixedColumnWidth(60),
-              },
+              columnWidths: const {0: FixedColumnWidth(60)},
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: _tableHeaderBgColor),
                   children: [
-                    const SizedBox(height: 40, child: Center(child: Text('Saat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                    ...daysLabels.map((d) => SizedBox(height: 40, child: Center(child: Text(d, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))))),
+                    const SizedBox(
+                      height: 40,
+                      child: Center(
+                        child: Text(
+                          'Saat',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    ...daysLabels.map(
+                      (d) => SizedBox(
+                        height: 40,
+                        child: Center(
+                          child: Text(
+                            d,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                ...List.generate(13, (hIdx) {
+                ...List.generate(14, (hIdx) {
                   return TableRow(
                     children: [
                       SizedBox(
@@ -594,36 +605,54 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                         child: Center(
                           child: Text(
                             hours[hIdx],
-                            style: TextStyle(fontSize: 11, color: cs.primary, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
                       ...List.generate(7, (dIdx) {
                         final slot = grid[hIdx][dIdx];
-                        final isToday = slot != null && slot.day == todayStr;
-                        
+                        final isToday =
+                            slot != null &&
+                            !slot.isBusy &&
+                            slot.day == todayStr;
+                        final isBusy = slot?.isBusy ?? false;
+
                         return TableCell(
                           child: InkWell(
-                            onTap: slot == null ? null : () {
-                              try {
-                                final item = _todayChecklist.firstWhere(
-                                  (i) => i.lessonId == slot.lessonId,
-                                );
-                                _showSubmitDialog(item);
-                              } catch (_) {
-                                if (isToday) {
-                                  _showErr('Bu ders bugunku kontrol listesinde bulunamadi.');
-                                } else {
-                                  _showMsg('Sadece bugunun dersleri icin bildirim yapabilirsiniz.');
-                                }
-                              }
-                            },
+                            onTap: slot == null || isBusy || !isToday
+                                ? null
+                                : () {
+                                    try {
+                                      final item = _todayChecklist.firstWhere(
+                                        (i) => i.lessonId == slot.lessonId,
+                                      );
+                                      _showSubmitDialog(item);
+                                    } catch (_) {
+                                      if (isToday) {
+                                        _showErr(
+                                          'Bu ders bugunku kontrol listesinde bulunamadi.',
+                                        );
+                                      } else {
+                                        _showMsg(
+                                          'Sadece bugunun dersleri icin bildirim yapabilirsiniz.',
+                                        );
+                                      }
+                                    }
+                                  },
                             child: Container(
                               height: 50,
                               padding: const EdgeInsets.all(2),
-                              color: slot != null 
-                                ? (isToday ? cs.primary.withAlpha(40) : cs.primary.withAlpha(15))
-                                : null,
+                              color: slot != null
+                                  ? isBusy
+                                        ? cs.surfaceContainerHighest
+                                        : (isToday
+                                              ? cs.primary.withAlpha(40)
+                                              : cs.primary.withAlpha(15))
+                                  : null,
                               child: slot != null
                                   ? Center(
                                       child: Text(
@@ -632,9 +661,13 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontSize: 9, 
-                                          fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
-                                          color: isToday ? cs.primary : null,
+                                          fontSize: isBusy ? 8 : 9,
+                                          fontWeight: isToday
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
+                                          color: isBusy
+                                              ? cs.onSurfaceVariant
+                                              : (isToday ? cs.primary : null),
                                         ),
                                       ),
                                     )

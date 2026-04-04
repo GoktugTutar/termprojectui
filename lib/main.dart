@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'core/api_client.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_scaffold.dart';
@@ -40,7 +39,6 @@ class _SplashState extends State<_Splash> {
   @override
   void initState() {
     super.initState();
-    if (kIsWeb) return;
     _check();
   }
 
@@ -62,10 +60,6 @@ class _SplashState extends State<_Splash> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      return const AuthScreen();
-    }
-
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.primary,

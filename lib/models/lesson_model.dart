@@ -6,16 +6,16 @@ class Deadline {
   Deadline({required this.type, required this.date, this.label});
 
   factory Deadline.fromJson(Map<String, dynamic> j) => Deadline(
-        type: j['type'] as String,
-        date: j['date'] as String,
-        label: j['label'] as String?,
-      );
+    type: j['type'] as String,
+    date: j['date'] as String,
+    label: j['label'] as String?,
+  );
 
   Map<String, dynamic> toJson() => {
-        'type': type,
-        'date': date,
-        if (label != null) 'label': label,
-      };
+    'type': type,
+    'date': date,
+    if (label != null) 'label': label,
+  };
 }
 
 class Lesson {
@@ -36,13 +36,13 @@ class Lesson {
   });
 
   factory Lesson.fromJson(Map<String, dynamic> j) => Lesson(
-        id: j['id'] as String,
-        lessonName: j['lessonName'] as String,
-        difficulty: j['difficulty'] as int,
-        deadlines: (j['deadlines'] as List)
-            .map((d) => Deadline.fromJson(d as Map<String, dynamic>))
-            .toList(),
-        semester: j['semester'] as String,
-        delay: j['delay'] as int? ?? 0,
-      );
+    id: j['id'] as String,
+    lessonName: j['lessonName'] as String,
+    difficulty: (j['difficulty'] as num).toInt(),
+    deadlines: (j['deadlines'] as List)
+        .map((d) => Deadline.fromJson(d as Map<String, dynamic>))
+        .toList(),
+    semester: j['semester'] as String,
+    delay: (j['delay'] as num?)?.toInt() ?? 0,
+  );
 }

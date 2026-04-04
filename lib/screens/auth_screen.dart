@@ -14,9 +14,9 @@ class _AuthScreenState extends State<AuthScreen> {
   final _loginKey = GlobalKey<FormState>();
   final _registerKey = GlobalKey<FormState>();
 
-  final _loginEmail = TextEditingController(text: 'demo@derstakip.app');
-  final _loginPass = TextEditingController(text: 'password123');
-  
+  final _loginEmail = TextEditingController();
+  final _loginPass = TextEditingController();
+
   // Register Controllers
   final _regName = TextEditingController();
   final _regEmail = TextEditingController();
@@ -30,7 +30,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _loading = false;
   bool _loginObscure = true;
-  bool _regObscure = true;
+  final bool _regObscure = true;
   bool _darkMode = true;
   int _pageIndex = 0;
 
@@ -85,6 +85,12 @@ class _AuthScreenState extends State<AuthScreen> {
         _regPass.text.trim(),
       );
       await ApiClient.saveToken(token);
+      await ApiClient.updateProfile({
+        if (_regName.text.trim().isNotEmpty) 'name': _regName.text.trim(),
+        if (_regGpa.text.trim().isNotEmpty)
+          'gpa': double.tryParse(_regGpa.text.trim().replaceAll(',', '.')),
+        if (_regYear.text.trim().isNotEmpty) 'semester': _regYear.text.trim(),
+      });
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -184,8 +190,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final maxWidth = wide ? 1320.0 : 860.0;
-                        final frameHeight = (constraints.maxHeight - 70)
-                            .clamp(480.0, wide ? 620.0 : 720.0);
+                        final frameHeight = (constraints.maxHeight - 70).clamp(
+                          480.0,
+                          wide ? 620.0 : 720.0,
+                        );
 
                         return ConstrainedBox(
                           constraints: BoxConstraints(maxWidth: maxWidth),
@@ -240,9 +248,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                             Icons.arrow_back_rounded,
                                             size: 18,
                                           ),
-                                          label: const Text(
-                                            'Back to Sign In',
-                                          ),
+                                          label: const Text('Back to Sign In'),
                                           style: TextButton.styleFrom(
                                             foregroundColor: palette.accent,
                                             textStyle: const TextStyle(
@@ -431,12 +437,15 @@ class _AuthScreenState extends State<AuthScreen> {
                       label: 'E-posta',
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
+                      validator: (v) => v == null || !v.contains('@')
+                          ? 'Gecerli e-posta girin'
+                          : null,
                       palette: palette,
                     ),
                     const SizedBox(height: 12),
                     _field(
                       controller: _regDept,
-                      label: 'Bölüm',
+                      label: 'Bolum',
                       icon: Icons.account_balance_outlined,
                       palette: palette,
                     ),
@@ -456,8 +465,18 @@ class _AuthScreenState extends State<AuthScreen> {
                         Expanded(
                           child: _field(
                             controller: _regYear,
-                            label: 'Sınıf',
+                            label: 'Donem',
                             icon: Icons.school_outlined,
+                            keyboardType: TextInputType.number,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Donem gerekli';
+                              }
+                              if (int.tryParse(v.trim()) == null) {
+                                return 'Sayisal girin';
+                              }
+                              return null;
+                            },
                             palette: palette,
                           ),
                         ),
@@ -467,6 +486,19 @@ class _AuthScreenState extends State<AuthScreen> {
                             controller: _regGpa,
                             label: 'GPA',
                             icon: Icons.star_outline,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) return null;
+                              final gpa = double.tryParse(
+                                v.trim().replaceAll(',', '.'),
+                              );
+                              if (gpa == null || gpa < 0 || gpa > 4) {
+                                return '0-4 arasi';
+                              }
+                              return null;
+                            },
                             palette: palette,
                           ),
                         ),
@@ -478,6 +510,8 @@ class _AuthScreenState extends State<AuthScreen> {
                       label: 'Sifre',
                       icon: Icons.lock_outline,
                       obscure: _regObscure,
+                      validator: (v) =>
+                          v == null || v.length < 6 ? 'En az 6 karakter' : null,
                       palette: palette,
                     ),
                     const SizedBox(height: 12),
@@ -486,7 +520,8 @@ class _AuthScreenState extends State<AuthScreen> {
                       label: 'Sifre Tekrar',
                       icon: Icons.lock_clock_outlined,
                       obscure: _regObscure,
-                      validator: (v) => v != _regPass.text ? 'Sifreler eslesmiyor' : null,
+                      validator: (v) =>
+                          v != _regPass.text ? 'Sifreler eslesmiyor' : null,
                       palette: palette,
                     ),
                   ],
@@ -501,7 +536,9 @@ class _AuthScreenState extends State<AuthScreen> {
               onPressed: _loading ? null : _register,
               style: FilledButton.styleFrom(
                 backgroundColor: palette.accent,
-                foregroundColor: _darkMode ? Colors.white : palette.backgroundStart,
+                foregroundColor: _darkMode
+                    ? Colors.white
+                    : palette.backgroundStart,
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
@@ -511,11 +548,17 @@ class _AuthScreenState extends State<AuthScreen> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Text(
                       'Kayıt Ol ve Başla',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
             ),
           ),
@@ -526,7 +569,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Widget _sectionTitle(String title, _AuthPalette palette) {
     return SizedBox(
-      height: 28, 
+      height: 28,
       child: Text(
         title,
         style: TextStyle(
@@ -554,7 +597,11 @@ class _AuthScreenState extends State<AuthScreen> {
       keyboardType: keyboardType,
       obscureText: obscure,
       validator: validator,
-      style: TextStyle(color: palette.text, fontWeight: FontWeight.w600, fontSize: 14),
+      style: TextStyle(
+        color: palette.text,
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+      ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: palette.muted, fontSize: 13),
@@ -562,7 +609,10 @@ class _AuthScreenState extends State<AuthScreen> {
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: palette.inputFill,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.border),
@@ -652,8 +702,8 @@ class _ModePill extends StatelessWidget {
           style: TextStyle(
             color: selected
                 ? (_AuthPalette.dark().accent == palette.accent
-                    ? Colors.white
-                    : palette.backgroundStart)
+                      ? Colors.white
+                      : palette.backgroundStart)
                 : palette.text,
             fontWeight: FontWeight.w700,
           ),

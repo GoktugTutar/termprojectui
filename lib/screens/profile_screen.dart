@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../models/lesson_model.dart';
-import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,6 +10,16 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const List<String> _weekdayLabels = [
+    'Pazartesi',
+    'Sali',
+    'Carsamba',
+    'Persembe',
+    'Cuma',
+    'Cumartesi',
+    'Pazar',
+  ];
+
   // Profile state
   Map<String, dynamic>? _user;
   List<Lesson> _lessons = [];
@@ -21,8 +30,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameCtrl = TextEditingController();
   final _gpaCtrl = TextEditingController();
   final _semesterCtrl = TextEditingController();
-  double _stress = 5;
+  double _stress = 3;
   final List<String> _busyTimes = [];
+
+  void _applyUserData(Map<String, dynamic> user) {
+    _user = user;
+    _nameCtrl.text = user['name'] ?? '';
+    _gpaCtrl.text = user['gpa']?.toString() ?? '';
+    _semesterCtrl.text = user['semester']?.toString() ?? '';
+    _stress = ((user['stress'] as int?) ?? 3).toDouble();
+    _busyTimes
+      ..clear()
+      ..addAll(
+        (user['busyTimes'] as List? ?? const []).map((e) => e.toString()),
+      );
+  }
 
   @override
   void initState() {
@@ -45,19 +67,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final lessons = await ApiClient.getLessons();
       if (!mounted) return;
       setState(() {
-        _user = user;
         _lessons = lessons
             .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
             .toList();
-        _nameCtrl.text = user['name'] ?? '';
-        _gpaCtrl.text = user['gpa']?.toString() ?? '';
-        _semesterCtrl.text = user['semester'] ?? '';
-        _stress = ((user['stress'] as int?) ?? 5).toDouble();
-        _busyTimes.clear();
-        if (user['busyTimes'] != null) {
-          _busyTimes.addAll(
-              (user['busyTimes'] as List).map((e) => e.toString()));
-        }
+        _applyUserData(user);
       });
     } catch (e) {
       if (!mounted) return;
@@ -74,13 +87,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final body = <String, dynamic>{
         if (_nameCtrl.text.isNotEmpty) 'name': _nameCtrl.text.trim(),
         if (_gpaCtrl.text.isNotEmpty)
-          'gpa': double.tryParse(_gpaCtrl.text),
+          'gpa': double.tryParse(_gpaCtrl.text.replaceAll(',', '.')),
         if (_semesterCtrl.text.isNotEmpty)
           'semester': _semesterCtrl.text.trim(),
         'stress': _stress.toInt(),
         'busyTimes': List<String>.from(_busyTimes),
       };
-      await ApiClient.updateProfile(body);
+      final updated = await ApiClient.updateProfile(body);
+      if (!mounted) return;
+      setState(() => _applyUserData(updated));
       if (!mounted) return;
       _showMsg('Profil guncellendi!');
     } catch (e) {
@@ -97,11 +112,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
-  void _showMsg(String m) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(m)));
+  void _showMsg(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
-  void _showErr(String m) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: Colors.red));
+  void _showErr(String m) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.red));
+
+  String? _semesterValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    if (int.tryParse(value.trim()) == null) {
+      return 'Sayisal donem girin';
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +139,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onRefresh: _load,
         child: Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: wideLayout ? 1180 : double.infinity),
+            constraints: BoxConstraints(
+              maxWidth: wideLayout ? 1180 : double.infinity,
+            ),
             child: CustomScrollView(
               slivers: [
                 SliverAppBar(
@@ -130,7 +156,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ],
                   flexibleSpace: FlexibleSpaceBar(
-                    title: Text('Profil', style: TextStyle(color: cs.onPrimary)),
+                    title: Text(
+                      'Profil',
+                      style: TextStyle(color: cs.onPrimary),
+                    ),
                     background: Container(
                       color: cs.primary,
                       child: Center(
@@ -142,12 +171,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               CircleAvatar(
                                 radius: 30,
                                 backgroundColor: cs.onPrimary.withAlpha(50),
-                                child: Icon(Icons.person, size: 36, color: cs.onPrimary),
+                                child: Icon(
+                                  Icons.person,
+                                  size: 36,
+                                  color: cs.onPrimary,
+                                ),
                               ),
                               if (_user?['email'] != null)
                                 Text(
                                   _user!['email'],
-                                  style: TextStyle(color: cs.onPrimary, fontSize: 12),
+                                  style: TextStyle(
+                                    color: cs.onPrimary,
+                                    fontSize: 12,
+                                  ),
                                 ),
                             ],
                           ),
@@ -156,6 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
+                SliverToBoxAdapter(child: _buildBusyTimesSummary(cs)),
                 SliverToBoxAdapter(child: _buildProfileSection(cs)),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -176,7 +213,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: const Icon(Icons.add, size: 18),
                           label: const Text('Ders Ekle'),
                           style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                           ),
                         ),
                       ],
@@ -221,11 +261,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Kisisel Bilgiler',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: cs.primary)),
+                Text(
+                  'Kisisel Bilgiler',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: cs.primary,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _nameCtrl,
@@ -265,10 +308,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           TextFormField(
                             controller: _semesterCtrl,
                             decoration: const InputDecoration(
-                              labelText: 'Donem',
+                              labelText: 'Donem No',
                               prefixIcon: Icon(Icons.event_note_outlined),
                               border: OutlineInputBorder(),
                             ),
+                            keyboardType: TextInputType.number,
+                            validator: _semesterValidator,
                           ),
                         ],
                       );
@@ -302,10 +347,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: TextFormField(
                             controller: _semesterCtrl,
                             decoration: const InputDecoration(
-                              labelText: 'Donem',
+                              labelText: 'Donem No',
                               prefixIcon: Icon(Icons.event_note_outlined),
                               border: OutlineInputBorder(),
                             ),
+                            keyboardType: TextInputType.number,
+                            validator: _semesterValidator,
                           ),
                         ),
                       ],
@@ -321,9 +368,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Expanded(
                       child: Slider(
                         value: _stress,
-                        min: 0,
-                        max: 10,
-                        divisions: 10,
+                        min: 1,
+                        max: 5,
+                        divisions: 4,
                         label: _stress.toInt().toString(),
                         onChanged: (v) => setState(() => _stress = v),
                       ),
@@ -349,6 +396,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildBusyTimesSummary(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.schedule_rounded, color: cs.primary),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Kayitli Mesgul Saatler',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_busyTimes.length} kayit',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_busyTimes.isEmpty)
+                Text(
+                  'Kullanici icin kayitli mesgul saat bulunmuyor.',
+                  style: TextStyle(color: cs.outline),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _busyTimes
+                      .map(
+                        (busyTime) => Chip(
+                          avatar: const Icon(Icons.event_busy, size: 16),
+                          label: Text(busyTime),
+                        ),
+                      )
+                      .toList(),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBusyTimes(ColorScheme cs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,8 +457,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Mesgul Saatler',
-                style: TextStyle(color: cs.onSurfaceVariant)),
+            Text(
+              'Mesgul Saatler',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
             TextButton.icon(
               icon: const Icon(Icons.calendar_month, size: 16),
               label: const Text('Ekle'),
@@ -366,19 +469,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         if (_busyTimes.isEmpty)
-          Text('Mesgul saat yok',
-              style: TextStyle(fontSize: 12, color: cs.outline))
+          Text(
+            'Mesgul saat yok',
+            style: TextStyle(fontSize: 12, color: cs.outline),
+          )
         else
           Wrap(
             spacing: 8,
             runSpacing: 4,
             children: _busyTimes
-                .map((t) => Chip(
-                      label: Text(t, style: const TextStyle(fontSize: 12)),
-                      onDeleted: () =>
-                          setState(() => _busyTimes.remove(t)),
-                      deleteIconColor: cs.error,
-                    ))
+                .map(
+                  (t) => Chip(
+                    label: Text(t, style: const TextStyle(fontSize: 12)),
+                    onDeleted: () => setState(() => _busyTimes.remove(t)),
+                    deleteIconColor: cs.error,
+                  ),
+                )
                 .toList(),
           ),
       ],
@@ -408,18 +514,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     final TimeOfDay? timeEnd = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: timeStart.hour + 1, minute: timeStart.minute),
+      initialTime: TimeOfDay(
+        hour: timeStart.hour + 1,
+        minute: timeStart.minute,
+      ),
       helpText: 'Bitis Saati',
     );
 
     if (timeEnd == null) return;
 
-    final String dayName = DateFormat('EEEE', 'tr_TR').format(date);
-    final String formattedDate = DateFormat('dd.MM.yyyy').format(date);
-    final String busyTime = "$dayName ($formattedDate) ${timeStart.format(context)}-${timeEnd.format(context)}";
+    final String dayName = _weekdayLabels[date.weekday - 1];
+    final int startHour = timeStart.hour;
+    int endHour = timeEnd.hour + (timeEnd.minute > 0 ? 1 : 0);
+    if (endHour <= startHour) {
+      endHour = startHour + 1;
+    }
+    final String busyTime =
+        '$dayName ${startHour.toString().padLeft(2, '0')}:00-${endHour.toString().padLeft(2, '0')}:00';
 
     setState(() {
-      _busyTimes.add(busyTime);
+      if (!_busyTimes.contains(busyTime)) {
+        _busyTimes.add(busyTime);
+      }
     });
   }
 
@@ -430,16 +546,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: cs.primaryContainer,
-          child: Text('${lesson.difficulty}',
-              style: TextStyle(
-                  color: cs.onPrimaryContainer,
-                  fontWeight: FontWeight.bold)),
+          child: Text(
+            '${lesson.difficulty}',
+            style: TextStyle(
+              color: cs.onPrimaryContainer,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
-        title: Text(lesson.lessonName,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(
+          lesson.lessonName,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
         subtitle: Text(
-            '${lesson.semester} • ${lesson.deadlines.length} sinav\n'
-            '${lesson.delay > 0 ? "Gecikme: ${lesson.delay}" : ""}'),
+          '${lesson.semester} • ${lesson.deadlines.length} sinav\n'
+          '${lesson.delay > 0 ? "Gecikme: ${lesson.delay}" : ""}',
+        ),
         isThreeLine: lesson.delay > 0,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -468,12 +590,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Text('"${lesson.lessonName}" silinsin mi?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Iptal')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Iptal'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style:
-                FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Sil'),
           ),
         ],
@@ -494,7 +616,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showAddLessonDialog() async {
     final nameCtrl = TextEditingController();
     final semCtrl = TextEditingController(
-        text: _user?['semester'] ?? '');
+      text: _user?['semester']?.toString() ?? '',
+    );
+    final creditCtrl = TextEditingController(text: '3');
     int difficulty = 3;
     final deadlines = <Map<String, dynamic>>[];
     final formKey = GlobalKey<FormState>();
@@ -512,10 +636,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Ders Ekle',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Ders Ekle',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: nameCtrl,
@@ -529,37 +656,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: semCtrl,
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Gerekli' : null,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Gerekli';
+                        if (int.tryParse(v.trim()) == null) {
+                          return 'Sayisal girin';
+                        }
+                        return null;
+                      },
                       decoration: const InputDecoration(
-                        labelText: 'Donem (orn: 2024-2025 Bahar)',
+                        labelText: 'Donem No (orn: 4)',
                         border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: creditCtrl,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Gerekli';
+                        if (double.tryParse(v.trim().replaceAll(',', '.')) ==
+                            null) {
+                          return 'Sayisal girin';
+                        }
+                        return null;
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Kredi',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      const Text('Zorluk: '),
-                      Expanded(
-                        child: Slider(
-                          value: difficulty.toDouble(),
-                          min: 1,
-                          max: 5,
-                          divisions: 4,
-                          label: difficulty.toString(),
-                          onChanged: (v) =>
-                              setS(() => difficulty = v.toInt()),
+                    Row(
+                      children: [
+                        const Text('Zorluk: '),
+                        Expanded(
+                          child: Slider(
+                            value: difficulty.toDouble(),
+                            min: 1,
+                            max: 5,
+                            divisions: 4,
+                            label: difficulty.toString(),
+                            onChanged: (v) =>
+                                setS(() => difficulty = v.toInt()),
+                          ),
                         ),
-                      ),
-                      Text('$difficulty/5'),
-                    ]),
+                        Text('$difficulty/5'),
+                      ],
+                    ),
                     const Divider(),
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Sinav Tarihleri',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          'Sinav Tarihleri',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         TextButton.icon(
                           icon: const Icon(Icons.add, size: 16),
                           label: const Text('Ekle'),
@@ -572,27 +726,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                    ...deadlines.map((d) => ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.event, size: 18),
-                          title: Text(
-                              '${d['type']} — ${d['date']}'),
-                          subtitle: d['label'] != null
-                              ? Text(d['label'])
-                              : null,
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () =>
-                                setS(() => deadlines.remove(d)),
-                          ),
-                        )),
+                    ...deadlines.map(
+                      (d) => ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.event, size: 18),
+                        title: Text('${d['type']} — ${d['date']}'),
+                        subtitle: d['label'] != null ? Text(d['label']) : null,
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () => setS(() => deadlines.remove(d)),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Iptal')),
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Iptal'),
+                        ),
                         const SizedBox(width: 8),
                         FilledButton(
                           onPressed: () async {
@@ -604,19 +757,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             try {
                               await ApiClient.registerLessons([
                                 {
-                                  'lessonName':
-                                      nameCtrl.text.trim(),
+                                  'lessonName': nameCtrl.text.trim(),
+                                  'credit': double.tryParse(
+                                    creditCtrl.text.trim().replaceAll(',', '.'),
+                                  ),
                                   'difficulty': difficulty,
                                   'deadlines': deadlines,
                                   'semester': semCtrl.text.trim(),
-                                }
+                                },
                               ]);
                               await _load();
                               _showMsg('Ders eklendi!');
                             } catch (e) {
-                              _showErr(e
-                                  .toString()
-                                  .replaceAll('Exception: ', ''));
+                              _showErr(
+                                e.toString().replaceAll('Exception: ', ''),
+                              );
                             }
                             setState(() => _loading = false);
                           },
@@ -635,10 +790,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _showEditLessonDialog(Lesson lesson) async {
-    final nameCtrl =
-        TextEditingController(text: lesson.lessonName);
-    final semCtrl =
-        TextEditingController(text: lesson.semester);
+    final nameCtrl = TextEditingController(text: lesson.lessonName);
+    final semCtrl = TextEditingController(text: lesson.semester);
     int difficulty = lesson.difficulty;
     final deadlines = lesson.deadlines
         .map((d) => d.toJson())
@@ -659,10 +812,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Ders Duzenle',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Ders Duzenle',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: nameCtrl,
@@ -676,35 +832,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: semCtrl,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Gerekli';
+                        if (int.tryParse(v.trim()) == null) {
+                          return 'Sayisal girin';
+                        }
+                        return null;
+                      },
                       decoration: const InputDecoration(
-                        labelText: 'Donem',
+                        labelText: 'Donem No',
                         border: OutlineInputBorder(),
                       ),
+                      keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      const Text('Zorluk: '),
-                      Expanded(
-                        child: Slider(
-                          value: difficulty.toDouble(),
-                          min: 1,
-                          max: 5,
-                          divisions: 4,
-                          label: difficulty.toString(),
-                          onChanged: (v) =>
-                              setS(() => difficulty = v.toInt()),
+                    Row(
+                      children: [
+                        const Text('Zorluk: '),
+                        Expanded(
+                          child: Slider(
+                            value: difficulty.toDouble(),
+                            min: 1,
+                            max: 5,
+                            divisions: 4,
+                            label: difficulty.toString(),
+                            onChanged: (v) =>
+                                setS(() => difficulty = v.toInt()),
+                          ),
                         ),
-                      ),
-                      Text('$difficulty/5'),
-                    ]),
+                        Text('$difficulty/5'),
+                      ],
+                    ),
                     const Divider(),
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Sinav Tarihleri',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          'Sinav Tarihleri',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         TextButton.icon(
                           icon: const Icon(Icons.add, size: 16),
                           label: const Text('Ekle'),
@@ -717,24 +883,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                    ...deadlines.map((d) => ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.event, size: 18),
-                          title: Text(
-                              '${d['type']} — ${d['date']}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () =>
-                                setS(() => deadlines.remove(d)),
-                          ),
-                        )),
+                    ...deadlines.map(
+                      (d) => ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.event, size: 18),
+                        title: Text('${d['type']} — ${d['date']}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () => setS(() => deadlines.remove(d)),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Iptal')),
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Iptal'),
+                        ),
                         const SizedBox(width: 8),
                         FilledButton(
                           onPressed: () async {
@@ -747,10 +914,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               final body = <String, dynamic>{
                                 'lessonName': lesson.lessonName,
                               };
-                              if (nameCtrl.text.trim() !=
-                                  lesson.lessonName) {
-                                body['newLessonName'] =
-                                    nameCtrl.text.trim();
+                              if (nameCtrl.text.trim() != lesson.lessonName) {
+                                body['newLessonName'] = nameCtrl.text.trim();
                               }
                               body['difficulty'] = difficulty;
                               body['deadlines'] = deadlines;
@@ -759,9 +924,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               await _load();
                               _showMsg('Ders guncellendi!');
                             } catch (e) {
-                              _showErr(e
-                                  .toString()
-                                  .replaceAll('Exception: ', ''));
+                              _showErr(
+                                e.toString().replaceAll('Exception: ', ''),
+                              );
                             }
                             setState(() => _loading = false);
                           },
@@ -780,7 +945,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<Map<String, dynamic>?> _showDeadlineDialog(
-      BuildContext parentCtx) async {
+    BuildContext parentCtx,
+  ) async {
     String type = 'midterm';
     DateTime selectedDate = DateTime.now();
     final labelCtrl = TextEditingController();
@@ -794,18 +960,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: type,
+                initialValue: type,
                 decoration: const InputDecoration(
                   labelText: 'Tur',
                   border: OutlineInputBorder(),
                 ),
                 items: const [
-                  DropdownMenuItem(
-                      value: 'midterm', child: Text('Vize')),
-                  DropdownMenuItem(
-                      value: 'final', child: Text('Final')),
-                  DropdownMenuItem(
-                      value: 'homework', child: Text('Odev')),
+                  DropdownMenuItem(value: 'midterm', child: Text('Vize')),
+                  DropdownMenuItem(value: 'final', child: Text('Final')),
+                  DropdownMenuItem(value: 'homework', child: Text('Odev')),
                 ],
                 onChanged: (v) => setS(() => type = v!),
               ),
@@ -820,8 +983,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     context: ctx,
                     initialDate: selectedDate,
                     firstDate: DateTime.now(),
-                    lastDate: DateTime.now()
-                        .add(const Duration(days: 365)),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (d != null) setS(() => selectedDate = d);
                 },
@@ -838,8 +1000,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Iptal')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Iptal'),
+            ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, {
                 'type': type,
