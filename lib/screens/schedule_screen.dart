@@ -80,24 +80,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     setState(() => _loading = false);
   }
 
-  Future<void> _showDailyUpdateDialog() async {
-    _closeFab();
-    setState(() => _loading = true);
-    try {
-      final data = await ApiClient.dailyUpdate();
-      if (!mounted) return;
-      setState(() {
-        _plan = WeeklySchedule.fromJson(data);
-      });
-      _showMsg('Program kalan gunler icin yeniden hesaplandi!');
-    } catch (e) {
-      if (!mounted) return;
-      _showErr(e.toString().replaceAll('Exception: ', ''));
-    }
-    if (!mounted) return;
-    setState(() => _loading = false);
-  }
-
   Future<void> _createChecklist() async {
     _closeFab();
     final today = DateTime.now().toIso8601String().substring(0, 10);
@@ -260,7 +242,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Haftalik plan, gunluk guncelleme ve kontrol listesi islemlerini masaustu yerlesiminden yonet.',
+                      'Haftalik plan ve kontrol listesi islemlerini masaustu yerlesiminden yonet.',
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   ],
@@ -270,11 +252,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 onPressed: _generateWeekly,
                 icon: const Icon(Icons.calendar_month_rounded),
                 label: const Text('Haftalik Plan'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: _showDailyUpdateDialog,
-                icon: const Icon(Icons.today_rounded),
-                label: const Text('Gunluk Guncelle'),
               ),
               OutlinedButton.icon(
                 onPressed: _createChecklist,
@@ -303,13 +280,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                       icon: Icons.checklist_rounded,
                       label: 'Kontrol Listesi Olustur',
                       onTap: _createChecklist,
-                      cs: cs,
-                    ),
-                    const SizedBox(height: 8),
-                    _miniFab(
-                      icon: Icons.today_rounded,
-                      label: 'Gunluk Guncelle',
-                      onTap: _showDailyUpdateDialog,
                       cs: cs,
                     ),
                     const SizedBox(height: 8),

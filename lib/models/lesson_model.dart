@@ -21,6 +21,7 @@ class Deadline {
 class Lesson {
   final String id;
   final String lessonName;
+  final double credit;
   final int difficulty;
   final List<Deadline> deadlines;
   final String semester;
@@ -29,6 +30,7 @@ class Lesson {
   Lesson({
     required this.id,
     required this.lessonName,
+    required this.credit,
     required this.difficulty,
     required this.deadlines,
     required this.semester,
@@ -38,6 +40,7 @@ class Lesson {
   factory Lesson.fromJson(Map<String, dynamic> j) => Lesson(
     id: j['id'] as String,
     lessonName: j['lessonName'] as String,
+    credit: (j['credit'] as num?)?.toDouble() ?? 0,
     difficulty: (j['difficulty'] as num).toInt(),
     deadlines: (j['deadlines'] as List)
         .map((d) => Deadline.fromJson(d as Map<String, dynamic>))
