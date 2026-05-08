@@ -1,51 +1,48 @@
-class Deadline {
-  final String type; // midterm | final | homework
-  final String date; // YYYY-MM-DD
-  final String? label;
+/// Sınav tarihini temsil eden model.
+class LessonExam {
+  final int id;
+  final String examDate; // ISO string (orn: "2026-05-20T00:00:00.000Z")
 
-  Deadline({required this.type, required this.date, this.label});
+  LessonExam({required this.id, required this.examDate});
 
-  factory Deadline.fromJson(Map<String, dynamic> j) => Deadline(
-    type: j['type'] as String,
-    date: j['date'] as String,
-    label: j['label'] as String?,
+  factory LessonExam.fromJson(Map<String, dynamic> j) => LessonExam(
+    id: j['id'] as int,
+    examDate: j['examDate'] as String,
   );
 
-  Map<String, dynamic> toJson() => {
-    'type': type,
-    'date': date,
-    if (label != null) 'label': label,
-  };
+  /// Tarihin sadece YYYY-MM-DD kısmını döndürür.
+  String get dateOnly => examDate.length >= 10 ? examDate.substring(0, 10) : examDate;
 }
 
+/// Backend /lesson endpoint'inden gelen ders modeli.
 class Lesson {
   final String id;
   final String lessonName;
-  final double credit;
   final int difficulty;
-  final List<Deadline> deadlines;
-  final String semester;
-  final int delay;
+  final List<LessonExam> exams;
+  final int keyfiDelayCount;
+  final int zorunluDelayCount;
+  final int needsMoreTime;
 
   Lesson({
     required this.id,
     required this.lessonName,
-    required this.credit,
     required this.difficulty,
-    required this.deadlines,
-    required this.semester,
-    required this.delay,
+    required this.exams,
+    required this.keyfiDelayCount,
+    required this.zorunluDelayCount,
+    required this.needsMoreTime,
   });
 
   factory Lesson.fromJson(Map<String, dynamic> j) => Lesson(
-    id: j['id'] as String,
-    lessonName: j['lessonName'] as String,
-    credit: (j['credit'] as num?)?.toDouble() ?? 0,
+    id: j['id'].toString(),
+    lessonName: j['name'] as String,
     difficulty: (j['difficulty'] as num).toInt(),
-    deadlines: (j['deadlines'] as List)
-        .map((d) => Deadline.fromJson(d as Map<String, dynamic>))
+    exams: ((j['exams'] as List?) ?? [])
+        .map((e) => LessonExam.fromJson(e as Map<String, dynamic>))
         .toList(),
-    semester: j['semester'] as String,
-    delay: (j['delay'] as num?)?.toInt() ?? 0,
+    keyfiDelayCount: (j['keyfiDelayCount'] as num?)?.toInt() ?? 0,
+    zorunluDelayCount: (j['zorunluDelayCount'] as num?)?.toInt() ?? 0,
+    needsMoreTime: (j['needsMoreTime'] as num?)?.toInt() ?? 0,
   );
 }

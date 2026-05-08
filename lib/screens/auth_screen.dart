@@ -14,15 +14,12 @@ class _AuthScreenState extends State<AuthScreen> {
   final _loginKey = GlobalKey<FormState>();
   final _registerKey = GlobalKey<FormState>();
 
+  // Login controllers
   final _loginEmail = TextEditingController();
   final _loginPass = TextEditingController();
 
-  // Register Controllers
-  final _regName = TextEditingController();
+  // Register controllers — sadece email + şifre
   final _regEmail = TextEditingController();
-  final _regDept = TextEditingController();
-  final _regYear = TextEditingController();
-  final _regGpa = TextEditingController();
   final _regPass = TextEditingController();
   final _regPassConfirm = TextEditingController();
 
@@ -30,7 +27,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _loading = false;
   bool _loginObscure = true;
-  final bool _regObscure = true;
+  bool _regObscure = true;
+  bool _regConfirmObscure = true;
   bool _darkMode = true;
   int _pageIndex = 0;
 
@@ -45,16 +43,13 @@ class _AuthScreenState extends State<AuthScreen> {
     _pageController.dispose();
     _loginEmail.dispose();
     _loginPass.dispose();
-    _regName.dispose();
     _regEmail.dispose();
-    _regDept.dispose();
-    _regYear.dispose();
-    _regGpa.dispose();
     _regPass.dispose();
     _regPassConfirm.dispose();
     super.dispose();
   }
 
+  /// E-posta ve şifre ile oturum açar; başarılı olursa ana sayfaya geçer.
   Future<void> _login() async {
     if (!_loginKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -76,6 +71,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  /// Yeni kullanıcı kaydı oluşturur; başarılı olursa ana sayfaya geçer.
   Future<void> _register() async {
     if (!_registerKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -85,12 +81,6 @@ class _AuthScreenState extends State<AuthScreen> {
         _regPass.text.trim(),
       );
       await ApiClient.saveToken(token);
-      await ApiClient.updateProfile({
-        if (_regName.text.trim().isNotEmpty) 'name': _regName.text.trim(),
-        if (_regGpa.text.trim().isNotEmpty)
-          'gpa': double.tryParse(_regGpa.text.trim().replaceAll(',', '.')),
-        if (_regYear.text.trim().isNotEmpty) 'semester': _regYear.text.trim(),
-      });
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -383,9 +373,7 @@ class _AuthScreenState extends State<AuthScreen> {
             onPressed: _loading ? null : _login,
             style: FilledButton.styleFrom(
               backgroundColor: palette.accent,
-              foregroundColor: _darkMode
-                  ? Colors.white
-                  : palette.backgroundStart,
+              foregroundColor: _darkMode ? Colors.white : palette.backgroundStart,
               padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
@@ -410,174 +398,83 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
+  /// Kayıt formu: sadece e-posta, şifre ve şifre tekrar alanları.
   Widget _buildRegisterForm(_AuthPalette palette) {
     return Form(
       key: _registerKey,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Sol Sütun
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionTitle('Kişisel Bilgiler', palette),
-                    const SizedBox(height: 16),
-                    _field(
-                      controller: _regName,
-                      label: 'Ad Soyad',
-                      icon: Icons.person_outline,
-                      palette: palette,
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      controller: _regEmail,
-                      label: 'E-posta',
-                      icon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (v) => v == null || !v.contains('@')
-                          ? 'Gecerli e-posta girin'
-                          : null,
-                      palette: palette,
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      controller: _regDept,
-                      label: 'Bolum',
-                      icon: Icons.account_balance_outlined,
-                      palette: palette,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 30),
-              // Sağ Sütun
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionTitle('Okul Bilgileri', palette),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _field(
-                            controller: _regYear,
-                            label: 'Donem',
-                            icon: Icons.school_outlined,
-                            keyboardType: TextInputType.number,
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Donem gerekli';
-                              }
-                              if (int.tryParse(v.trim()) == null) {
-                                return 'Sayisal girin';
-                              }
-                              return null;
-                            },
-                            palette: palette,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _field(
-                            controller: _regGpa,
-                            label: 'GPA',
-                            icon: Icons.star_outline,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return null;
-                              final gpa = double.tryParse(
-                                v.trim().replaceAll(',', '.'),
-                              );
-                              if (gpa == null || gpa < 0 || gpa > 4) {
-                                return '0-4 arasi';
-                              }
-                              return null;
-                            },
-                            palette: palette,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      controller: _regPass,
-                      label: 'Sifre',
-                      icon: Icons.lock_outline,
-                      obscure: _regObscure,
-                      validator: (v) =>
-                          v == null || v.length < 6 ? 'En az 6 karakter' : null,
-                      palette: palette,
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      controller: _regPassConfirm,
-                      label: 'Sifre Tekrar',
-                      icon: Icons.lock_clock_outlined,
-                      obscure: _regObscure,
-                      validator: (v) =>
-                          v != _regPass.text ? 'Sifreler eslesmiyor' : null,
-                      palette: palette,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          _field(
+            controller: _regEmail,
+            label: 'E-posta',
+            icon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+            validator: (v) =>
+                v == null || !v.contains('@') ? 'Gecerli e-posta girin' : null,
+            palette: palette,
           ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _loading ? null : _register,
-              style: FilledButton.styleFrom(
-                backgroundColor: palette.accent,
-                foregroundColor: _darkMode
-                    ? Colors.white
-                    : palette.backgroundStart,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
+          const SizedBox(height: 14),
+          _field(
+            controller: _regPass,
+            label: 'Sifre',
+            icon: Icons.lock_outline,
+            obscure: _regObscure,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _regObscure ? Icons.visibility_off : Icons.visibility,
+                color: palette.accent,
               ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text(
-                      'Kayıt Ol ve Başla',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              onPressed: () => setState(() => _regObscure = !_regObscure),
             ),
+            validator: (v) =>
+                v == null || v.length < 6 ? 'En az 6 karakter' : null,
+            palette: palette,
+          ),
+          const SizedBox(height: 14),
+          _field(
+            controller: _regPassConfirm,
+            label: 'Sifre Tekrar',
+            icon: Icons.lock_clock_outlined,
+            obscure: _regConfirmObscure,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _regConfirmObscure ? Icons.visibility_off : Icons.visibility,
+                color: palette.accent,
+              ),
+              onPressed: () =>
+                  setState(() => _regConfirmObscure = !_regConfirmObscure),
+            ),
+            validator: (v) =>
+                v != _regPass.text ? 'Sifreler eslesmiyor' : null,
+            palette: palette,
+          ),
+          const SizedBox(height: 22),
+          FilledButton(
+            onPressed: _loading ? null : _register,
+            style: FilledButton.styleFrom(
+              backgroundColor: palette.accent,
+              foregroundColor: _darkMode ? Colors.white : palette.backgroundStart,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            child: _loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Kayit Ol ve Basla',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title, _AuthPalette palette) {
-    return SizedBox(
-      height: 28,
-      child: Text(
-        title,
-        style: TextStyle(
-          color: palette.accent,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
       ),
     );
   }
@@ -609,10 +506,7 @@ class _AuthScreenState extends State<AuthScreen> {
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: palette.inputFill,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.border),

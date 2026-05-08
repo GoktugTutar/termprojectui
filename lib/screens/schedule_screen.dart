@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../models/planner_model.dart';
 
+/// Program ekranı: haftalık plan blokları ve günlük checklist yönetimi.
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
 
@@ -11,8 +12,8 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen>
     with SingleTickerProviderStateMixin {
-  WeeklySchedule? _plan;
-  List<ChecklistItem> _todayChecklist = [];
+  WeeklyPlan? _plan;
+  DailyChecklist? _todayChecklist;
   bool _loading = false;
   bool _fabOpen = false;
   late final AnimationController _fabAnim;
@@ -23,7 +24,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   Color get _primaryFabBgColor => _cs.primary;
   Color get _errorFabBgColor => _cs.error;
   Color get _secondaryFabBgColor => _cs.secondaryContainer;
-  Color get _tableHeaderBgColor => _cs.primaryContainer.withAlpha(100);
 
   @override
   void initState() {
@@ -32,7 +32,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
-    _loadToday();
+    _loadData();
   }
 
   @override
@@ -41,19 +41,27 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     super.dispose();
   }
 
-  Future<void> _loadToday() async {
-    setState(() => _loading = true);
-    WeeklySchedule? plan;
-    List<ChecklistItem> checklist = [];
+  // ── Veri yükleme ────────────────────────────────────────────────────────────
 
+  /// Haftalık planı ve bugünün checklist'ini yükler.
+  Future<void> _loadData() async {
+    setState(() => _loading = true);
+    WeeklyPlan? plan;
+    DailyChecklist? checklist;
+
+    // Haftalık plan yükle
     try {
-      final schedule = await ApiClient.getSchedule();
-      plan = WeeklySchedule.fromJson(schedule);
+      final data = await ApiClient.getWeekPlan();
+      plan = WeeklyPlan.fromJson(data);
     } catch (_) {}
 
+    // Bugünün checklist'ini yükle
     try {
-      final items = await ApiClient.getTodayChecklist();
-      checklist = items.map((i) => ChecklistItem.fromJson(i)).toList();
+      final today = _todayString();
+      final data = await ApiClient.getChecklist(today);
+      if (data != null) {
+        checklist = _parseChecklist(data, plan);
+      }
     } catch (_) {}
 
     if (!mounted) return;
@@ -64,13 +72,53 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     });
   }
 
+  /// API'den dönen ham checklist verisini [DailyChecklist] modeline dönüştürür.
+  /// Ders adlarını haftalık plan bloklarından tamamlar.
+  DailyChecklist _parseChecklist(
+    Map<String, dynamic> data,
+    WeeklyPlan? plan,
+  ) {
+    // Ders adı haritası: lessonId → lessonName
+    final lessonNames = <int, String>{};
+    if (plan != null) {
+      for (final b in plan.blocks) {
+        lessonNames[b.lessonId] = b.lessonName;
+      }
+    }
+
+    final rawItems = (data['items'] as List? ?? []);
+    final items = rawItems.map((raw) {
+      final r = raw as Map<String, dynamic>;
+      final lessonId = (r['lessonId'] as num).toInt();
+      return ChecklistItem(
+        id: (r['id'] as num).toInt(),
+        lessonId: lessonId,
+        lessonName: lessonNames[lessonId] ?? 'Ders',
+        plannedBlocks: (r['plannedBlocks'] as num).toInt(),
+        completedBlocks: (r['completedBlocks'] as num? ?? 0).toInt(),
+        delayed: r['delayed'] as bool? ?? false,
+      );
+    }).toList();
+
+    return DailyChecklist(
+      id: (data['id'] as num).toInt(),
+      date: (data['date'] as String).substring(0, 10),
+      stressLevel: (data['stressLevel'] as num? ?? 3).toInt(),
+      fatigueLevel: (data['fatigueLevel'] as num? ?? 3).toInt(),
+      items: items,
+    );
+  }
+
+  // ── Eylemler ────────────────────────────────────────────────────────────────
+
+  /// Haftalık planı POST /planner/create ile oluşturur.
   Future<void> _generateWeekly() async {
     _closeFab();
     setState(() => _loading = true);
     try {
       final data = await ApiClient.createWeeklyPlan();
       if (!mounted) return;
-      setState(() => _plan = WeeklySchedule.fromJson(data));
+      setState(() => _plan = WeeklyPlan.fromJson(data));
       _showMsg('Haftalik plan olusturuldu!');
     } catch (e) {
       if (!mounted) return;
@@ -80,36 +128,25 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     setState(() => _loading = false);
   }
 
-  Future<void> _createChecklist() async {
+  /// Checklist gönderme dialogunu açar.
+  Future<void> _openSubmitChecklist() async {
     _closeFab();
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    final hasPlannedLesson =
-        _plan?.slots.any(
-          (slot) => slot.day == today && !slot.isEmpty && !slot.isBusy,
-        ) ??
-        false;
-
-    if (!hasPlannedLesson) {
-      _showErr(
-        'Bugun icin planlanmis ders yok, bu yuzden kontrol listesi olusturulamiyor.',
-      );
+    if (_plan == null) {
+      _showErr('Once haftalik plan olusturun.');
       return;
     }
 
-    setState(() => _loading = true);
-    try {
-      await ApiClient.createChecklist(const []);
-      await _loadToday();
-      if (!mounted) return;
-      _showMsg('Kontrol listesi olusturuldu!');
-    } catch (e) {
-      if (!mounted) return;
-      _showErr(e.toString().replaceAll('Exception: ', ''));
+    final today = _todayString();
+    final todayBlocks = _plan!.blocksForDate(today);
+    if (todayBlocks.isEmpty) {
+      _showErr('Bugun icin planlanmis ders blogu yok.');
+      return;
     }
-    if (!mounted) return;
-    setState(() => _loading = false);
+
+    await _showChecklistSubmitDialog(todayBlocks);
   }
 
+  /// FAB açma/kapama.
   void _toggleFab() {
     setState(() => _fabOpen = !_fabOpen);
     if (_fabOpen) {
@@ -131,14 +168,197 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     SnackBar(content: Text(m), backgroundColor: _errorSnackBarBgColor),
   );
 
+  /// Bugünün tarihini "YYYY-MM-DD" formatında döndürür.
+  String _todayString() => DateTime.now().toIso8601String().substring(0, 10);
+
+  // ── Checklist dialog ────────────────────────────────────────────────────────
+
+  /// Bugün için checklist gönderme dialogunu gösterir.
+  Future<void> _showChecklistSubmitDialog(
+    List<ScheduledBlock> todayBlocks,
+  ) async {
+    // Her blok için tamamlanan blok sayısını tutan map: lessonId → completedBlocks
+    final completedMap = <int, int>{};
+    final delayedMap = <int, bool>{};
+    for (final b in todayBlocks) {
+      completedMap.putIfAbsent(b.lessonId, () => 0);
+      delayedMap.putIfAbsent(b.lessonId, () => false);
+    }
+
+    // Dersleri tekil listele (aynı ders birden fazla blokta olabilir)
+    final uniqueBlocks = <int, ScheduledBlock>{};
+    for (final b in todayBlocks) {
+      uniqueBlocks.putIfAbsent(b.lessonId, () => b);
+    }
+
+    int stressLevel = 3;
+    int fatigueLevel = 3;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Gunluk Kontrol Listesi'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Stres seviyesi
+                Row(
+                  children: [
+                    const Text('Stres: '),
+                    Expanded(
+                      child: Slider(
+                        value: stressLevel.toDouble(),
+                        min: 1,
+                        max: 5,
+                        divisions: 4,
+                        label: stressLevel.toString(),
+                        onChanged: (v) => setS(() => stressLevel = v.toInt()),
+                      ),
+                    ),
+                    Text('$stressLevel/5'),
+                  ],
+                ),
+                // Yorgunluk seviyesi
+                Row(
+                  children: [
+                    const Text('Yorgunluk: '),
+                    Expanded(
+                      child: Slider(
+                        value: fatigueLevel.toDouble(),
+                        min: 1,
+                        max: 5,
+                        divisions: 4,
+                        label: fatigueLevel.toString(),
+                        onChanged: (v) => setS(() => fatigueLevel = v.toInt()),
+                      ),
+                    ),
+                    Text('$fatigueLevel/5'),
+                  ],
+                ),
+                const Divider(),
+                // Her ders için tamamlanan blok sayısı
+                ...uniqueBlocks.values.map((block) {
+                  // Bu derse ait toplam planlanan blok
+                  final totalPlanned = todayBlocks
+                      .where((b) => b.lessonId == block.lessonId)
+                      .fold(0, (sum, b) => sum + b.blockCount);
+                  final completed = completedMap[block.lessonId] ?? 0;
+                  final delayed = delayedMap[block.lessonId] ?? false;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          block.isReview
+                              ? '${block.lessonName} (Tekrar)'
+                              : block.lessonName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'Planlanan: $totalPlanned blok (${totalPlanned * 30} dk)',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Row(
+                          children: [
+                            const Text('Tamamlanan blok: '),
+                            Expanded(
+                              child: Slider(
+                                value: completed.toDouble(),
+                                min: 0,
+                                max: totalPlanned.toDouble(),
+                                divisions: totalPlanned > 0 ? totalPlanned : 1,
+                                label: completed.toString(),
+                                onChanged: (v) => setS(
+                                  () => completedMap[block.lessonId] =
+                                      v.toInt(),
+                                ),
+                              ),
+                            ),
+                            Text('$completed'),
+                          ],
+                        ),
+                        // Ertelendi toggle
+                        SwitchListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Ertelendi',
+                            style: TextStyle(fontSize: 13),
+                          ),
+                          value: delayed,
+                          onChanged: (v) =>
+                              setS(() => delayedMap[block.lessonId] = v),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Iptal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                setState(() => _loading = true);
+                try {
+                  // Her ders için item oluştur
+                  final items = uniqueBlocks.values.map((block) {
+                    final totalPlanned = todayBlocks
+                        .where((b) => b.lessonId == block.lessonId)
+                        .fold(0, (sum, b) => sum + b.blockCount);
+                    return {
+                      'lessonId': block.lessonId,
+                      'plannedBlocks': totalPlanned,
+                      'completedBlocks': completedMap[block.lessonId] ?? 0,
+                      'delayed': delayedMap[block.lessonId] ?? false,
+                    };
+                  }).toList();
+
+                  await ApiClient.submitChecklist(
+                    stressLevel: stressLevel,
+                    fatigueLevel: fatigueLevel,
+                    items: items,
+                  );
+                  await _loadData();
+                  if (!mounted) return;
+                  _showMsg('Kontrol listesi kaydedildi!');
+                } catch (e) {
+                  if (!mounted) return;
+                  _showErr(e.toString().replaceAll('Exception: ', ''));
+                }
+                if (!mounted) return;
+                setState(() => _loading = false);
+              },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     _cs = cs;
     final wideLayout = MediaQuery.sizeOf(context).width >= 1100;
+    final today = _todayString();
 
     final scrollView = CustomScrollView(
       slivers: [
+        // AppBar
         SliverAppBar(
           expandedHeight: wideLayout ? 148 : 120,
           pinned: true,
@@ -148,21 +368,24 @@ class _ScheduleScreenState extends State<ScheduleScreen>
             background: Container(color: _appBarBgColor),
           ),
         ),
+
+        // Masaüstü hızlı işlemler
         if (wideLayout) SliverToBoxAdapter(child: _buildDesktopActions(cs)),
-        if (_todayChecklist.isNotEmpty) ...[
-          _sectionHeader('Bugunku Kontrol Listesi'),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) => _checklistTile(_todayChecklist[i]),
-              childCount: _todayChecklist.length,
-            ),
-          ),
+
+        // Bugünün checklist özeti
+        if (_todayChecklist != null) ...[
+          _sectionHeader('Bugunku Kontrol Listesi — $today'),
+          SliverToBoxAdapter(child: _buildChecklistSummary(cs)),
         ],
+
+        // Haftalık plan
         if (_plan != null) ...[
           _sectionHeader('Haftalik Plan — ${_plan!.weekStart}'),
-          SliverToBoxAdapter(child: _buildVisualSchedule(cs)),
+          SliverToBoxAdapter(child: _buildWeeklyPlan(cs, today)),
         ],
-        if (_plan == null && _todayChecklist.isEmpty)
+
+        // Boş durum
+        if (_plan == null && _todayChecklist == null)
           SliverFillRemaining(
             hasScrollBody: false,
             child: Center(
@@ -190,6 +413,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               ),
             ),
           ),
+
         const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
@@ -200,7 +424,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
-                onRefresh: _loadToday,
+                onRefresh: _loadData,
                 child: wideLayout
                     ? Center(
                         child: ConstrainedBox(
@@ -215,6 +439,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     );
   }
 
+  // ── Alt widget'lar ───────────────────────────────────────────────────────────
+
+  /// Masaüstü hızlı işlem kartı.
   Widget _buildDesktopActions(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
@@ -242,7 +469,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Haftalik plan ve kontrol listesi islemlerini masaustu yerlesiminden yonet.',
+                      'Haftalik plan olustur veya gunluk kontrol listesi kaydet.',
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   ],
@@ -251,12 +478,12 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               FilledButton.icon(
                 onPressed: _generateWeekly,
                 icon: const Icon(Icons.calendar_month_rounded),
-                label: const Text('Haftalik Plan'),
+                label: const Text('Haftalik Plan Olustur'),
               ),
               OutlinedButton.icon(
-                onPressed: _createChecklist,
+                onPressed: _openSubmitChecklist,
                 icon: const Icon(Icons.checklist_rounded),
-                label: const Text('Kontrol Listesi'),
+                label: const Text('Kontrol Listesi Kaydet'),
               ),
             ],
           ),
@@ -265,6 +492,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     );
   }
 
+  /// Mobil speed dial FAB.
   Widget _buildSpeedDial(ColorScheme cs) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -278,8 +506,8 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                   children: [
                     _miniFab(
                       icon: Icons.checklist_rounded,
-                      label: 'Kontrol Listesi Olustur',
-                      onTap: _createChecklist,
+                      label: 'Kontrol Listesi Kaydet',
+                      onTap: _openSubmitChecklist,
                       cs: cs,
                     ),
                     const SizedBox(height: 8),
@@ -348,149 +576,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     );
   }
 
-  Widget _checklistTile(ChecklistItem item) {
-    final cs = Theme.of(context).colorScheme;
-    Color statusColor;
-    IconData statusIcon;
-    switch (item.status) {
-      case 'completed':
-        statusColor = Colors.green;
-        statusIcon = Icons.check_circle;
-        break;
-      case 'early':
-        statusColor = Colors.blue;
-        statusIcon = Icons.check_circle_outline;
-        break;
-      case 'incomplete':
-        statusColor = Colors.orange;
-        statusIcon = Icons.radio_button_unchecked;
-        break;
-      case 'not_done':
-        statusColor = Colors.red;
-        statusIcon = Icons.cancel_outlined;
-        break;
-      default:
-        statusColor = cs.primary;
-        statusIcon = Icons.pending_outlined;
-    }
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: Icon(statusIcon, color: statusColor),
-        title: Text(
-          item.lessonName,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text('${item.plannedHours} saat planli'),
-        trailing: item.status == 'pending'
-            ? TextButton(
-                onPressed: () => _showSubmitDialog(item),
-                child: const Text('Bildir'),
-              )
-            : Text(
-                item.status,
-                style: TextStyle(color: statusColor, fontSize: 12),
-              ),
-      ),
-    );
-  }
-
-  Future<void> _showSubmitDialog(ChecklistItem item) async {
-    String status = 'completed';
-    final ctrl = TextEditingController(text: item.plannedHours.toString());
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: Text(item.lessonName),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Planlanan: ${item.plannedHours} saat'),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Gercek Calisma (saat)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text('Durum:'),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: status,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'completed',
-                    child: Text('Tamamlandi'),
-                  ),
-                  DropdownMenuItem(value: 'early', child: Text('Erken Bitti')),
-                  DropdownMenuItem(
-                    value: 'incomplete',
-                    child: Text('Eksik Kaldi'),
-                  ),
-                  DropdownMenuItem(value: 'not_done', child: Text('Yapilmadi')),
-                ],
-                onChanged: (v) {
-                  if (v != null) {
-                    setS(() => status = v);
-                  }
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Iptal'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final actualHours = double.tryParse(
-                  ctrl.text.trim().replaceAll(',', '.'),
-                );
-                final needsHours =
-                    status == 'completed' || status == 'incomplete';
-
-                if (needsHours && (actualHours == null || actualHours <= 0)) {
-                  _showErr('Lutfen gecerli bir calisma suresi girin.');
-                  return;
-                }
-
-                Navigator.pop(ctx);
-                setState(() => _loading = true);
-                try {
-                  await ApiClient.submitChecklist({
-                    'lessonId': item.lessonId,
-                    'actualHours': actualHours,
-                    'status': status,
-                  });
-                  await _loadToday();
-                  if (!mounted) return;
-                  _showMsg('Bildirildi!');
-                } catch (e) {
-                  if (!mounted) return;
-                  _showErr(e.toString().replaceAll('Exception: ', ''));
-                }
-                if (!mounted) return;
-                setState(() => _loading = false);
-              },
-              child: const Text('Kaydet'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   SliverToBoxAdapter _sectionHeader(String title) {
     return SliverToBoxAdapter(
       child: Padding(
@@ -503,157 +588,162 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     );
   }
 
-  Widget _buildVisualSchedule(ColorScheme cs) {
-    final daysLabels = ['Pzt', 'Sal', 'Car', 'Per', 'Cum', 'Cmt', 'Paz'];
-    final hours = List.generate(
-      14,
-      (i) => '${(i + 8).toString().padLeft(2, '0')}:00',
-    );
-    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+  // ── Checklist özeti ──────────────────────────────────────────────────────────
 
-    final grid = List.generate(
-      14,
-      (_) => List<DailySlot?>.generate(7, (_) => null),
-    );
-    if (_plan == null) return const SizedBox.shrink();
-
-    for (final slot in _plan!.slots) {
-      if (slot.isEmpty) continue;
-      if (slot.dayIndex < 0 || slot.dayIndex >= 7) continue;
-      if (slot.hourIndex < 0 || slot.hourIndex >= 14) continue;
-      grid[slot.hourIndex][slot.dayIndex] = slot;
-    }
-
+  /// Bugünkü checklist özetini kart olarak gösterir.
+  Widget _buildChecklistSummary(ColorScheme cs) {
+    final cl = _todayChecklist!;
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 600),
-            child: Table(
-              border: TableBorder.all(color: cs.outlineVariant, width: 0.5),
-              columnWidths: const {0: FixedColumnWidth(60)},
-              children: [
-                TableRow(
-                  decoration: BoxDecoration(color: _tableHeaderBgColor),
-                  children: [
-                    const SizedBox(
-                      height: 40,
-                      child: Center(
-                        child: Text(
-                          'Saat',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    ...daysLabels.map(
-                      (d) => SizedBox(
-                        height: 40,
-                        child: Center(
-                          child: Text(
-                            d,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.mood_outlined, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Stres: ${cl.stressLevel}/5  •  Yorgunluk: ${cl.fatigueLevel}/5',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...cl.items.map(
+                (item) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    item.completedBlocks >= item.plannedBlocks
+                        ? Icons.check_circle
+                        : item.delayed
+                            ? Icons.cancel_outlined
+                            : Icons.radio_button_unchecked,
+                    color: item.completedBlocks >= item.plannedBlocks
+                        ? Colors.green
+                        : item.delayed
+                            ? Colors.red
+                            : cs.primary,
+                  ),
+                  title: Text(item.lessonName),
+                  subtitle: Text(
+                    '${item.completedBlocks}/${item.plannedBlocks} blok tamamlandi'
+                    '${item.delayed ? ' • Ertelendi' : ''}',
+                  ),
                 ),
-                ...List.generate(14, (hIdx) {
-                  return TableRow(
-                    children: [
-                      SizedBox(
-                        height: 50,
-                        child: Center(
-                          child: Text(
-                            hours[hIdx],
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      ...List.generate(7, (dIdx) {
-                        final slot = grid[hIdx][dIdx];
-                        final isToday =
-                            slot != null &&
-                            !slot.isBusy &&
-                            slot.day == todayStr;
-                        final isBusy = slot?.isBusy ?? false;
-
-                        return TableCell(
-                          child: InkWell(
-                            onTap: slot == null || isBusy || !isToday
-                                ? null
-                                : () {
-                                    try {
-                                      final item = _todayChecklist.firstWhere(
-                                        (i) => i.lessonId == slot.lessonId,
-                                      );
-                                      _showSubmitDialog(item);
-                                    } catch (_) {
-                                      if (isToday) {
-                                        _showErr(
-                                          'Bu ders bugunku kontrol listesinde bulunamadi.',
-                                        );
-                                      } else {
-                                        _showMsg(
-                                          'Sadece bugunun dersleri icin bildirim yapabilirsiniz.',
-                                        );
-                                      }
-                                    }
-                                  },
-                            child: Container(
-                              height: 50,
-                              padding: const EdgeInsets.all(2),
-                              color: slot != null
-                                  ? isBusy
-                                        ? cs.surfaceContainerHighest
-                                        : (isToday
-                                              ? cs.primary.withAlpha(40)
-                                              : cs.primary.withAlpha(15))
-                                  : null,
-                              child: slot != null
-                                  ? Center(
-                                      child: Text(
-                                        slot.lessonName,
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: isBusy ? 8 : 9,
-                                          fontWeight: isToday
-                                              ? FontWeight.bold
-                                              : FontWeight.w500,
-                                          color: isBusy
-                                              ? cs.onSurfaceVariant
-                                              : (isToday ? cs.primary : null),
-                                        ),
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  );
-                }),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  // ── Haftalık plan görünümü ───────────────────────────────────────────────────
+
+  /// Haftalık planı gün bazında liste olarak gösterir.
+  Widget _buildWeeklyPlan(ColorScheme cs, String today) {
+    if (_plan == null) return const SizedBox.shrink();
+
+    // 7 günü sırayla göster; her gün için o güne ait blokları listele
+    final weekDays = List.generate(7, (i) {
+      final dt = DateTime.parse(_plan!.weekStart).add(Duration(days: i));
+      return dt.toIso8601String().substring(0, 10);
+    });
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: weekDays.map((date) {
+          final blocks = _plan!.blocksForDate(date);
+          final isToday = date == today;
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            color: isToday ? cs.primaryContainer.withAlpha(60) : null,
+            child: ExpansionTile(
+              initiallyExpanded: isToday,
+              leading: CircleAvatar(
+                backgroundColor: isToday
+                    ? cs.primary
+                    : cs.surfaceContainerHighest,
+                child: Text(
+                  _shortDay(date),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isToday ? cs.onPrimary : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              title: Text(
+                date,
+                style: TextStyle(
+                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                  color: isToday ? cs.primary : null,
+                ),
+              ),
+              subtitle: blocks.isEmpty
+                  ? const Text('Ders yok')
+                  : Text(
+                      '${blocks.length} blok  •  '
+                      '${blocks.fold(0, (sum, b) => sum + b.blockCount) * 30} dk',
+                    ),
+              children: blocks.isEmpty
+                  ? [
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Bu gun icin planlanmis ders yok.'),
+                      ),
+                    ]
+                  : blocks.map((b) => _blockTile(b, cs)).toList(),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// Tek bir ScheduledBlock için liste tile'ı.
+  Widget _blockTile(ScheduledBlock block, ColorScheme cs) {
+    final minutes = block.blockCount * 30;
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        block.isReview
+            ? Icons.replay_outlined
+            : block.completed
+                ? Icons.check_circle_outline
+                : Icons.book_outlined,
+        color: block.isReview
+            ? cs.tertiary
+            : block.completed
+                ? Colors.green
+                : cs.primary,
+        size: 20,
+      ),
+      title: Text(
+        block.isReview ? '${block.lessonName} (Tekrar)' : block.lessonName,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text('${block.startTime} – ${block.endTime}  •  $minutes dk'),
+      trailing: block.completed
+          ? const Icon(Icons.check, color: Colors.green, size: 18)
+          : null,
+    );
+  }
+
+  /// Tarih stringinden kısa gün adı üretir (orn: "Pzt").
+  String _shortDay(String date) {
+    try {
+      final dt = DateTime.parse(date);
+      const labels = ['Pzt', 'Sal', 'Car', 'Per', 'Cum', 'Cmt', 'Paz'];
+      return labels[(dt.weekday - 1) % 7];
+    } catch (_) {
+      return '?';
+    }
   }
 }

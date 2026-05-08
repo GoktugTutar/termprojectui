@@ -1,384 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+
 import '../core/api_client.dart';
-import '../models/lesson_model.dart';
+import '../theme.dart';
 
-const int _busyScheduleStartHour = 8;
-const int _busyScheduleEndHour = 21;
-const double _busyScheduleCellHeight = 52;
-const double _busyScheduleHourColumnWidth = 68;
-const double _busyScheduleDayColumnWidth = 132;
-
-class _BusyTimeEntry {
-  const _BusyTimeEntry({
-    required this.dayLabel,
-    required this.startHour,
-    required this.endHour,
-    this.reason,
-  });
-
-  final String dayLabel;
-  final int startHour;
-  final int endHour;
-  final String? reason;
-
-  String toDisplayString() {
-    final base = '$dayLabel ${_formatHour(startHour)}-${_formatHour(endHour)}';
-    final cleanReason = reason?.trim() ?? '';
-    if (cleanReason.isEmpty || cleanReason.toLowerCase() == 'mesgul') {
-      return base;
-    }
-    return '$base ($cleanReason)';
-  }
-
-  static String _formatHour(int hour) =>
-      '${hour.toString().padLeft(2, '0')}:00';
-}
-
-class _BusyTimeFormResult {
-  const _BusyTimeFormResult.save(this.value) : delete = false;
-
-  const _BusyTimeFormResult.delete() : value = null, delete = true;
-
-  final String? value;
-  final bool delete;
-}
-
-class _BusyTimeDisplayItem {
-  const _BusyTimeDisplayItem({
-    required this.index,
-    required this.entry,
-    required this.visibleStartHour,
-    required this.visibleEndHour,
-  });
-
-  final int index;
-  final _BusyTimeEntry entry;
-  final int visibleStartHour;
-  final int visibleEndHour;
-}
-
-class _BusyTimeFormScreen extends StatefulWidget {
-  const _BusyTimeFormScreen({
-    required this.weekdayLabels,
-    required this.existingBusyTimes,
-    this.initialValue,
-    this.editIndex,
-  });
-
-  final List<String> weekdayLabels;
-  final List<String> existingBusyTimes;
-  final _BusyTimeEntry? initialValue;
-  final int? editIndex;
-
-  @override
-  State<_BusyTimeFormScreen> createState() => _BusyTimeFormScreenState();
-}
-
-class _BusyTimeFormScreenState extends State<_BusyTimeFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _reasonCtrl;
-  late String _selectedDay;
-  late int _startHour;
-  late int _endHour;
-  String? _timeError;
-
-  bool get _isEditing => widget.editIndex != null;
-
-  List<int> get _startHourOptions => List<int>.generate(
-    _busyScheduleEndHour - _busyScheduleStartHour,
-    (index) => _busyScheduleStartHour + index,
-  );
-
-  List<int> get _endHourOptions => List<int>.generate(
-    _busyScheduleEndHour - _busyScheduleStartHour,
-    (index) => _busyScheduleStartHour + index + 1,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _reasonCtrl = TextEditingController(
-      text: widget.initialValue?.reason ?? '',
-    );
-    _selectedDay = widget.initialValue?.dayLabel ?? widget.weekdayLabels.first;
-    _startHour = math.max(
-      _busyScheduleStartHour,
-      math.min(widget.initialValue?.startHour ?? 9, _busyScheduleEndHour - 1),
-    );
-    _endHour = math.max(
-      _startHour + 1,
-      math.min(widget.initialValue?.endHour ?? 10, _busyScheduleEndHour),
-    );
-  }
-
-  @override
-  void dispose() {
-    _reasonCtrl.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_endHour <= _startHour) {
-      setState(() => _timeError = 'Bitis saati baslangictan sonra olmali.');
-      return;
-    }
-
-    final result = _BusyTimeEntry(
-      dayLabel: _selectedDay,
-      startHour: _startHour,
-      endHour: _endHour,
-      reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
-    ).toDisplayString();
-
-    final duplicateIndex = widget.existingBusyTimes.indexOf(result);
-    if (duplicateIndex != -1 && duplicateIndex != widget.editIndex) {
-      setState(() => _timeError = 'Bu mesgul saat zaten ekli.');
-      return;
-    }
-
-    Navigator.of(context).pop(_BusyTimeFormResult.save(result));
-  }
-
-  Future<void> _delete() async {
-    if (!_isEditing) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Mesgul Saati Sil'),
-        content: const Text('Bu busy time kaydi silinsin mi?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Iptal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Sil'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      Navigator.of(context).pop(const _BusyTimeFormResult.delete());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditing ? 'Mesgul Saat Duzenle' : 'Mesgul Saat Ekle'),
-        actions: [
-          if (_isEditing)
-            IconButton(
-              onPressed: _delete,
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Sil',
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Tum parametreleri bu ekrandan girin',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: cs.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Gun, baslangic, bitis ve aciklamayi tek seferde duzenleyebilirsiniz.',
-                          style: TextStyle(color: cs.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedDay,
-                          decoration: const InputDecoration(
-                            labelText: 'Gun',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: widget.weekdayLabels
-                              .map(
-                                (day) => DropdownMenuItem(
-                                  value: day,
-                                  child: Text(day),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _selectedDay = value);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final stacked = constraints.maxWidth < 420;
-                            final startField = DropdownButtonFormField<int>(
-                              initialValue: _startHour,
-                              decoration: const InputDecoration(
-                                labelText: 'Baslangic',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: _startHourOptions
-                                  .map(
-                                    (hour) => DropdownMenuItem(
-                                      value: hour,
-                                      child: Text(
-                                        _BusyTimeEntry._formatHour(hour),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _startHour = value;
-                                    if (_endHour <= _startHour) {
-                                      _endHour = _startHour + 1;
-                                    }
-                                    _timeError = null;
-                                  });
-                                }
-                              },
-                            );
-                            final endField = DropdownButtonFormField<int>(
-                              initialValue: _endHour,
-                              decoration: const InputDecoration(
-                                labelText: 'Bitis',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: _endHourOptions
-                                  .map(
-                                    (hour) => DropdownMenuItem(
-                                      value: hour,
-                                      child: Text(
-                                        _BusyTimeEntry._formatHour(hour),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _endHour = value;
-                                    _timeError = null;
-                                  });
-                                }
-                              },
-                            );
-
-                            if (stacked) {
-                              return Column(
-                                children: [
-                                  startField,
-                                  const SizedBox(height: 12),
-                                  endField,
-                                ],
-                              );
-                            }
-
-                            return Row(
-                              children: [
-                                Expanded(child: startField),
-                                const SizedBox(width: 12),
-                                Expanded(child: endField),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _reasonCtrl,
-                          maxLines: 2,
-                          onChanged: (_) => setState(() => _timeError = null),
-                          decoration: const InputDecoration(
-                            labelText: 'Busy Time Adi',
-                            hintText: 'Orn: Spor, Kulup, Is',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        if (_timeError != null) ...[
-                          const SizedBox(height: 12),
-                          Text(_timeError!, style: TextStyle(color: cs.error)),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  color: cs.primaryContainer.withAlpha(120),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Onizleme',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: cs.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _BusyTimeEntry(
-                            dayLabel: _selectedDay,
-                            startHour: _startHour,
-                            endHour: _endHour,
-                            reason: _reasonCtrl.text.trim().isEmpty
-                                ? null
-                                : _reasonCtrl.text.trim(),
-                          ).toDisplayString(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: _save,
-                  icon: Icon(_isEditing ? Icons.save_outlined : Icons.add),
-                  label: Text(
-                    _isEditing ? 'Mesgul Saati Guncelle' : 'Mesgul Saati Ekle',
-                  ),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+const _kDanger  = Color(0xFFFF5C7A);
+const _kWarning = Color(0xFFF2B14A);
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -387,43 +13,19 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  static const List<String> _weekdayLabels = [
-    'Pazartesi',
-    'Sali',
-    'Carsamba',
-    'Persembe',
-    'Cuma',
-    'Cumartesi',
-    'Pazar',
-  ];
+class _ProfileScreenState extends State<ProfileScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
-  // Profile state
   Map<String, dynamic>? _user;
-  List<Lesson> _lessons = [];
   bool _loading = true;
+  bool _isTestMode = false;
 
-  // Profile form
-  final _profileKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  final _gpaCtrl = TextEditingController();
-  final _semesterCtrl = TextEditingController();
-  double _stress = 3;
-  final List<String> _busyTimes = [];
-
-  void _applyUserData(Map<String, dynamic> user) {
-    _user = user;
-    _nameCtrl.text = user['name'] ?? '';
-    _gpaCtrl.text = user['gpa']?.toString() ?? '';
-    _semesterCtrl.text = user['semester']?.toString() ?? '';
-    _stress = ((user['stress'] as int?) ?? 3).toDouble();
-    _busyTimes
-      ..clear()
-      ..addAll(
-        (user['busyTimes'] as List? ?? const []).map((e) => e.toString()),
-      );
-    _sortBusyTimes();
-  }
+  String _preferredStudyTime = 'morning';
+  String _studyStyle = 'normal';
+  final List<Map<String, dynamic>> _busySlots = [];
+  bool _saving = false;
 
   @override
   void initState() {
@@ -431,58 +33,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _load();
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _gpaCtrl.dispose();
-    _semesterCtrl.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final user = await ApiClient.getMe();
-      final lessons = await ApiClient.getLessons();
+      final results = await Future.wait<Map<String, dynamic>>([
+        ApiClient.getMe(),
+        ApiClient.getMode(),
+      ]);
       if (!mounted) return;
+      final user = results[0];
+      final modeInfo = results[1];
       setState(() {
-        _lessons = lessons
-            .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
-            .toList();
-        _applyUserData(user);
+        _user = user;
+        _preferredStudyTime =
+            user['preferredStudyTime']?.toString() ?? 'morning';
+        _studyStyle = user['studyStyle']?.toString() ?? 'normal';
+        _busySlots
+          ..clear()
+          ..addAll(
+            ((user['busySlots'] as List?) ?? [])
+                .map((s) => Map<String, dynamic>.from(s as Map))
+                .toList(),
+          );
+        _isTestMode = modeInfo['mode']?.toString() == 'test';
+        _loading = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      _showErr(e.toString().replaceAll('Exception: ', ''));
+      setState(() => _loading = false);
     }
-    if (!mounted) return;
-    setState(() => _loading = false);
   }
 
-  Future<void> _saveProfile() async {
-    if (!_profileKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+  void _snack(String msg, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: error ? Colors.red : null,
+    ));
+  }
+
+  Future<void> _savePreferences() async {
+    setState(() => _saving = true);
     try {
-      final body = <String, dynamic>{
-        if (_nameCtrl.text.isNotEmpty) 'name': _nameCtrl.text.trim(),
-        if (_gpaCtrl.text.isNotEmpty)
-          'gpa': double.tryParse(_gpaCtrl.text.replaceAll(',', '.')),
-        if (_semesterCtrl.text.isNotEmpty)
-          'semester': _semesterCtrl.text.trim(),
-        'stress': _stress.toInt(),
-        'busyTimes': List<String>.from(_busyTimes),
-      };
-      final updated = await ApiClient.updateProfile(body);
+      await ApiClient.setupUser({
+        'preferredStudyTime': _preferredStudyTime,
+        'studyStyle': _studyStyle,
+      });
       if (!mounted) return;
-      setState(() => _applyUserData(updated));
-      if (!mounted) return;
-      _showMsg('Profil guncellendi!');
+      _snack('Preferences saved!');
     } catch (e) {
       if (!mounted) return;
-      _showErr(e.toString().replaceAll('Exception: ', ''));
+      _snack(e.toString().replaceAll('Exception: ', ''), error: true);
     }
     if (!mounted) return;
-    setState(() => _loading = false);
+    setState(() => _saving = false);
+  }
+
+  Future<void> _saveBusySlots() async {
+    setState(() => _saving = true);
+    try {
+      await ApiClient.updateBusySlots(_busySlots);
+      if (!mounted) return;
+      _snack('Busy slots saved!');
+    } catch (e) {
+      if (!mounted) return;
+      _snack(e.toString().replaceAll('Exception: ', ''), error: true);
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
   }
 
   Future<void> _logout() async {
@@ -491,1321 +108,983 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
-  void _showMsg(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
-
-  void _showErr(String m) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.red));
-
-  String? _semesterValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    if (int.tryParse(value.trim()) == null) {
-      return 'Sayisal donem girin';
-    }
-    return null;
-  }
-
-  _BusyTimeEntry? _parseBusyTime(String value) {
-    final match = RegExp(
-      r'^(Pazartesi|Sali|Carsamba|Persembe|Cuma|Cumartesi|Pazar)\s+(\d{2}):(\d{2})-(\d{2}):(\d{2})(?:\s+\(([^)]+)\))?$',
-    ).firstMatch(value.trim());
-
-    if (match == null) return null;
-
-    final startHour = int.parse(match.group(2)!);
-    final endHour = int.parse(match.group(4)!);
-    if (endHour <= startHour) return null;
-
-    return _BusyTimeEntry(
-      dayLabel: match.group(1)!,
-      startHour: startHour,
-      endHour: endHour,
-      reason: match.group(6)?.trim(),
-    );
-  }
-
-  void _sortBusyTimes() {
-    _busyTimes.sort((a, b) {
-      final first = _parseBusyTime(a);
-      final second = _parseBusyTime(b);
-      if (first == null || second == null) {
-        return a.compareTo(b);
-      }
-
-      final dayCompare = _weekdayLabels
-          .indexOf(first.dayLabel)
-          .compareTo(_weekdayLabels.indexOf(second.dayLabel));
-      if (dayCompare != 0) return dayCompare;
-
-      final startCompare = first.startHour.compareTo(second.startHour);
-      if (startCompare != 0) return startCompare;
-
-      return first.endHour.compareTo(second.endHour);
-    });
-  }
-
-  String _formatCredit(double value) {
-    return value == value.roundToDouble()
-        ? value.toStringAsFixed(0)
-        : value.toStringAsFixed(1);
-  }
-
-  String _shortDayLabel(String day) {
-    switch (day) {
-      case 'Pazartesi':
-        return 'Pzt';
-      case 'Sali':
-        return 'Sal';
-      case 'Carsamba':
-        return 'Car';
-      case 'Persembe':
-        return 'Per';
-      case 'Cuma':
-        return 'Cum';
-      case 'Cumartesi':
-        return 'Cmt';
-      case 'Pazar':
-        return 'Paz';
-      default:
-        return day;
-    }
-  }
-
-  List<int> _scheduleHours() {
-    return List<int>.generate(
-      _busyScheduleEndHour - _busyScheduleStartHour,
-      (index) => _busyScheduleStartHour + index,
-    );
-  }
-
-  List<_BusyTimeDisplayItem> _busyItemsForDay(String day) {
-    final items = <_BusyTimeDisplayItem>[];
-
-    for (var i = 0; i < _busyTimes.length; i++) {
-      final parsed = _parseBusyTime(_busyTimes[i]);
-      if (parsed == null || parsed.dayLabel != day) continue;
-
-      final visibleStart = math.max(parsed.startHour, _busyScheduleStartHour);
-      final visibleEnd = math.min(parsed.endHour, _busyScheduleEndHour);
-      if (visibleEnd <= visibleStart) continue;
-
-      items.add(
-        _BusyTimeDisplayItem(
-          index: i,
-          entry: parsed,
-          visibleStartHour: visibleStart,
-          visibleEndHour: visibleEnd,
-        ),
-      );
-    }
-
-    items.sort((a, b) {
-      final startCompare = a.visibleStartHour.compareTo(b.visibleStartHour);
-      if (startCompare != 0) return startCompare;
-      return a.visibleEndHour.compareTo(b.visibleEndHour);
-    });
-
-    return items;
-  }
-
-  bool _hourIsCovered(List<_BusyTimeDisplayItem> items, int hour) {
-    return items.any(
-      (item) => hour >= item.visibleStartHour && hour < item.visibleEndHour,
+  void _openBusySlotSheet({Map<String, dynamic>? existing, int? editIndex}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: kSurface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => _BusySlotSheet(
+        existing: existing,
+        editIndex: editIndex,
+        busySlots: _busySlots,
+        onChanged: () => setState(() {}),
+        onSave: _saveBusySlots,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final wideLayout = MediaQuery.sizeOf(context).width >= 1100;
+    super.build(context);
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: kBg,
+        body: Center(child: CircularProgressIndicator(color: kAccent)),
+      );
     }
+
+    final email = _user?['email']?.toString() ?? '';
+    final displayName =
+        email.isNotEmpty ? email.split('@').first : 'User';
+    final initial =
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
+
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: wideLayout ? 1180 : double.infinity,
-            ),
-            child: CustomScrollView(
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: wideLayout ? 164 : 140,
-                  pinned: true,
-                  backgroundColor: cs.primary,
-                  actions: [
-                    IconButton(
-                      icon: Icon(Icons.logout, color: cs.onPrimary),
-                      onPressed: _logout,
-                      tooltip: 'Cikis Yap',
-                    ),
-                  ],
-                  flexibleSpace: FlexibleSpaceBar(
-                    title: Text(
-                      'Profil',
-                      style: TextStyle(color: cs.onPrimary),
-                    ),
-                    background: Container(
-                      color: cs.primary,
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircleAvatar(
-                                radius: 30,
-                                backgroundColor: cs.onPrimary.withAlpha(50),
-                                child: Icon(
-                                  Icons.person,
-                                  size: 36,
-                                  color: cs.onPrimary,
-                                ),
-                              ),
-                              if (_user?['email'] != null)
-                                Text(
-                                  _user!['email'],
-                                  style: TextStyle(
-                                    color: cs.onPrimary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(child: _buildBusyTimesSummary(cs)),
-                SliverToBoxAdapter(child: _buildProfileSection(cs)),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Derslerim',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _showAddLessonDialog,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Ders Ekle'),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                _lessons.isEmpty
-                    ? SliverToBoxAdapter(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Text(
-                              'Henuz ders eklenmedi',
-                              style: TextStyle(color: cs.outline),
-                            ),
-                          ),
-                        ),
-                      )
-                    : SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (ctx, i) => _lessonTile(_lessons[i]),
-                          childCount: _lessons.length,
-                        ),
-                      ),
-                const SliverToBoxAdapter(child: SizedBox(height: 32)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileSection(ColorScheme cs) {
-    return Form(
-      key: _profileKey,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Kisisel Bilgiler',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: cs.primary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Ad Soyad',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final stacked = constraints.maxWidth < 520;
-                    if (stacked) {
-                      return Column(
-                        children: [
-                          TextFormField(
-                            controller: _gpaCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return null;
-                              final d = double.tryParse(v);
-                              if (d == null || d < 0 || d > 4) {
-                                return '0-4 arasi';
-                              }
-                              return null;
-                            },
-                            decoration: const InputDecoration(
-                              labelText: 'GPA (0-4)',
-                              prefixIcon: Icon(Icons.grade_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _semesterCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Donem No',
-                              prefixIcon: Icon(Icons.event_note_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: _semesterValidator,
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _gpaCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return null;
-                              final d = double.tryParse(v);
-                              if (d == null || d < 0 || d > 4) {
-                                return '0-4 arasi';
-                              }
-                              return null;
-                            },
-                            decoration: const InputDecoration(
-                              labelText: 'GPA (0-4)',
-                              prefixIcon: Icon(Icons.grade_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _semesterCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Donem No',
-                              prefixIcon: Icon(Icons.event_note_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: _semesterValidator,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Icon(Icons.psychology_outlined, size: 20),
-                    const SizedBox(width: 8),
-                    Text('Stres Seviyesi: ${_stress.toInt()}'),
-                    Expanded(
-                      child: Slider(
-                        value: _stress,
-                        min: 1,
-                        max: 5,
-                        divisions: 4,
-                        label: _stress.toInt().toString(),
-                        onChanged: (v) => setState(() => _stress = v),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                _buildBusyTimes(cs),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: _saveProfile,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Profili Kaydet'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBusyTimesSummary(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      backgroundColor: kBg,
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          color: kAccent,
+          backgroundColor: kSurface,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                 children: [
-                  Icon(Icons.schedule_rounded, color: cs.primary),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Haftalik Busy Schedule',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: cs.primary,
+                  // Header / kicker
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 12, 0, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Setup',
+                            style: TextStyle(
+                                color: kText2,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8)),
+                        SizedBox(height: 6),
+                        Text('Profile',
+                            style: TextStyle(
+                                color: kText1,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold)),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    '${_busyTimes.length} kayit',
-                    style: TextStyle(color: cs.onSurfaceVariant),
+                  // Avatar row
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [kAccent, Color(0xFF5AB6FF)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(initial,
+                                style: const TextStyle(
+                                    color: kBg,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(displayName,
+                                style: const TextStyle(
+                                    color: kText1,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700)),
+                            const Text('12 weeks · 314 blocks completed',
+                                style: TextStyle(
+                                    color: kText2, fontSize: 13)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Preferred study time
+                  _SectionLabel('Preferred study time'),
+                  const SizedBox(height: 8),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 2.8,
+                    children: [
+                      _TimeChip(
+                        v: 'morning',
+                        label: 'Morning',
+                        range: '08–11',
+                        icon: Icons.wb_sunny_outlined,
+                        pref: _preferredStudyTime,
+                        onTap: () => setState(
+                            () => _preferredStudyTime = 'morning'),
+                      ),
+                      _TimeChip(
+                        v: 'afternoon',
+                        label: 'Afternoon',
+                        range: '12–15',
+                        icon: Icons.wb_cloudy_outlined,
+                        pref: _preferredStudyTime,
+                        onTap: () => setState(
+                            () => _preferredStudyTime = 'afternoon'),
+                      ),
+                      _TimeChip(
+                        v: 'evening',
+                        label: 'Evening',
+                        range: '18–21',
+                        icon: Icons.nights_stay_outlined,
+                        pref: _preferredStudyTime,
+                        onTap: () => setState(
+                            () => _preferredStudyTime = 'evening'),
+                      ),
+                      _TimeChip(
+                        v: 'night',
+                        label: 'Night',
+                        range: '21–24',
+                        icon: Icons.bedtime_outlined,
+                        pref: _preferredStudyTime,
+                        onTap: () => setState(
+                            () => _preferredStudyTime = 'night'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  // Study style
+                  _SectionLabel('Study style'),
+                  const SizedBox(height: 8),
+                  Column(
+                    children: [
+                      _StyleCard(
+                        v: 'deep_focus',
+                        label: 'Deep focus',
+                        sub: '1 long block · max 2h',
+                        rule: 'maxSessions=1, max=4 blocks',
+                        value: _studyStyle,
+                        onChange: (s) =>
+                            setState(() => _studyStyle = s),
+                      ),
+                      const SizedBox(height: 8),
+                      _StyleCard(
+                        v: 'distributed',
+                        label: 'Distributed',
+                        sub: '3 short blocks · spread across day',
+                        rule: 'maxSessions=3, max=2 blocks',
+                        value: _studyStyle,
+                        onChange: (s) =>
+                            setState(() => _studyStyle = s),
+                      ),
+                      const SizedBox(height: 8),
+                      _StyleCard(
+                        v: 'normal',
+                        label: 'Balanced',
+                        sub: '2 medium blocks · default',
+                        rule: 'maxSessions=2, max=3 blocks',
+                        value: _studyStyle,
+                        onChange: (s) =>
+                            setState(() => _studyStyle = s),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    onPressed: _saving ? null : _savePreferences,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kAccent,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Save preferences',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: 24),
+                  // Busy slots
+                  Row(
+                    children: [
+                      Text('BUSY SLOTS · ${_busySlots.length}',
+                          style: const TextStyle(
+                              color: kText2,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => _openBusySlotSheet(),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add,
+                                size: 12, color: kAccent),
+                            SizedBox(width: 4),
+                            Text('Add',
+                                style: TextStyle(
+                                    color: kAccent,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (_busySlots.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No busy slots added yet.',
+                          style: TextStyle(
+                              color: kText2, fontSize: 13)),
+                    )
+                  else
+                    Column(
+                      children: List.generate(_busySlots.length, (i) {
+                        final slot = _busySlots[i];
+                        final dayIdx =
+                            (slot['dayOfWeek'] as int? ?? 1) - 1;
+                        const dayLetters = [
+                          'M', 'T', 'W', 'T', 'F', 'S', 'S'
+                        ];
+                        final dayLetter =
+                            dayIdx >= 0 && dayIdx < 7
+                                ? dayLetters[dayIdx]
+                                : '?';
+                        final fatigue =
+                            (slot['fatigueLevel'] as num?)?.toInt() ??
+                                3;
+                        final label =
+                            slot['label']?.toString() ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: GestureDetector(
+                            onTap: () => _openBusySlotSheet(
+                                existing: slot, editIndex: i),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: kSurface,
+                                borderRadius:
+                                    BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: kBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 28,
+                                    child: Text(dayLetter,
+                                        textAlign:
+                                            TextAlign.center,
+                                        style: const TextStyle(
+                                            color: kText2,
+                                            fontSize: 11,
+                                            fontWeight:
+                                                FontWeight.w700)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (label.isNotEmpty)
+                                          Text(label,
+                                              style: const TextStyle(
+                                                  color: kText1,
+                                                  fontSize: 14,
+                                                  fontWeight:
+                                                      FontWeight
+                                                          .w600)),
+                                        Text(
+                                            '${slot['startTime']} – ${slot['endTime']}',
+                                            style: const TextStyle(
+                                                color: kText2,
+                                                fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                  _FatigueDots(level: fatigue),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  const SizedBox(height: 24),
+                  // Developer / Test mode (sadece MODE=test'te gösterilir)
+                  if (_isTestMode) ...[
+                    _SectionLabel('Developer'),
+                    const SizedBox(height: 8),
+                    _TestModeCard(onSave: _snack),
+                    const SizedBox(height: 24),
+                  ],
+                  // Logout
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout_rounded,
+                          size: 18, color: _kDanger),
+                      label: const Text('Sign out',
+                          style: TextStyle(color: _kDanger)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: _kDanger),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(12)),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                '08:00-21:00 arasi haftalik schedule asagida yer aliyor. Bos hucrelerdeki + ile yeni busy time ekleyebilir, mevcut bloklarda duzenleme yapabilirsiniz.',
-                style: TextStyle(color: cs.onSurfaceVariant),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildBusyTimes(ColorScheme cs) {
-    final hours = _scheduleHours();
+// ── Section label ─────────────────────────────────────────────────────────────
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text.toUpperCase(),
+        style: const TextStyle(
+            color: kText2,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8));
+  }
+}
+
+// ── Time chip ─────────────────────────────────────────────────────────────────
+
+class _TimeChip extends StatelessWidget {
+  const _TimeChip({
+    required this.v,
+    required this.label,
+    required this.range,
+    required this.icon,
+    required this.pref,
+    required this.onTap,
+  });
+
+  final String v;
+  final String label;
+  final String range;
+  final IconData icon;
+  final String pref;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = pref == v;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: on ? kAccent.withAlpha(46) : kSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: on ? kAccent : kBorder, width: 0.5),
+        ),
+        child: Row(
           children: [
-            Text(
-              'Mesguliyet Takvimi',
-              style: TextStyle(color: cs.onSurfaceVariant),
-            ),
-            TextButton.icon(
-              icon: const Icon(Icons.add_circle_outline, size: 16),
-              label: const Text('Yeni Busy Time'),
-              onPressed: () => _showBusyTimeForm(
-                initialValue: const _BusyTimeEntry(
-                  dayLabel: 'Pazartesi',
-                  startHour: _busyScheduleStartHour,
-                  endHour: _busyScheduleStartHour + 1,
-                ),
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: on ? kAccent : kBorder,
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: Icon(icon,
+                  color: on ? kBg : kText2, size: 15),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        color: on ? kText1 : kText2,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600)),
+                Text(range,
+                    style: const TextStyle(
+                        color: kText2, fontSize: 11)),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Bos hucrelerdeki + ile yeni kayit acin. Dolu bloklardaki duzenle alani ile ismi degistirebilir veya silebilirsiniz.',
-          style: TextStyle(fontSize: 12, color: cs.outline),
+      ),
+    );
+  }
+}
+
+// ── Style card ────────────────────────────────────────────────────────────────
+
+class _StyleCard extends StatelessWidget {
+  const _StyleCard({
+    required this.v,
+    required this.label,
+    required this.sub,
+    required this.rule,
+    required this.value,
+    required this.onChange,
+  });
+
+  final String v;
+  final String label;
+  final String sub;
+  final String rule;
+  final String value;
+  final ValueChanged<String> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = value == v;
+    return GestureDetector(
+      onTap: () => onChange(v),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: on ? kAccent.withAlpha(46) : kSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: on ? kAccent : kBorder, width: 0.5),
         ),
-        const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: _busyScheduleHourColumnWidth,
-                child: Column(
-                  children: [
-                    Container(
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer.withAlpha(130),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Saat',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: cs.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...hours.map(
-                      (hour) => Container(
-                        width: _busyScheduleHourColumnWidth,
-                        height: _busyScheduleCellHeight,
-                        alignment: Alignment.topCenter,
-                        padding: const EdgeInsets.only(top: 6),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: cs.outlineVariant),
-                          ),
-                        ),
-                        child: Text(
-                          _BusyTimeEntry._formatHour(hour),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: cs.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+        child: Row(
+          children: [
+            // Radio circle
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: on ? kAccent : kText2,
+                  width: 1.5,
                 ),
+                color: on ? kAccent : Colors.transparent,
               ),
-              const SizedBox(width: 8),
-              ..._weekdayLabels.map(
-                (day) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _buildBusyDayColumn(day, hours, cs),
+              child: on
+                  ? Center(
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                            color: kBg, shape: BoxShape.circle),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          color: on ? kText1 : kText2,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
+                  Text(sub,
+                      style: const TextStyle(
+                          color: kText2, fontSize: 12)),
+                ],
+              ),
+            ),
+            // Monospace rule
+            SizedBox(
+              width: 110,
+              child: Text(rule,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: kText2.withAlpha(180),
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                  )),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Fatigue dots ──────────────────────────────────────────────────────────────
+
+class _FatigueDots extends StatelessWidget {
+  const _FatigueDots({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color dotColor;
+    if (level >= 4) {
+      dotColor = _kDanger;
+    } else if (level >= 3) {
+      dotColor = _kWarning;
+    } else {
+      dotColor = kAccent;
+    }
+
+    return Row(
+      children: List.generate(5, (i) {
+        final filled = i < level;
+        return Container(
+          width: 4,
+          height: 14,
+          margin: const EdgeInsets.only(right: 2),
+          decoration: BoxDecoration(
+            color: filled ? dotColor : kBorder,
+            borderRadius: BorderRadius.circular(1),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+// ── Test mode card ────────────────────────────────────────────────────────────
+
+class _TestModeCard extends StatefulWidget {
+  const _TestModeCard({required this.onSave});
+
+  final void Function(String msg, {bool error}) onSave;
+
+  @override
+  State<_TestModeCard> createState() => _TestModeCardState();
+}
+
+class _TestModeCardState extends State<_TestModeCard> {
+  DateTime _now = DateTime.now();
+
+  Future<void> _edit() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _now,
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2030),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+            colorScheme:
+                const ColorScheme.dark(primary: kAccent)),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_now),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+            colorScheme:
+                const ColorScheme.dark(primary: kAccent)),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return;
+    final dt = DateTime(date.year, date.month, date.day,
+        time.hour, time.minute);
+    try {
+      await ApiClient.setTestClock(dt.toIso8601String());
+      setState(() => _now = dt);
+      widget.onSave(
+          'Test clock: ${dt.toIso8601String().substring(0, 16)}');
+    } catch (e) {
+      widget.onSave(
+          e.toString().replaceAll('Exception: ', ''),
+          error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _kDanger.withAlpha(46),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.access_time,
+                    size: 14, color: _kDanger),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('mod=test',
+                        style: TextStyle(
+                            color: kText1,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    Text(
+                        'Override the system clock — algorithm reads from this.',
+                        style:
+                            TextStyle(color: kText2, fontSize: 12)),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBusyDayColumn(String day, List<int> hours, ColorScheme cs) {
-    final items = _busyItemsForDay(day);
-
-    return SizedBox(
-      width: _busyScheduleDayColumnWidth,
-      child: Column(
-        children: [
-          Container(
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withAlpha(130),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              _shortDayLabel(day),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: cs.onPrimaryContainer,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: hours.length * _busyScheduleCellHeight,
-            child: Stack(
-              children: [
-                Column(
-                  children: hours.map((hour) {
-                    final isCovered = _hourIsCovered(items, hour);
-                    return Container(
-                      width: _busyScheduleDayColumnWidth,
-                      height: _busyScheduleCellHeight,
-                      decoration: BoxDecoration(
-                        color: isCovered
-                            ? cs.surfaceContainerHighest.withAlpha(70)
-                            : cs.surface,
-                        border: Border(
-                          bottom: BorderSide(color: cs.outlineVariant),
-                          left: BorderSide(color: cs.outlineVariant),
-                          right: BorderSide(color: cs.outlineVariant),
-                        ),
-                      ),
-                      child: isCovered
-                          ? const SizedBox.shrink()
-                          : Center(
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(10),
-                                onTap: () => _showBusyTimeForm(
-                                  initialValue: _BusyTimeEntry(
-                                    dayLabel: day,
-                                    startHour: hour,
-                                    endHour: hour + 1,
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.add_circle_outline,
-                                        size: 18,
-                                        color: cs.primary,
-                                      ),
-                                      Text(
-                                        'Yeni',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: cs.primary,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                    );
-                  }).toList(),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text('Now:',
+                  style:
+                      TextStyle(color: kText2, fontSize: 12)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _now.toIso8601String().substring(0, 16).replaceAll('T', ' '),
+                  style: const TextStyle(
+                      color: kText1,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600),
                 ),
-                ...items.map((item) => _buildBusyBlock(item, cs)),
-              ],
-            ),
+              ),
+              GestureDetector(
+                onTap: _edit,
+                child: Container(
+                  height: 36,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: kAccent.withAlpha(46),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: kBorder),
+                  ),
+                  child: const Center(
+                    child: Text('Edit',
+                        style: TextStyle(
+                            color: kAccent,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildBusyBlock(_BusyTimeDisplayItem item, ColorScheme cs) {
-    final top =
-        (item.visibleStartHour - _busyScheduleStartHour) *
-        _busyScheduleCellHeight;
-    final height =
-        (item.visibleEndHour - item.visibleStartHour) * _busyScheduleCellHeight;
-    final blockLabel = item.entry.reason?.trim().isNotEmpty == true
-        ? item.entry.reason!.trim()
-        : 'Mesgul';
+// ── Busy slot sheet ───────────────────────────────────────────────────────────
 
-    return Positioned(
-      top: top + 4,
-      left: 4,
-      right: 4,
-      height: math.max(height - 8, 44.0),
-      child: Material(
-        color: cs.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _showBusyTimeForm(editIndex: item.index),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        blockLabel,
-                        maxLines: height <= _busyScheduleCellHeight ? 1 : 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: cs.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 16,
-                      color: cs.onPrimaryContainer,
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  '${_BusyTimeEntry._formatHour(item.visibleStartHour)}-${_BusyTimeEntry._formatHour(item.visibleEndHour)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.onPrimaryContainer.withAlpha(220),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withAlpha(30),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'Edit',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: cs.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+class _BusySlotSheet extends StatefulWidget {
+  const _BusySlotSheet({
+    this.existing,
+    this.editIndex,
+    required this.busySlots,
+    required this.onChanged,
+    required this.onSave,
+  });
+
+  final Map<String, dynamic>? existing;
+  final int? editIndex;
+  final List<Map<String, dynamic>> busySlots;
+  final VoidCallback onChanged;
+  final Future<void> Function() onSave;
+
+  @override
+  State<_BusySlotSheet> createState() => _BusySlotSheetState();
+}
+
+class _BusySlotSheetState extends State<_BusySlotSheet> {
+  int _dayOfWeek = 1;
+  late TextEditingController _startCtrl;
+  late TextEditingController _endCtrl;
+  int _fatigue = 3;
+  bool _saving = false;
+
+  static const _dayNames = [
+    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _dayOfWeek = widget.existing?['dayOfWeek'] as int? ?? 1;
+    _startCtrl = TextEditingController(
+        text: widget.existing?['startTime']?.toString() ?? '09:00');
+    _endCtrl = TextEditingController(
+        text: widget.existing?['endTime']?.toString() ?? '11:00');
+    _fatigue =
+        (widget.existing?['fatigueLevel'] as num?)?.toInt() ?? 3;
   }
 
-  Future<void> _showBusyTimeForm({
-    int? editIndex,
-    _BusyTimeEntry? initialValue,
-  }) async {
-    final existing = editIndex == null
-        ? initialValue
-        : _parseBusyTime(_busyTimes[editIndex]);
-    if (editIndex != null && existing == null) {
-      _showErr('Mesgul saat bilgisi okunamadi.');
+  @override
+  void dispose() {
+    _startCtrl.dispose();
+    _endCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _isValid() {
+    final re = RegExp(r'^\d{2}:\d{2}$');
+    return re.hasMatch(_startCtrl.text.trim()) &&
+        re.hasMatch(_endCtrl.text.trim());
+  }
+
+  Future<void> _confirm() async {
+    if (!_isValid()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Time format must be HH:MM')));
       return;
     }
-
-    final result = await Navigator.of(context).push<_BusyTimeFormResult>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => _BusyTimeFormScreen(
-          weekdayLabels: _weekdayLabels,
-          existingBusyTimes: List<String>.from(_busyTimes),
-          initialValue: existing,
-          editIndex: editIndex,
-        ),
-      ),
-    );
-    if (!mounted || result == null) return;
-
-    setState(() {
-      if (result.delete) {
-        if (editIndex != null) {
-          _busyTimes.removeAt(editIndex);
-        }
-      } else if (result.value != null) {
-        if (editIndex == null) {
-          _busyTimes.add(result.value!);
-        } else {
-          _busyTimes[editIndex] = result.value!;
-        }
-      }
-      _sortBusyTimes();
-    });
+    final slot = {
+      'dayOfWeek': _dayOfWeek,
+      'startTime': _startCtrl.text.trim(),
+      'endTime': _endCtrl.text.trim(),
+      'fatigueLevel': _fatigue,
+    };
+    if (widget.editIndex != null) {
+      widget.busySlots[widget.editIndex!] = slot;
+    } else {
+      widget.busySlots.add(slot);
+    }
+    widget.onChanged();
+    setState(() => _saving = true);
+    await widget.onSave();
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
-  Widget _lessonTile(Lesson lesson) {
-    final cs = Theme.of(context).colorScheme;
-    final lessonDetails = <String>[
-      if (lesson.semester.trim().isNotEmpty) '${lesson.semester}. donem',
-      if (lesson.credit > 0) '${_formatCredit(lesson.credit)} kredi',
-      '${lesson.deadlines.length} sinav',
-    ];
-    if (lesson.delay > 0) {
-      lessonDetails.add('Gecikme: ${lesson.delay}');
+  void _delete() {
+    if (widget.editIndex != null) {
+      widget.busySlots.removeAt(widget.editIndex!);
+      widget.onChanged();
+      widget.onSave();
     }
+    Navigator.pop(context);
+  }
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: cs.primaryContainer,
-          child: Text(
-            '${lesson.difficulty}',
-            style: TextStyle(
-              color: cs.onPrimaryContainer,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(
-          lesson.lessonName,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(lessonDetails.join(' • ')),
-        trailing: Row(
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditLessonDialog(lesson),
-              tooltip: 'Duzenle',
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: kBorder,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
             ),
-            IconButton(
-              icon: Icon(Icons.delete_outline, color: cs.error),
-              onPressed: () => _deleteLesson(lesson),
-              tooltip: 'Sil',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _deleteLesson(Lesson lesson) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Dersi Sil'),
-        content: Text('"${lesson.lessonName}" silinsin mi?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Iptal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Sil'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    setState(() => _loading = true);
-    try {
-      await ApiClient.deleteLesson(lesson.id);
-      await _load();
-      _showMsg('Ders silindi');
-    } catch (e) {
-      _showErr(e.toString().replaceAll('Exception: ', ''));
-    }
-    setState(() => _loading = false);
-  }
-
-  Future<void> _showAddLessonDialog() async {
-    final nameCtrl = TextEditingController();
-    final semCtrl = TextEditingController(
-      text: _user?['semester']?.toString() ?? '',
-    );
-    final creditCtrl = TextEditingController(text: '3');
-    int difficulty = 3;
-    final deadlines = <Map<String, dynamic>>[];
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => Dialog(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Ders Ekle',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: nameCtrl,
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Gerekli' : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Ders Adi',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: semCtrl,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Gerekli';
-                        if (int.tryParse(v.trim()) == null) {
-                          return 'Sayisal girin';
-                        }
-                        return null;
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Donem No (orn: 4)',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: creditCtrl,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Gerekli';
-                        if (double.tryParse(v.trim().replaceAll(',', '.')) ==
-                            null) {
-                          return 'Sayisal girin';
-                        }
-                        return null;
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Kredi',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text('Zorluk: '),
-                        Expanded(
-                          child: Slider(
-                            value: difficulty.toDouble(),
-                            min: 1,
-                            max: 5,
-                            divisions: 4,
-                            label: difficulty.toString(),
-                            onChanged: (v) =>
-                                setS(() => difficulty = v.toInt()),
-                          ),
-                        ),
-                        Text('$difficulty/5'),
-                      ],
-                    ),
-                    const Divider(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Sinav Tarihleri',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        TextButton.icon(
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Ekle'),
-                          onPressed: () async {
-                            final d = await _showDeadlineDialog(ctx);
-                            if (d != null) {
-                              setS(() => deadlines.add(d));
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    ...deadlines.asMap().entries.map(
-                      (entry) => ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.event, size: 18),
-                        title: Text(
-                          '${entry.value['type']} — ${entry.value['date']}',
-                        ),
-                        subtitle: entry.value['label'] != null
-                            ? Text(entry.value['label'])
-                            : null,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () async {
-                                final updated = await _showDeadlineDialog(
-                                  ctx,
-                                  initialDeadline: entry.value,
-                                );
-                                if (updated != null) {
-                                  setS(() => deadlines[entry.key] = updated);
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 16),
-                              onPressed: () =>
-                                  setS(() => deadlines.removeAt(entry.key)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Iptal'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: () async {
-                            if (!formKey.currentState!.validate()) {
-                              return;
-                            }
-                            Navigator.pop(ctx);
-                            setState(() => _loading = true);
-                            try {
-                              await ApiClient.registerLessons([
-                                {
-                                  'lessonName': nameCtrl.text.trim(),
-                                  'credit': double.tryParse(
-                                    creditCtrl.text.trim().replaceAll(',', '.'),
-                                  ),
-                                  'difficulty': difficulty,
-                                  'deadlines': deadlines,
-                                  'semester': semCtrl.text.trim(),
-                                },
-                              ]);
-                              await _load();
-                              _showMsg('Ders eklendi!');
-                            } catch (e) {
-                              _showErr(
-                                e.toString().replaceAll('Exception: ', ''),
-                              );
-                            }
-                            setState(() => _loading = false);
-                          },
-                          child: const Text('Kaydet'),
-                        ),
-                      ],
-                    ),
-                  ],
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Text(
+                  widget.editIndex != null
+                      ? 'Edit busy slot'
+                      : 'Add busy slot',
+                  style: const TextStyle(
+                      color: kText1,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold),
                 ),
-              ),
+                const Spacer(),
+                if (widget.editIndex != null)
+                  GestureDetector(
+                    onTap: _delete,
+                    child: const Icon(Icons.delete_outline,
+                        color: _kDanger),
+                  ),
+              ],
             ),
-          ),
-        ),
-      ),
-    );
-
-    nameCtrl.dispose();
-    semCtrl.dispose();
-    creditCtrl.dispose();
-  }
-
-  Future<void> _showEditLessonDialog(Lesson lesson) async {
-    final nameCtrl = TextEditingController(text: lesson.lessonName);
-    final semCtrl = TextEditingController(text: lesson.semester);
-    final creditCtrl = TextEditingController(
-      text: _formatCredit(lesson.credit),
-    );
-    int difficulty = lesson.difficulty;
-    final deadlines = lesson.deadlines
-        .map((d) => d.toJson())
-        .toList()
-        .cast<Map<String, dynamic>>();
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => Dialog(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Ders Duzenle',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+            const SizedBox(height: 20),
+            const Text('DAY',
+                style: TextStyle(
+                    color: kText2,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(7, (i) {
+                final selected = i + 1 == _dayOfWeek;
+                return GestureDetector(
+                  onTap: () =>
+                      setState(() => _dayOfWeek = i + 1),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected ? kAccent : kBorder,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: nameCtrl,
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Gerekli' : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Ders Adi',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: semCtrl,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Gerekli';
-                        if (int.tryParse(v.trim()) == null) {
-                          return 'Sayisal girin';
-                        }
-                        return null;
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Donem No',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: creditCtrl,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Gerekli';
-                        if (double.tryParse(v.trim().replaceAll(',', '.')) ==
-                            null) {
-                          return 'Sayisal girin';
-                        }
-                        return null;
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Kredi',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text('Zorluk: '),
-                        Expanded(
-                          child: Slider(
-                            value: difficulty.toDouble(),
-                            min: 1,
-                            max: 5,
-                            divisions: 4,
-                            label: difficulty.toString(),
-                            onChanged: (v) =>
-                                setS(() => difficulty = v.toInt()),
-                          ),
-                        ),
-                        Text('$difficulty/5'),
-                      ],
-                    ),
-                    const Divider(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Sinav Tarihleri',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        TextButton.icon(
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Ekle'),
-                          onPressed: () async {
-                            final d = await _showDeadlineDialog(ctx);
-                            if (d != null) {
-                              setS(() => deadlines.add(d));
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    ...deadlines.asMap().entries.map(
-                      (entry) => ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.event, size: 18),
-                        title: Text(
-                          '${entry.value['type']} — ${entry.value['date']}',
-                        ),
-                        subtitle: entry.value['label'] != null
-                            ? Text(entry.value['label'])
-                            : null,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () async {
-                                final updated = await _showDeadlineDialog(
-                                  ctx,
-                                  initialDeadline: entry.value,
-                                );
-                                if (updated != null) {
-                                  setS(() => deadlines[entry.key] = updated);
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 16),
-                              onPressed: () =>
-                                  setS(() => deadlines.removeAt(entry.key)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Iptal'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: () async {
-                            if (!formKey.currentState!.validate()) {
-                              return;
-                            }
-                            Navigator.pop(ctx);
-                            setState(() => _loading = true);
-                            try {
-                              final body = <String, dynamic>{
-                                'lessonName': lesson.lessonName,
-                              };
-                              if (nameCtrl.text.trim() != lesson.lessonName) {
-                                body['newLessonName'] = nameCtrl.text.trim();
-                              }
-                              body['credit'] = double.tryParse(
-                                creditCtrl.text.trim().replaceAll(',', '.'),
-                              );
-                              body['difficulty'] = difficulty;
-                              body['deadlines'] = deadlines;
-                              body['semester'] = semCtrl.text.trim();
-                              await ApiClient.updateLesson(body);
-                              await _load();
-                              _showMsg('Ders guncellendi!');
-                            } catch (e) {
-                              _showErr(
-                                e.toString().replaceAll('Exception: ', ''),
-                              );
-                            }
-                            setState(() => _loading = false);
-                          },
-                          child: const Text('Guncelle'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    nameCtrl.dispose();
-    semCtrl.dispose();
-    creditCtrl.dispose();
-  }
-
-  Future<Map<String, dynamic>?> _showDeadlineDialog(
-    BuildContext parentCtx, {
-    Map<String, dynamic>? initialDeadline,
-  }) async {
-    String type = initialDeadline?['type']?.toString() ?? 'midterm';
-    DateTime selectedDate =
-        DateTime.tryParse(initialDeadline?['date']?.toString() ?? '') ??
-        DateTime.now();
-    final labelCtrl = TextEditingController(
-      text: initialDeadline?['label']?.toString() ?? '',
-    );
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: parentCtx,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: Text(
-            initialDeadline == null ? 'Sinav Ekle' : 'Sinav Bilgisi Duzenle',
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: type,
-                decoration: const InputDecoration(
-                  labelText: 'Tur',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'midterm', child: Text('Vize')),
-                  DropdownMenuItem(value: 'final', child: Text('Final')),
-                  DropdownMenuItem(value: 'homework', child: Text('Odev')),
-                ],
-                onChanged: (v) => setS(() => type = v!),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today),
-                title: Text(selectedDate.toIso8601String().substring(0, 10)),
-                subtitle: const Text('Tarih Sec'),
-                onTap: () async {
-                  final d = await showDatePicker(
-                    context: ctx,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2100),
-                  );
-                  if (d != null) setS(() => selectedDate = d);
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: labelCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Etiket (istegle bagli, orn: HW1)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Iptal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, {
-                'type': type,
-                'date': selectedDate.toIso8601String().substring(0, 10),
-                if (labelCtrl.text.isNotEmpty) 'label': labelCtrl.text,
+                    child: Text(_dayNames[i],
+                        style: TextStyle(
+                            color: selected
+                                ? Colors.white
+                                : kText2,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ),
+                );
               }),
-              child: Text(initialDeadline == null ? 'Ekle' : 'Guncelle'),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _startCtrl,
+                    style: const TextStyle(color: kText1),
+                    decoration: const InputDecoration(
+                        labelText: 'Start',
+                        hintText: '09:00',
+                        hintStyle: TextStyle(color: kText2)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _endCtrl,
+                    style: const TextStyle(color: kText1),
+                    decoration: const InputDecoration(
+                        labelText: 'End',
+                        hintText: '11:00',
+                        hintStyle: TextStyle(color: kText2)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Text('Fatigue',
+                    style:
+                        TextStyle(color: kText2, fontSize: 13)),
+                const SizedBox(width: 12),
+                ...List.generate(5, (i) {
+                  final n = i + 1;
+                  final sel = n == _fatigue;
+                  return GestureDetector(
+                    onTap: () => setState(() => _fatigue = n),
+                    child: AnimatedContainer(
+                      duration:
+                          const Duration(milliseconds: 120),
+                      width: 36,
+                      height: 36,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: sel ? kAccent : kBorder,
+                        borderRadius:
+                            BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text('$n',
+                            style: TextStyle(
+                                color: sel
+                                    ? Colors.white
+                                    : kText2,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _confirm,
+                style: FilledButton.styleFrom(
+                  backgroundColor: kAccent,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(12)),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        widget.editIndex != null
+                            ? 'Update'
+                            : 'Add',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600)),
+              ),
             ),
           ],
         ),
       ),
     );
-
-    labelCtrl.dispose();
-    return result;
   }
 }

@@ -1,106 +1,93 @@
-class DailySlot {
-  final String day;
-  final String? dayLabel;
-  final String? dayKey;
-  final int dayIndex;
-  final int hourIndex;
-  final String lessonId;
+/// Backend'den gelen tek bir zamanlanmış çalışma bloğu.
+class ScheduledBlock {
+  final int id;
+  final int lessonId;
   final String lessonName;
-  final double hours;
-  final double score;
-  final bool isBusy;
-  final bool isEmpty;
+  final String date;      // YYYY-MM-DD
+  final String startTime; // HH:MM
+  final String endTime;   // HH:MM
+  final int blockCount;   // 1 blok = 30 dakika
+  final bool isReview;
+  final bool completed;
 
-  DailySlot({
-    required this.day,
-    this.dayLabel,
-    this.dayKey,
-    required this.dayIndex,
-    required this.hourIndex,
+  ScheduledBlock({
+    required this.id,
     required this.lessonId,
     required this.lessonName,
-    required this.hours,
-    required this.score,
-    this.isBusy = false,
-    this.isEmpty = false,
+    required this.date,
+    required this.startTime,
+    required this.endTime,
+    required this.blockCount,
+    required this.isReview,
+    required this.completed,
   });
 
-  factory DailySlot.fromJson(Map<String, dynamic> j) => DailySlot(
-    day: j['day'] as String,
-    dayLabel: j['dayLabel'] as String?,
-    dayKey: j['dayKey'] as String?,
-    dayIndex: (j['dayIndex'] as num?)?.toInt() ?? 0,
-    hourIndex: (j['hourIndex'] as num?)?.toInt() ?? 0,
-    lessonId: j['lessonId'] as String,
-    lessonName: j['lessonName'] as String,
-    hours: (j['hours'] as num?)?.toDouble() ?? 1,
-    score: (j['score'] as num?)?.toDouble() ?? 0,
-    isBusy: j['isBusy'] as bool? ?? false,
-    isEmpty: j['isEmpty'] as bool? ?? false,
+  factory ScheduledBlock.fromJson(Map<String, dynamic> j) => ScheduledBlock(
+    id: j['id'] as int,
+    lessonId: j['lessonId'] as int,
+    lessonName:
+        (j['lesson'] as Map<String, dynamic>?)?['name']?.toString() ?? 'Ders',
+    date: (j['date'] as String).substring(0, 10),
+    startTime: j['startTime'] as String,
+    endTime: j['endTime'] as String,
+    blockCount: (j['blockCount'] as num).toInt(),
+    isReview: j['isReview'] as bool? ?? false,
+    completed: j['completed'] as bool? ?? false,
   );
 }
 
-class WeeklySchedule {
-  final String generatedAt;
-  final String weekStart;
-  final List<DailySlot> slots;
+/// Haftalık planı ve içindeki blokları temsil eden model.
+class WeeklyPlan {
+  final String weekStart; // YYYY-MM-DD
+  final List<ScheduledBlock> blocks;
 
-  WeeklySchedule({
-    required this.generatedAt,
-    required this.weekStart,
-    required this.slots,
-  });
+  WeeklyPlan({required this.weekStart, required this.blocks});
 
-  factory WeeklySchedule.fromJson(Map<String, dynamic> j) => WeeklySchedule(
-    generatedAt: j['generatedAt'] as String,
-    weekStart: j['weekStart'] as String,
-    slots: (j['slots'] as List)
-        .map((s) => DailySlot.fromJson(s as Map<String, dynamic>))
+  factory WeeklyPlan.fromJson(Map<String, dynamic> j) => WeeklyPlan(
+    weekStart: (j['weekStart'] as String).substring(0, 10),
+    blocks: ((j['blocks'] as List?) ?? [])
+        .map((b) => ScheduledBlock.fromJson(b as Map<String, dynamic>))
         .toList(),
   );
 
-  Map<String, List<DailySlot>> get byDay {
-    final Map<String, List<DailySlot>> map = {};
-    for (final slot in slots) {
-      (map[slot.day] ??= []).add(slot);
-    }
-    return map;
-  }
+  /// Belirli bir güne (YYYY-MM-DD) ait blokları startTime sırasıyla döndürür.
+  List<ScheduledBlock> blocksForDate(String date) =>
+      blocks.where((b) => b.date == date).toList()
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
 }
 
+/// Günlük checklist'teki tek bir ders kalemi.
 class ChecklistItem {
-  final String id;
-  final String lessonId;
-  final String lessonName;
-  final String date;
-  final double plannedHours;
-  final double? actualHours;
-  final String status;
-  final double? remaining;
+  final int id;
+  final int lessonId;
+  final String lessonName; // API client tarafından doldurulur
+  final int plannedBlocks;
+  final int completedBlocks;
+  final bool delayed;
 
   ChecklistItem({
     required this.id,
     required this.lessonId,
     required this.lessonName,
-    required this.date,
-    required this.plannedHours,
-    this.actualHours,
-    required this.status,
-    this.remaining,
+    required this.plannedBlocks,
+    required this.completedBlocks,
+    required this.delayed,
   });
+}
 
-  factory ChecklistItem.fromJson(Map<String, dynamic> j) => ChecklistItem(
-    id: j['id'] as String,
-    lessonId: j['lessonId'] as String,
-    lessonName: j['lessonName'] as String,
-    date: j['date'] as String,
-    plannedHours: (j['plannedHours'] as num).toDouble(),
-    actualHours: j['actualHours'] != null
-        ? (j['actualHours'] as num).toDouble()
-        : null,
-    status: j['status'] as String,
-    remaining: j['remaining'] != null
-        ? (j['remaining'] as num).toDouble()
-        : null,
-  );
+/// Günlük checklist modeli (GET /checklist/:date yanıtı).
+class DailyChecklist {
+  final int id;
+  final String date;
+  final int stressLevel;
+  final int fatigueLevel;
+  final List<ChecklistItem> items;
+
+  DailyChecklist({
+    required this.id,
+    required this.date,
+    required this.stressLevel,
+    required this.fatigueLevel,
+    required this.items,
+  });
 }
