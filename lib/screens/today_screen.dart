@@ -30,6 +30,7 @@ class _TodayScreenState extends State<TodayScreen>
   int _fatigueLevel = 3;
   bool _submitting = false;
   bool _sleepAsked = false;
+  List<({String lessonName, String title, DateTime date, int daysLeft})> _upcomingDeadlines = [];
 
   @override
   void initState() {
@@ -60,6 +61,32 @@ class _TodayScreenState extends State<TodayScreen>
         _stressLevel = (cl['stressLevel'] as num? ?? 2).toInt();
         _fatigueLevel = (cl['fatigueLevel'] as num? ?? 3).toInt();
       }
+      // Load upcoming deadlines
+      try {
+        final raw = await ApiClient.getLessons();
+        final now = DateTime.now();
+        final deadlines = <({String lessonName, String title, DateTime date, int daysLeft})>[];
+        for (final l in raw) {
+          final lessonName = (l['name'] as String? ?? '');
+          final dlList = (l['deadlines'] as List?) ?? [];
+          for (final d in dlList) {
+            final date = DateTime.tryParse(d['deadlineDate'] as String? ?? '');
+            if (date == null) continue;
+            final daysLeft = date.difference(DateTime(now.year, now.month, now.day)).inDays;
+            if (daysLeft >= 0 && daysLeft <= 14) {
+              deadlines.add((
+                lessonName: lessonName,
+                title: (d['title'] as String?) ?? '',
+                date: date,
+                daysLeft: daysLeft,
+              ));
+            }
+          }
+        }
+        deadlines.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
+        if (mounted) setState(() => _upcomingDeadlines = deadlines);
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _plan = plan;
@@ -181,6 +208,13 @@ class _TodayScreenState extends State<TodayScreen>
                       ),
                     ),
                   ),
+                  if (_upcomingDeadlines.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                        child: _ComingUpCard(deadlines: _upcomingDeadlines),
+                      ),
+                    ),
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
@@ -854,4 +888,106 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RingPainter old) => old.progress != progress;
+}
+
+// ── Coming up card ────────────────────────────────────────────────────────────
+
+class _ComingUpCard extends StatelessWidget {
+  const _ComingUpCard({required this.deadlines});
+
+  final List<({String lessonName, String title, DateTime date, int daysLeft})> deadlines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.assignment_outlined, size: 14, color: kText2),
+              SizedBox(width: 6),
+              Text(
+                'COMING UP',
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...deadlines.map((d) {
+            final Color urgencyColor;
+            final String daysLabel;
+            if (d.daysLeft == 0) {
+              urgencyColor = kDanger;
+              daysLabel = 'Today';
+            } else if (d.daysLeft == 1) {
+              urgencyColor = kDanger;
+              daysLabel = 'Tomorrow';
+            } else if (d.daysLeft <= 3) {
+              urgencyColor = kWarning;
+              daysLabel = 'in ${d.daysLeft}d';
+            } else {
+              urgencyColor = kText2;
+              daysLabel = 'in ${d.daysLeft}d';
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: urgencyColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          d.title.isNotEmpty ? d.title : d.lessonName,
+                          style: const TextStyle(
+                            color: kText1,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          d.title.isNotEmpty ? d.lessonName : '',
+                          style: const TextStyle(color: kText2, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    daysLabel,
+                    style: TextStyle(
+                      color: urgencyColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
 }

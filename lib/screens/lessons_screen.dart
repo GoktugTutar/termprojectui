@@ -420,6 +420,68 @@ class _Pico extends StatelessWidget {
   }
 }
 
+// ── Deadline entry / chip helpers ────────────────────────────────────────────
+
+class _DeadlineEntry {
+  const _DeadlineEntry({required this.title, required this.date});
+  final String title;
+  final DateTime date;
+}
+
+class _DeadlineChip extends StatelessWidget {
+  const _DeadlineChip({
+    required this.label,
+    this.sub,
+    required this.onDelete,
+    this.pending = false,
+  });
+  final String label;
+  final String? sub;
+  final VoidCallback onDelete;
+  final bool pending;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: pending ? kAccent.withAlpha(20) : kBorder,
+        borderRadius: BorderRadius.circular(10),
+        border: pending
+            ? Border.all(color: kAccent.withAlpha(80), width: 0.5)
+            : null,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.assignment_outlined,
+              size: 14, color: pending ? kAccent : kText2),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        color: pending ? kAccent : kText1,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+                if (sub != null)
+                  Text(sub!,
+                      style: const TextStyle(color: kText2, fontSize: 11)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onDelete,
+            child: const Icon(Icons.close, size: 14, color: kText2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Lesson sheet ──────────────────────────────────────────────────────────────
 
 class _LessonSheet extends StatefulWidget {
@@ -437,8 +499,12 @@ class _LessonSheetState extends State<_LessonSheet> {
   int _difficulty = 3;
   bool _saving = false;
   bool _hasExam = false;
-  DateTime _examDate =
-      DateTime.now().add(const Duration(days: 14));
+  DateTime _examDate = DateTime.now().add(const Duration(days: 14));
+  List<LessonDeadline> _existingDeadlines = [];
+  final List<_DeadlineEntry> _pendingDeadlines = [];
+  bool _showDeadlineForm = false;
+  final _deadlineTitleCtrl = TextEditingController();
+  DateTime _deadlineDate = DateTime.now().add(const Duration(days: 7));
 
   bool get _isEdit => widget.lesson != null;
 
@@ -449,12 +515,14 @@ class _LessonSheetState extends State<_LessonSheet> {
       _nameCtrl.text = widget.lesson!.lessonName;
       _difficulty = widget.lesson!.difficulty;
       if (widget.lesson!.exams.isNotEmpty) _hasExam = true;
+      _existingDeadlines = List.from(widget.lesson!.deadlines);
     }
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _deadlineTitleCtrl.dispose();
     super.dispose();
   }
 
@@ -464,18 +532,33 @@ class _LessonSheetState extends State<_LessonSheet> {
     setState(() => _saving = true);
     try {
       if (_isEdit) {
+        final lessonId = int.parse(widget.lesson!.id);
         await ApiClient.updateLesson(
-          int.parse(widget.lesson!.id),
+          lessonId,
           name: name,
           difficulty: _difficulty,
         );
+        for (final pd in _pendingDeadlines) {
+          await ApiClient.addDeadline(
+            lessonId,
+            pd.date.toIso8601String().substring(0, 10),
+            title: pd.title.isNotEmpty ? pd.title : null,
+          );
+        }
       } else {
         final created = await ApiClient.createLesson(name, _difficulty);
+        final lessonId = (created['id'] as num).toInt();
         if (_hasExam) {
-          final lessonId = (created['id'] as num).toInt();
           await ApiClient.addExam(
             lessonId,
             _examDate.toIso8601String().substring(0, 10),
+          );
+        }
+        for (final pd in _pendingDeadlines) {
+          await ApiClient.addDeadline(
+            lessonId,
+            pd.date.toIso8601String().substring(0, 10),
+            title: pd.title.isNotEmpty ? pd.title : null,
           );
         }
       }
@@ -525,6 +608,19 @@ class _LessonSheetState extends State<_LessonSheet> {
       if (!mounted) return;
       Navigator.pop(context);
       widget.onSaved();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceAll('Exception: ', '')),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  Future<void> _deleteExistingDeadline(LessonDeadline d) async {
+    try {
+      await ApiClient.deleteDeadline(int.parse(widget.lesson!.id), d.id);
+      setState(() => _existingDeadlines.remove(d));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -686,6 +782,8 @@ class _LessonSheetState extends State<_LessonSheet> {
                 ],
               ],
             ),
+            const SizedBox(height: 20),
+            _buildDeadlinesSection(),
             if (_isEdit) ...[
               const SizedBox(height: 8),
               GestureDetector(
@@ -781,6 +879,189 @@ class _LessonSheetState extends State<_LessonSheet> {
               _examDate.toIso8601String().substring(0, 10),
               style: const TextStyle(
                   color: kText1, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeadlinesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Deadlines / Homework',
+            style: TextStyle(color: kText2, fontSize: 13)),
+        const SizedBox(height: 8),
+        if (_existingDeadlines.isNotEmpty) ...[
+          ..._existingDeadlines.map((d) => _DeadlineChip(
+                label: (d.title != null && d.title!.isNotEmpty)
+                    ? d.title!
+                    : d.dateOnly,
+                sub: (d.title != null && d.title!.isNotEmpty)
+                    ? d.dateOnly
+                    : null,
+                onDelete: () => _deleteExistingDeadline(d),
+              )),
+          const SizedBox(height: 4),
+        ],
+        if (_pendingDeadlines.isNotEmpty) ...[
+          ..._pendingDeadlines.asMap().entries.map((e) => _DeadlineChip(
+                label: e.value.title.isNotEmpty
+                    ? e.value.title
+                    : e.value.date.toIso8601String().substring(0, 10),
+                sub: e.value.title.isNotEmpty
+                    ? e.value.date.toIso8601String().substring(0, 10)
+                    : null,
+                onDelete: () =>
+                    setState(() => _pendingDeadlines.removeAt(e.key)),
+                pending: true,
+              )),
+          const SizedBox(height: 4),
+        ],
+        if (_showDeadlineForm)
+          _buildDeadlineForm()
+        else
+          GestureDetector(
+            onTap: () => setState(() => _showDeadlineForm = true),
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: kBorder,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: kAccent.withAlpha(80), width: 0.5),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.add, size: 14, color: kAccent),
+                  SizedBox(width: 6),
+                  Text('Add deadline',
+                      style: TextStyle(
+                          color: kAccent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDeadlineForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _deadlineTitleCtrl,
+          style: const TextStyle(color: kText1),
+          decoration: InputDecoration(
+            hintText: 'Title (optional) · e.g. "Project 2"',
+            hintStyle: const TextStyle(color: kText2),
+            filled: true,
+            fillColor: kBorder,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildDeadlineDatePicker(),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  _showDeadlineForm = false;
+                  _deadlineTitleCtrl.clear();
+                }),
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: kBorder,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Center(
+                    child: Text('Cancel',
+                        style: TextStyle(
+                            color: kText2,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  _pendingDeadlines.add(_DeadlineEntry(
+                    title: _deadlineTitleCtrl.text.trim(),
+                    date: _deadlineDate,
+                  ));
+                  _showDeadlineForm = false;
+                  _deadlineTitleCtrl.clear();
+                  _deadlineDate =
+                      DateTime.now().add(const Duration(days: 7));
+                }),
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: kAccent.withAlpha(46),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: kAccent, width: 0.5),
+                  ),
+                  child: const Center(
+                    child: Text('Add',
+                        style: TextStyle(
+                            color: kAccent,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeadlineDatePicker() {
+    return GestureDetector(
+      onTap: () async {
+        final d = await showDatePicker(
+          context: context,
+          initialDate: _deadlineDate,
+          firstDate: DateTime.now(),
+          lastDate: DateTime(2100),
+          builder: (ctx, child) => Theme(
+            data: Theme.of(ctx).copyWith(
+              colorScheme:
+                  const ColorScheme.dark(primary: kAccent),
+            ),
+            child: child!,
+          ),
+        );
+        if (d != null) setState(() => _deadlineDate = d);
+      },
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: kBorder,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_outlined,
+                size: 16, color: kAccent),
+            const SizedBox(width: 10),
+            Text(
+              _deadlineDate.toIso8601String().substring(0, 10),
+              style: const TextStyle(color: kText1, fontSize: 14),
             ),
           ],
         ),

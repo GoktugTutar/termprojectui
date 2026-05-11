@@ -191,6 +191,34 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
+  /// Derse ödev / deadline ekler (POST /lesson/:id/deadline).
+  /// [deadlineDate] formatı: "YYYY-MM-DD", [title] opsiyonel.
+  static Future<Map<String, dynamic>> addDeadline(
+    int lessonId,
+    String deadlineDate, {
+    String? title,
+  }) async {
+    final h = await _authHeaders();
+    final body = <String, dynamic>{'deadlineDate': deadlineDate};
+    if (title != null && title.isNotEmpty) body['title'] = title;
+    final res = await http.post(
+      Uri.parse('$_base/lesson/$lessonId/deadline'),
+      headers: h,
+      body: json.encode(body),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  /// Dersten deadline siler (DELETE /lesson/:lessonId/deadline/:deadlineId).
+  static Future<void> deleteDeadline(int lessonId, int deadlineId) async {
+    final h = await _authHeaders();
+    final res = await http.delete(
+      Uri.parse('$_base/lesson/$lessonId/deadline/$deadlineId'),
+      headers: h,
+    );
+    await _handle(res);
+  }
+
   // ── PLANNER ─────────────────────────────────────────────────────────────────
 
   /// Haftalık planı algoritma ile oluşturur (POST /planner/create).
