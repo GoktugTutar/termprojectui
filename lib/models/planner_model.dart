@@ -27,7 +27,7 @@ class ScheduledBlock {
     lessonId: j['lessonId'] as int,
     lessonName:
         (j['lesson'] as Map<String, dynamic>?)?['name']?.toString() ?? 'Ders',
-    date: (j['date'] as String).substring(0, 10),
+    date: DateTime.parse(j['date'] as String).toLocal().toIso8601String().substring(0, 10),
     startTime: j['startTime'] as String,
     endTime: j['endTime'] as String,
     blockCount: (j['blockCount'] as num).toInt(),
@@ -44,7 +44,7 @@ class WeeklyPlan {
   WeeklyPlan({required this.weekStart, required this.blocks});
 
   factory WeeklyPlan.fromJson(Map<String, dynamic> j) => WeeklyPlan(
-    weekStart: (j['weekStart'] as String).substring(0, 10),
+    weekStart: DateTime.parse(j['weekStart'] as String).toLocal().toIso8601String().substring(0, 10),
     blocks: ((j['blocks'] as List?) ?? [])
         .map((b) => ScheduledBlock.fromJson(b as Map<String, dynamic>))
         .toList(),

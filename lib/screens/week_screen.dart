@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/app_time.dart';
 import '../models/planner_model.dart';
 import '../theme.dart';
 
@@ -63,7 +64,7 @@ class _WeekScreenState extends State<WeekScreen>
   @override
   void initState() {
     super.initState();
-    _selectedDayIndex = (DateTime.now().weekday - 1).clamp(0, 6);
+    _selectedDayIndex = (AppTime.now().weekday - 1).clamp(0, 6);
     _load();
   }
 
@@ -128,7 +129,7 @@ class _WeekScreenState extends State<WeekScreen>
   List<String> get _weekDates {
     if (_plan == null) return [];
     return List.generate(7, (i) {
-      final dt = DateTime.parse(_plan!.weekStart).add(Duration(days: i));
+      final dt = DateTime.parse(_plan!.weekStart).toLocal().add(Duration(days: i));
       return dt.toIso8601String().substring(0, 10);
     });
   }
@@ -136,7 +137,7 @@ class _WeekScreenState extends State<WeekScreen>
   String get _weekLabel {
     if (_plan == null) return '';
     try {
-      final ws = DateTime.parse(_plan!.weekStart);
+      final ws = DateTime.parse(_plan!.weekStart).toLocal();
       final we = ws.add(const Duration(days: 6));
       return '${ws.day} ${_monthShorts[ws.month - 1]} – ${we.day} ${_monthShorts[we.month - 1]}';
     } catch (_) {
@@ -237,7 +238,7 @@ class _WeekScreenState extends State<WeekScreen>
 
   /// Dar ekran gün seçici şeridi — bugün accent-soft arka plan, seçili gün border.
   Widget _buildDayStrip() {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final today = AppTime.now().toIso8601String().substring(0, 10);
     return SizedBox(
       height: 56,
       child: Padding(
@@ -312,7 +313,7 @@ class _WeekScreenState extends State<WeekScreen>
       dates: [date],
       blocksByDate: {date: blocks},
       busyByDow: {dow: busy},
-      todayDate: DateTime.now().toIso8601String().substring(0, 10),
+      todayDate: AppTime.now().toIso8601String().substring(0, 10),
       vScroll: _vScroll,
       onBlockTap: _showBlockDetail,
     );
@@ -320,7 +321,7 @@ class _WeekScreenState extends State<WeekScreen>
 
   /// Geniş ekran 7 sütun grid görünümü.
   Widget _buildWideGrid() {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final today = AppTime.now().toIso8601String().substring(0, 10);
     final blocksByDate = {
       for (final d in _weekDates)
         d: _plan?.blocksForDate(d) ?? <ScheduledBlock>[],
@@ -475,7 +476,7 @@ class _TimeGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = AppTime.now();
     final nowMin = now.hour * 60 + now.minute;
 
     return SingleChildScrollView(
@@ -841,22 +842,136 @@ class _StripedPainter extends CustomPainter {
 // ── Block Detail Sheet ────────────────────────────────────────────────────────
 
 /// Bloğun detaylarını gösteren modal bottom sheet.
-class _BlockDetailSheet extends StatelessWidget {
-  const _BlockDetailSheet(
-      {required this.block, required this.color});
+class _BlockDetailSheet extends StatefulWidget {
+  const _BlockDetailSheet({required this.block, required this.color});
 
   final ScheduledBlock block;
   final Color color;
 
   @override
+  State<_BlockDetailSheet> createState() => _BlockDetailSheetState();
+}
+
+class _BlockDetailSheetState extends State<_BlockDetailSheet> {
+  late int _studiedMinutes;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start at full planned time if already completed, else 0
+    final plannedMins = widget.block.blockCount * 30;
+    _studiedMinutes = widget.block.completed ? plannedMins : 0;
+    // Load existing checklist entry for this date
+    _loadExisting();
+  }
+
+  Future<void> _loadExisting() async {
+    try {
+      final cl = await ApiClient.getChecklist(widget.block.date);
+      if (cl == null || !mounted) return;
+      final items = (cl['items'] as List?) ?? [];
+      for (final item in items) {
+        if ((item['lessonId'] as num).toInt() == widget.block.lessonId) {
+          final saved = (item['completedBlocks'] as num? ?? 0).toInt() * 30;
+          if (mounted) setState(() => _studiedMinutes = saved);
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
+  int get _plannedMinutes => widget.block.blockCount * 30;
+  int get _completedBlocks => (_studiedMinutes / 30).round();
+  bool get _isFull => _completedBlocks >= widget.block.blockCount;
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    try {
+      // Get all blocks for this date to build a full checklist submission
+      final weekData = await ApiClient.getWeekPlan();
+      final allBlocks = (weekData['blocks'] as List? ?? [])
+          .map((b) => ScheduledBlock.fromJson(b as Map<String, dynamic>))
+          .toList();
+      final dateBlocks = allBlocks
+          .where((b) => b.date == widget.block.date)
+          .toList();
+
+      // Load existing checklist to preserve other lessons' values
+      final existing = await ApiClient.getChecklist(widget.block.date);
+      final existingItems = <int, int>{}; // lessonId → completedBlocks
+      if (existing != null) {
+        for (final item in (existing['items'] as List? ?? [])) {
+          existingItems[(item['lessonId'] as num).toInt()] =
+              (item['completedBlocks'] as num? ?? 0).toInt();
+        }
+      }
+
+      // Build items: this block gets our new value, others keep existing
+      final seen = <int>{};
+      final items = <Map<String, dynamic>>[];
+      for (final b in dateBlocks) {
+        if (!seen.add(b.lessonId)) continue;
+        final planned = dateBlocks
+            .where((bl) => bl.lessonId == b.lessonId)
+            .fold(0, (s, bl) => s + bl.blockCount);
+        final completedBlocks = b.lessonId == widget.block.lessonId
+            ? _completedBlocks
+            : (existingItems[b.lessonId] ?? 0);
+        items.add({
+          'lessonId': b.lessonId,
+          'plannedBlocks': planned,
+          'completedBlocks': completedBlocks,
+          'delayed': completedBlocks == 0,
+        });
+      }
+
+      await ApiClient.submitChecklist(
+        stressLevel: (existing?['stressLevel'] as num? ?? 2).toInt(),
+        fatigueLevel: (existing?['fatigueLevel'] as num? ?? 3).toInt(),
+        items: items,
+      );
+
+
+      if (!mounted) return;
+
+      final today = AppTime.now().toIso8601String().substring(0, 10);
+      final isLate = widget.block.date.compareTo(today) < 0;
+      final isIncomplete = _completedBlocks < widget.block.blockCount;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isLate && isIncomplete && _studiedMinutes > 0
+                ? 'Logged ${_studiedMinutes}m for ${widget.block.date} — tap Recalculate in the week view to update your plan.'
+                : _studiedMinutes == 0
+                    ? 'Marked as not studied'
+                    : 'Saved: \${_studiedMinutes}m studied',
+          ),
+          backgroundColor: kSurface,
+          duration: Duration(seconds: isLate && isIncomplete ? 5 : 3),
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceAll('Exception: ', '')),
+        backgroundColor: Colors.red,
+      ));
+    }
+    if (mounted) setState(() => _submitting = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final sm = _timeToMin(block.startTime);
-    final em = _timeToMin(block.endTime);
+    final sm = _timeToMin(widget.block.startTime);
+    final em = _timeToMin(widget.block.endTime);
     final durationMin = em - sm;
     final hours = durationMin ~/ 60;
     final mins = durationMin % 60;
-    final durationStr =
-        mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
+    final durationStr = mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
+    final fillRatio = (_studiedMinutes / _plannedMinutes).clamp(0.0, 1.0);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -869,15 +984,13 @@ class _BlockDetailSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle çubuğu
+          // Handle
           Center(
             child: Container(
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: kBorder,
-                borderRadius: BorderRadius.circular(2),
-              ),
+                  color: kBorder, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
@@ -889,67 +1002,144 @@ class _BlockDetailSheet extends StatelessWidget {
               Container(
                 width: 14,
                 height: 14,
-                decoration: BoxDecoration(
-                    color: color, shape: BoxShape.circle),
+                decoration:
+                    BoxDecoration(color: widget.color, shape: BoxShape.circle),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  block.lessonName,
+                  widget.block.lessonName,
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: kText1,
-                  ),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: kText1),
                 ),
               ),
             ],
           ),
           Text(
-            '${block.date} · ${block.startTime} – ${block.endTime}',
-            style:
-                const TextStyle(fontSize: 13, color: kText2),
+            '${widget.block.date} · ${widget.block.startTime} – ${widget.block.endTime}',
+            style: const TextStyle(fontSize: 13, color: kText2),
           ),
           const SizedBox(height: 16),
-          if (block.isReview)
+          if (widget.block.isReview)
             _DetailRow(
               icon: Icons.repeat_rounded,
               label: 'Review block',
               value: 'Pre-exam review',
-              tone: color,
+              tone: widget.color,
             ),
           _DetailRow(
             icon: Icons.access_time_rounded,
             label: 'Duration',
-            value:
-                '${block.blockCount} blocks · $durationStr',
+            value: '${widget.block.blockCount} blocks · $durationStr',
           ),
-          _DetailRow(
-            icon: Icons.check_circle_outline_rounded,
-            label: 'Status',
-            value: block.completed ? 'Completed' : 'Pending',
-            tone: block.completed
-                ? const Color(0xFF5BD49B)
-                : null,
+          // Studied time input
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: kBorder.withAlpha(80),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isFull ? kAccent.withAlpha(100) : Colors.transparent,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                          color: kBorder,
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Icon(Icons.timer_outlined,
+                          size: 16,
+                          color: _isFull ? kAccent : kText2),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text('Time studied',
+                          style:
+                              const TextStyle(fontSize: 13, color: kText2)),
+                    ),
+                    Text(
+                      _studiedMinutes == 0
+                          ? '—'
+                          : '${_studiedMinutes}m / ${_plannedMinutes}m',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _isFull ? kAccent : kText1,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: fillRatio,
+                    minHeight: 4,
+                    backgroundColor: kBorder,
+                    valueColor: AlwaysStoppedAnimation(
+                        _isFull ? kAccent : widget.color),
+                  ),
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined,
+                        size: 13, color: kText2),
+                    Expanded(
+                      child: Slider(
+                        value: _studiedMinutes.toDouble(),
+                        min: 0,
+                        max: (_plannedMinutes * 1.5).ceilToDouble(),
+                        divisions:
+                            ((_plannedMinutes * 1.5) / 10).ceil().clamp(1, 999),
+                        activeColor: _isFull ? kAccent : widget.color,
+                        inactiveColor: kBorder,
+                        onChanged: (v) =>
+                            setState(() => _studiedMinutes = v.round()),
+                      ),
+                    ),
+                    Text(
+                      '${_studiedMinutes}m',
+                      style: const TextStyle(
+                          color: kText2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             height: 46,
             child: FilledButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: _submitting ? null : _submit,
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text(
-                block.completed
-                    ? 'Mark as not done'
-                    : 'Mark complete',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600),
-              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : Text(
+                      _studiedMinutes == 0 ? 'Mark as skipped' : 'Save',
+                      style:
+                          const TextStyle(fontWeight: FontWeight.w600),
+                    ),
             ),
           ),
         ],

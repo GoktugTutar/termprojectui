@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
 import '../core/api_client.dart';
+import '../core/app_time.dart';
 import '../models/planner_model.dart';
 import '../theme.dart';
 
@@ -25,46 +27,71 @@ class _TodayScreenState extends State<TodayScreen>
   WeeklyPlan? _plan;
   bool _loading = true;
   String _today = '';
-  final Set<int> _completedIds = {};
+  final Map<int, int> _studiedMinutes = {}; // lessonId → minutes studied
   int _stressLevel = 2;
   int _fatigueLevel = 3;
   bool _submitting = false;
   bool _sleepAsked = false;
   List<({String lessonName, String title, DateTime date, int daysLeft})> _upcomingDeadlines = [];
+  List<Map<String, dynamic>> _alerts = [];
 
   @override
   void initState() {
     super.initState();
     _today = _todayStr();
     _load();
-    final hour = DateTime.now().hour;
+    
+    final hour = AppTime.now().hour;
     if (hour >= 6 && hour < 12) {
-      Future.delayed(const Duration(milliseconds: 380), () {
-        if (mounted && !_sleepAsked) _showSleepModal();
+      Future.delayed(const Duration(milliseconds: 380), () async {
+        if (!mounted) return;
+        final prefs = await SharedPreferences.getInstance();
+        final lastAsked = prefs.getString('sleep_modal_date') ?? '';
+        final today = AppTime.now().toIso8601String().substring(0, 10);
+        if (lastAsked != today) _showSleepModal();
       });
     }
   }
 
-  String _todayStr() => DateTime.now().toIso8601String().substring(0, 10);
+  String _todayStr() => AppTime.now().toIso8601String().substring(0, 10);
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final data = await ApiClient.getWeekPlan();
-      final plan = WeeklyPlan.fromJson(data);
-      final todayBlocks = plan.blocksForDate(_today);
-      for (final b in todayBlocks) {
-        if (b.completed) _completedIds.add(b.id);
+      Map<String, dynamic> data = await ApiClient.getWeekPlan();
+      WeeklyPlan plan = WeeklyPlan.fromJson(data);
+      // Auto-create if no plan, or today falls outside the plan's week
+      final today = AppTime.now();
+      final todayStr = today.toIso8601String().substring(0, 10);
+      bool needsNewPlan = plan.blocks.isEmpty;
+      if (!needsNewPlan && plan.weekStart.isNotEmpty) {
+        // Plan covers weekStart to weekStart+6 days
+        final ws = DateTime.parse(plan.weekStart);
+        final we = ws.add(const Duration(days: 6));
+        final todayDate = DateTime(today.year, today.month, today.day);
+        needsNewPlan = todayDate.isBefore(ws) || todayDate.isAfter(we);
       }
+      
+      if (needsNewPlan) {
+        data = await ApiClient.createWeeklyPlan();
+        plan = WeeklyPlan.fromJson(data);
+      }
+      final todayBlocks = plan.blocksForDate(_today);
       final cl = await ApiClient.getChecklist(_today);
       if (cl != null) {
         _stressLevel = (cl['stressLevel'] as num? ?? 2).toInt();
         _fatigueLevel = (cl['fatigueLevel'] as num? ?? 3).toInt();
+        // Pre-fill studied minutes from saved completedBlocks
+        for (final item in (cl['items'] as List? ?? [])) {
+          final lid = (item['lessonId'] as num).toInt();
+          final cb = (item['completedBlocks'] as num? ?? 0).toInt();
+          _studiedMinutes[lid] = cb * 30;
+        }
       }
       // Load upcoming deadlines
       try {
         final raw = await ApiClient.getLessons();
-        final now = DateTime.now();
+        final now = AppTime.now();
         final deadlines = <({String lessonName, String title, DateTime date, int daysLeft})>[];
         for (final l in raw) {
           final lessonName = (l['name'] as String? ?? '');
@@ -87,6 +114,16 @@ class _TodayScreenState extends State<TodayScreen>
         if (mounted) setState(() => _upcomingDeadlines = deadlines);
       } catch (_) {}
 
+      // Load alerts
+      try {
+        final rawAlerts = await ApiClient.getFeedbackMessages();
+        if (mounted) {
+          setState(() => _alerts = rawAlerts
+              .map((a) => a as Map<String, dynamic>)
+              .toList());
+        }
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _plan = plan;
@@ -101,21 +138,43 @@ class _TodayScreenState extends State<TodayScreen>
   List<ScheduledBlock> get _todayBlocks =>
       _plan?.blocksForDate(_today) ?? [];
 
-  int get _completedCount => _todayBlocks
-      .where((b) => _completedIds.contains(b.id))
-      .length;
+  int get _totalPlannedMinutes {
+    final seen = <int>{};
+    int total = 0;
+    for (final b in _todayBlocks) {
+      if (seen.add(b.lessonId)) {
+        total += _todayBlocks
+            .where((bl) => bl.lessonId == b.lessonId)
+            .fold(0, (s, bl) => s + bl.blockCount) * 30;
+      }
+    }
+    return total;
+  }
 
-  double get _progress =>
-      _todayBlocks.isEmpty ? 0 : _completedCount / _todayBlocks.length;
+  int get _totalStudiedMinutes =>
+      _studiedMinutes.values.fold(0, (a, b) => a + b);
+
+  int get _completedBlocks => (_totalStudiedMinutes / 30).floor();
+  int get _totalBlocks => (_totalPlannedMinutes / 30).floor();
+
+  double get _progress => _totalPlannedMinutes == 0
+      ? 0
+      : (_totalStudiedMinutes / _totalPlannedMinutes).clamp(0.0, 1.0);
 
   void _showSleepModal() {
     setState(() => _sleepAsked = true);
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('sleep_modal_date',
+          AppTime.now().toIso8601String().substring(0, 10));
+    });
     showDialog(
       context: context,
       barrierColor: Colors.black.withAlpha(160),
       builder: (_) => const _SleepDialog(),
     );
   }
+
+  int _minutesToBlocks(int minutes) => (minutes / 30).round().clamp(0, 999);
 
   Future<void> _submitChecklist() async {
     final items = <Map<String, dynamic>>[];
@@ -125,10 +184,7 @@ class _TodayScreenState extends State<TodayScreen>
         final planned = _todayBlocks
             .where((bl) => bl.lessonId == b.lessonId)
             .fold(0, (s, bl) => s + bl.blockCount);
-        final done = _todayBlocks
-            .where((bl) =>
-                bl.lessonId == b.lessonId && _completedIds.contains(bl.id))
-            .fold(0, (s, bl) => s + bl.blockCount);
+        final done = _minutesToBlocks(_studiedMinutes[b.lessonId] ?? 0);
         items.add({
           'lessonId': b.lessonId,
           'plannedBlocks': planned,
@@ -166,7 +222,7 @@ class _TodayScreenState extends State<TodayScreen>
       );
     }
 
-    final now = DateTime.now();
+    final now = AppTime.now();
     final h = now.hour;
     final greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
     const dowLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -202,12 +258,21 @@ class _TodayScreenState extends State<TodayScreen>
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
                       child: _ProgressCard(
-                        completed: _completedCount,
-                        total: total,
+                        completedBlocks: _completedBlocks,
+                        totalBlocks: _totalBlocks,
+                        studiedMinutes: _totalStudiedMinutes,
+                        plannedMinutes: _totalPlannedMinutes,
                         progress: _progress,
                       ),
                     ),
                   ),
+                  if (_alerts.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                        child: _AlertBanner(alerts: _alerts),
+                      ),
+                    ),
                   if (_upcomingDeadlines.isNotEmpty)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -278,16 +343,15 @@ class _TodayScreenState extends State<TodayScreen>
                     delegate: SliverChildBuilderDelegate(
                       (ctx, i) {
                         final block = _todayBlocks[i];
+                        final plannedMins = _todayBlocks
+                            .where((bl) => bl.lessonId == block.lessonId)
+                            .fold(0, (s, bl) => s + bl.blockCount) * 30;
                         return _BlockRow(
                           block: block,
-                          isCompleted: _completedIds.contains(block.id),
-                          onToggle: () => setState(() {
-                            if (_completedIds.contains(block.id)) {
-                              _completedIds.remove(block.id);
-                            } else {
-                              _completedIds.add(block.id);
-                            }
-                          }),
+                          studiedMinutes: _studiedMinutes[block.lessonId] ?? 0,
+                          plannedMinutes: plannedMins,
+                          onMinutesChanged: (v) => setState(
+                              () => _studiedMinutes[block.lessonId] = v),
                         );
                       },
                       childCount: _todayBlocks.length,
@@ -456,14 +520,27 @@ class _ScreenHeader extends StatelessWidget {
 
 class _ProgressCard extends StatelessWidget {
   const _ProgressCard({
-    required this.completed,
-    required this.total,
+    required this.completedBlocks,
+    required this.totalBlocks,
+    required this.studiedMinutes,
+    required this.plannedMinutes,
     required this.progress,
   });
 
-  final int completed;
-  final int total;
+  final int completedBlocks;
+  final int totalBlocks;
+  final int studiedMinutes;
+  final int plannedMinutes;
   final double progress;
+
+  String _fmtMins(int m) {
+    if (m == 0) return '0m';
+    final h = m ~/ 60;
+    final min = m % 60;
+    if (h == 0) return '${min}m';
+    if (min == 0) return '${h}h';
+    return '${h}h ${min}m';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -474,56 +551,98 @@ class _ProgressCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: kBorder),
       ),
-      child: Row(
+      child: Column(
         children: [
-          SizedBox(
-            width: 84,
-            height: 84,
-            child: CustomPaint(
-              painter: _RingPainter(progress),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$completed',
-                      style: const TextStyle(
-                          color: kText1,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              SizedBox(
+                width: 84,
+                height: 84,
+                child: CustomPaint(
+                  painter: _RingPainter(progress),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _fmtMins(studiedMinutes),
+                          style: const TextStyle(
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          'studied',
+                          style: const TextStyle(color: kText2, fontSize: 10),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'of $total',
-                      style: const TextStyle(color: kText2, fontSize: 11),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    _Stat(
+                      label: 'Progress',
+                      value: totalBlocks > 0
+                          ? '${(progress * 100).round()}%'
+                          : '—',
+                      sub: 'of ${_fmtMins(plannedMinutes)} planned',
+                    ),
+                    Divider(height: 16, thickness: 0.5, color: kBorder),
+                    _Stat(
+                      label: 'Blocks',
+                      value: '$completedBlocks / $totalBlocks',
+                      sub: 'completed (30 min each)',
                     ),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+          // Blocks completed breakdown
+          if (totalBlocks > 0) ...[
+            const SizedBox(height: 14),
+            Divider(height: 1, thickness: 0.5, color: kBorder),
+            const SizedBox(height: 12),
+            Row(
+              children: List.generate(totalBlocks, (i) {
+                final filled = i < completedBlocks;
+                return Expanded(
+                  child: Container(
+                    height: 6,
+                    margin: EdgeInsets.only(right: i < totalBlocks - 1 ? 3 : 0),
+                    decoration: BoxDecoration(
+                      color: filled ? kAccent : kBorder,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _Stat(
-                  label: 'Today',
-                  value: total > 0
-                      ? '${(progress * 100).round()}%'
-                      : '—',
-                  sub: 'blocks done',
+                Text(
+                  '$completedBlocks block${completedBlocks != 1 ? 's' : ''} done',
+                  style: const TextStyle(color: kText2, fontSize: 11),
                 ),
-                Divider(
-                    height: 16,
-                    thickness: 0.5,
-                    color: kBorder),
-                const _Stat(
-                  label: 'Last 7 days',
-                  value: '—',
-                  sub: 'completion rate',
+                Text(
+                  '${totalBlocks - completedBlocks} remaining',
+                  style: TextStyle(
+                    color: completedBlocks >= totalBlocks ? kAccent : kText2,
+                    fontSize: 11,
+                    fontWeight: completedBlocks >= totalBlocks
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -573,113 +692,178 @@ class _Stat extends StatelessWidget {
 class _BlockRow extends StatelessWidget {
   const _BlockRow({
     required this.block,
-    required this.isCompleted,
-    required this.onToggle,
+    required this.studiedMinutes,
+    required this.plannedMinutes,
+    required this.onMinutesChanged,
   });
 
   final ScheduledBlock block;
-  final bool isCompleted;
-  final VoidCallback onToggle;
+  final int studiedMinutes;
+  final int plannedMinutes;
+  final ValueChanged<int> onMinutesChanged;
 
   @override
   Widget build(BuildContext context) {
     final color = lessonColor(block.lessonId);
-    final blocks30 = block.blockCount;
+    final planned = block.blockCount;
+    final completedBlocks = (studiedMinutes / 30).round();
+    final isFull = completedBlocks >= planned;
+    final fillRatio = plannedMinutes == 0
+        ? 0.0
+        : (studiedMinutes / plannedMinutes).clamp(0.0, 1.0);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-      child: AnimatedOpacity(
-        opacity: isCompleted ? 0.6 : 1.0,
-        duration: const Duration(milliseconds: 200),
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: kBorder),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isFull ? kAccent.withAlpha(80) : kBorder,
           ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(width: 4, color: color),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              '${block.startTime} – ${block.endTime}',
-                              style: const TextStyle(
-                                  color: kText2,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '· $blocks30 block${blocks30 > 1 ? 's' : ''}',
-                              style: TextStyle(
-                                  color: kText2.withAlpha(160),
-                                  fontSize: 12),
-                            ),
-                            if (block.isReview) ...[
+        ),
+        child: Column(
+          children: [
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(width: 4, color: color),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                '${block.startTime} – ${block.endTime}',
+                                style: const TextStyle(
+                                    color: kText2,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
+                              ),
                               const SizedBox(width: 6),
-                              _Chip('REVIEW', kAccent),
+                              Text(
+                                '· $planned block${planned > 1 ? 's' : ''}',
+                                style: TextStyle(
+                                    color: kText2.withAlpha(160),
+                                    fontSize: 12),
+                              ),
+                              if (block.isReview) ...[
+                                const SizedBox(width: 6),
+                                _Chip('REVIEW', kAccent),
+                              ],
                             ],
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          block.lessonName,
-                          style: TextStyle(
-                            color: kText1,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            decoration: isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                            decorationColor: kText2,
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            block.lessonName,
+                            style: const TextStyle(
+                              color: kText1,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Studied time display
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 12, 14, 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          studiedMinutes == 0 ? '—' : '${studiedMinutes}m',
+                          style: TextStyle(
+                            color: isFull ? kAccent : kText1,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          'of ${plannedMinutes}m',
+                          style: const TextStyle(
+                              color: kText2, fontSize: 11),
+                        ),
+                        // block pip indicators
+                        const SizedBox(height: 4),
+                        Row(
+                          children: List.generate(planned, (i) {
+                            final done = i < completedBlocks;
+                            return Container(
+                              width: 8,
+                              height: 8,
+                              margin: EdgeInsets.only(
+                                  left: i > 0 ? 3 : 0),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: done ? kAccent : kBorder,
+                              ),
+                            );
+                          }),
                         ),
                       ],
                     ),
                   ),
-                ),
-                GestureDetector(
-                  onTap: onToggle,
-                  child: SizedBox(
-                    width: 56,
-                    child: Center(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isCompleted
-                                ? kAccent
-                                : kBorder.withAlpha(200),
-                            width: 1.5,
-                          ),
-                          color: isCompleted
-                              ? kAccent
-                              : Colors.transparent,
-                        ),
-                        child: isCompleted
-                            ? const Icon(Icons.check,
-                                size: 16, color: kBg)
-                            : null,
-                      ),
-                    ),
+                ],
+              ),
+            ),
+            // Progress bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: fillRatio,
+                  minHeight: 4,
+                  backgroundColor: kBorder,
+                  valueColor: AlwaysStoppedAnimation(
+                    isFull ? kAccent : color,
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+            // Minutes slider
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 12, 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer_outlined,
+                      size: 13, color: kText2),
+                  Expanded(
+                    child: Slider(
+                      value: studiedMinutes.toDouble(),
+                      min: 0,
+                      max: (plannedMinutes * 1.5).ceilToDouble(),
+                      divisions: ((plannedMinutes * 1.5) / 10)
+                          .ceil()
+                          .clamp(1, 999),
+                      activeColor: isFull ? kAccent : color,
+                      inactiveColor: kBorder,
+                      onChanged: (v) => onMinutesChanged(v.round()),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 36,
+                    child: Text(
+                      '${studiedMinutes}m',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                          color: kText2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -888,6 +1072,111 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RingPainter old) => old.progress != progress;
+}
+
+// ── Alert banner ─────────────────────────────────────────────────────────────
+
+class _AlertBanner extends StatelessWidget {
+  const _AlertBanner({required this.alerts});
+
+  final List<Map<String, dynamic>> alerts;
+
+  Color _colorForType(String type) {
+    switch (type) {
+      case 'critical':
+      case 'sinav_yakin':
+        return const Color(0xFFFF5C7A);
+      case 'warning':
+      case 'asiri_yuk':
+      case 'yuksek_stres':
+      case 'hareketsizlik':
+        return const Color(0xFFF2B14A);
+      default:
+        return kAccent;
+    }
+  }
+
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'sinav_yakin':
+        return Icons.warning_amber_rounded;
+      case 'yuksek_stres':
+        return Icons.sentiment_very_dissatisfied_outlined;
+      case 'hareketsizlik':
+        return Icons.bedtime_outlined;
+      case 'asiri_yuk':
+        return Icons.local_fire_department_outlined;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final first = alerts.first;
+    final type = first['type']?.toString() ?? 'info';
+    final message = first['message']?.toString() ?? '';
+    final color = _colorForType(type);
+    final icon = _iconForType(type);
+    final extra = alerts.length - 1;
+
+    return GestureDetector(
+      onTap: () {
+        // Navigate to Insights tab (index 3)
+        // We use the root navigator to find MainScaffold and switch tab
+        final scaffold = context.findAncestorStateOfType<State>();
+        if (scaffold != null) {
+          // sendPrompt not available here — user taps to insights manually
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withAlpha(20),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withAlpha(80)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withAlpha(40),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 17),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (extra > 0)
+                    Text(
+                      '+$extra more alert${extra > 1 ? 's' : ''} · See Insights',
+                      style: const TextStyle(
+                          color: kText2, fontSize: 11),
+                    ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: color, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Coming up card ────────────────────────────────────────────────────────────
