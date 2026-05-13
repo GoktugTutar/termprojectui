@@ -12,6 +12,18 @@
 .swiftpm/
 migrate_working_dir/
 
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
 # IntelliJ related
 *.iml
 *.ipr

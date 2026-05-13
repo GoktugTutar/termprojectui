@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/app_time.dart';
 import '../theme.dart';
 
 const _kDanger  = Color(0xFFFF5C7A);
@@ -699,7 +700,7 @@ class _TestModeCard extends StatefulWidget {
 }
 
 class _TestModeCardState extends State<_TestModeCard> {
-  DateTime _now = DateTime.now();
+  DateTime _now = AppTime.now();
 
   Future<void> _edit() async {
     final date = await showDatePicker(
@@ -730,6 +731,7 @@ class _TestModeCardState extends State<_TestModeCard> {
         time.hour, time.minute);
     try {
       await ApiClient.setTestClock(dt.toIso8601String());
+      AppTime.setOverride(dt);
       setState(() => _now = dt);
       widget.onSave(
           'Test clock: ${dt.toIso8601String().substring(0, 16)}');

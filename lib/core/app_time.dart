@@ -29,4 +29,9 @@ class AppTime {
 
   /// Bugünün tarihini YYYY-MM-DD formatında döndürür.
   static String todayStr() => now().toIso8601String().substring(0, 10);
+
+  /// Test modunda çalışma zamanı saat override'ını günceller.
+  static void setOverride(DateTime dt) {
+    _override = dt;
+  }
 }
