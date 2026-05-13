@@ -125,6 +125,16 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
+  /// Dijital ikiz öğrenci profilini getirir (GET /user/student-profile).
+static Future<Map<String, dynamic>> getStudentProfile() async {
+  final h = await _authHeaders();
+  final res = await http.get(
+    Uri.parse('$_base/user/student-profile'),
+    headers: h,
+  );
+  return Map<String, dynamic>.from(await _handle(res) as Map);
+}
+
   // ── LESSON ──────────────────────────────────────────────────────────────────
 
   /// Kullanıcının tüm derslerini listeler (GET /lesson).

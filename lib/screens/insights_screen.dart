@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/app_time.dart';
 import '../models/lesson_model.dart';
 import '../theme.dart';
 
@@ -23,6 +25,10 @@ class _InsightsScreenState extends State<InsightsScreen>
   List<dynamic> _messages = [];
   List<Lesson> _lessons = [];
   bool _loading = true;
+  String _multiplierStr = '—';
+  String _completionStr = '—';
+  Map<String, dynamic>? _profile;
+  String _stressStr = '—';
 
   @override
   void initState() {
@@ -35,12 +41,33 @@ class _InsightsScreenState extends State<InsightsScreen>
     try {
       final msgs = await ApiClient.getFeedbackMessages();
       final rawLessons = await ApiClient.getLessons();
+
+      // Fetch student profile (single call replaces 7 checklist calls)
+      Map<String, dynamic>? profile;
+      String multiplierStr = '1.00';
+      String completionStr = '—';
+      String stressStr = '—';
+      try {
+        profile = await ApiClient.getStudentProfile();
+        final rate = (profile['completionRate7d'] as num? ?? 0).toDouble();
+        completionStr = '${(rate * 100).round()}%';
+        final stress = (profile['avgStress7d'] as num? ?? 0).toDouble();
+        stressStr = stress.toStringAsFixed(1);
+        // Multiplier from overload alert
+        final hasOverload = msgs.any((m) => m['type']?.toString() == 'asiri_yuk');
+        if (hasOverload) multiplierStr = '0.85';
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _messages = msgs;
         _lessons = rawLessons
             .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
             .toList();
+        _profile = profile;
+        _multiplierStr = multiplierStr;
+        _completionStr = completionStr;
+        _stressStr = stressStr;
         _loading = false;
       });
     } catch (_) {
@@ -84,6 +111,7 @@ class _InsightsScreenState extends State<InsightsScreen>
                         _buildHeader(),
                         _buildCta(),
                         _buildTrends(),
+                        if (_profile != null) _buildProfileCard(),
                         _buildMessages(),
                         const SliverToBoxAdapter(
                             child: SizedBox(height: 100)),
@@ -183,28 +211,175 @@ class _InsightsScreenState extends State<InsightsScreen>
     );
   }
 
+  Widget _buildProfileCard() {
+    final p = _profile!;
+    final consistency = (p['consistencyScore'] as num? ?? 0).toDouble();
+    final sweet = (p['sweetSpotBlocks'] as num? ?? 2).toDouble();
+    final stressExam = (p['stressNearExam'] as num? ?? 3).toDouble();
+    final fatigue = (p['avgFatigue7d'] as num? ?? 3).toDouble();
+    final submissions = (p['totalSubmissions'] as num? ?? 0).toInt();
+
+    // Parse day-of-week rates
+    List<double> dowRates = [0, 0, 0, 0, 0, 0, 0];
+    try {
+      final raw = p['dowCompletionRates'] as String? ?? '[0,0,0,0,0,0,0]';
+      final parsed = (json.decode(raw) as List)
+          .map((v) => (v as num).toDouble())
+          .toList();
+      if (parsed.length == 7) dowRates = parsed;
+    } catch (_) {}
+
+    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: kSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.person_outline_rounded,
+                      size: 14, color: kText2),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'STUDENT PROFILE',
+                    style: TextStyle(
+                      color: kText2,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '$submissions submissions',
+                    style: const TextStyle(color: kText2, fontSize: 11),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              // Day-of-week bar chart
+              const Text('Weekly pattern',
+                  style: TextStyle(color: kText2, fontSize: 12)),
+              const SizedBox(height: 8),
+              Row(
+                children: List.generate(7, (i) {
+                  final rate = dowRates[i];
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(right: i < 6 ? 4 : 0),
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                              color: kBorder,
+                            ),
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: FractionallySizedBox(
+                                heightFactor: rate.clamp(0.05, 1.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(4),
+                                    color: rate >= 0.8
+                                        ? kAccent
+                                        : rate >= 0.5
+                                            ? kAccent.withAlpha(150)
+                                            : kAccent.withAlpha(60),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(days[i],
+                              style: const TextStyle(
+                                  color: kText2, fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 14),
+              Divider(height: 1, thickness: 0.5, color: kBorder),
+              const SizedBox(height: 14),
+              // Stats row
+              Row(
+                children: [
+                  Expanded(
+                    child: _ProfileStat(
+                      label: 'Sweet spot',
+                      value: '${sweet.toStringAsFixed(1)} blocks',
+                      sub: 'per session',
+                      icon: Icons.bolt_rounded,
+                    ),
+                  ),
+                  Expanded(
+                    child: _ProfileStat(
+                      label: 'Consistency',
+                      value: '${(consistency * 100).round()}%',
+                      sub: 'last 14 days',
+                      icon: Icons.calendar_today_outlined,
+                    ),
+                  ),
+                  Expanded(
+                    child: _ProfileStat(
+                      label: 'Pre-exam stress',
+                      value: stressExam.toStringAsFixed(1),
+                      sub: 'avg score',
+                      icon: Icons.warning_amber_outlined,
+                    ),
+                  ),
+                  Expanded(
+                    child: _ProfileStat(
+                      label: 'Fatigue avg',
+                      value: fatigue.toStringAsFixed(1),
+                      sub: 'this week',
+                      icon: Icons.bedtime_outlined,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTrends() {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
         child: Row(
-          children: const [
+          children: [
             Expanded(
                 child: _TrendCard(
                     label: 'Multiplier',
-                    value: '1.00',
+                    value: _multiplierStr,
                     sub: 'last week')),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
                 child: _TrendCard(
                     label: 'Completion',
-                    value: '—',
+                    value: _completionStr,
                     sub: 'last 7 days')),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
                 child: _TrendCard(
                     label: 'Stress avg',
-                    value: '—',
+                    value: _stressStr,
                     sub: 'this week')),
           ],
         ),
@@ -231,7 +406,7 @@ class _InsightsScreenState extends State<InsightsScreen>
       );
     }
 
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final today = AppTime.now().toIso8601String().substring(0, 10);
     final todayMsgs = _messages.where((m) {
       final ts = m['createdAt']?.toString() ?? m['ts']?.toString() ?? '';
       return ts.startsWith(today);
@@ -749,6 +924,44 @@ class _SegmentedControl extends StatelessWidget {
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+class _ProfileStat extends StatelessWidget {
+  const _ProfileStat({
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final String sub;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, size: 16, color: kAccent),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            color: kText1,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: kText2, fontSize: 10),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
