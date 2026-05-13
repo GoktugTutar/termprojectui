@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/api_client.dart';
+import 'core/app_time.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_scaffold.dart';
 import 'theme.dart';
@@ -36,6 +37,7 @@ class _SplashState extends State<_Splash> {
   }
 
   Future<void> _check() async {
+    await AppTime.init(); // backend saatini senkronize et
     final token = await ApiClient.getToken();
     if (!mounted) return;
     Navigator.pushReplacement(
