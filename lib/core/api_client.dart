@@ -275,9 +275,21 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Belirli bir günün checklist durumunu getirir.
+  /// Yanıt: {date, blocked, missingDates, checklist}
+  static Future<Map<String, dynamic>> getChecklistStatus(String date) async {
+    final h = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$_base/checklist/status/$date'),
+      headers: h,
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
   /// Günlük checklist'i gönderir (POST /checklist/submit).
   /// [items]: [{lessonId, plannedBlocks, completedBlocks, delayed?}]
   static Future<Map<String, dynamic>?> submitChecklist({
+    String? date,
     required int stressLevel,
     required int fatigueLevel,
     required List<Map<String, dynamic>> items,
@@ -287,6 +299,7 @@ class ApiClient {
       Uri.parse('$_base/checklist/submit'),
       headers: h,
       body: json.encode({
+        'date': ?date,
         'stressLevel': stressLevel,
         'fatigueLevel': fatigueLevel,
         'items': items,

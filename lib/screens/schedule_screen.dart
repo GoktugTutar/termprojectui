@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
+import '../core/app_time.dart';
 import '../models/planner_model.dart';
 
 /// Program ekranı: haftalık plan blokları ve günlük checklist yönetimi.
@@ -166,7 +167,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   );
 
   /// Bugünün tarihini "YYYY-MM-DD" formatında döndürür.
-  String _todayString() => DateTime.now().toIso8601String().substring(0, 10);
+  String _todayString() => AppTime.todayStr();
 
   // ── Checklist dialog ────────────────────────────────────────────────────────
 
@@ -322,6 +323,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                   }).toList();
 
                   await ApiClient.submitChecklist(
+                    date: _todayString(),
                     stressLevel: stressLevel,
                     fatigueLevel: fatigueLevel,
                     items: items,

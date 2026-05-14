@@ -1014,11 +1014,12 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
           'lessonId': b.lessonId,
           'plannedBlocks': planned,
           'completedBlocks': completedBlocks,
-          'delayed': completedBlocks == 0,
+          'delayed': completedBlocks < planned,
         });
       }
 
       await ApiClient.submitChecklist(
+        date: widget.block.date,
         stressLevel: (existing?['stressLevel'] as num? ?? 2).toInt(),
         fatigueLevel: (existing?['fatigueLevel'] as num? ?? 3).toInt(),
         items: items,

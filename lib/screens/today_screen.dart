@@ -39,6 +39,9 @@ class _TodayScreenState extends State<TodayScreen>
   bool _loading = true;
   String _today = '';
   final Map<int, int> _studiedMinutes = {}; // lessonId → minutes studied
+  List<String> _missingChecklistDates = [];
+  bool _todayChecklistSubmitted = false;
+  bool _resolvingMissingChecklists = false;
   String _quickNote = '';
   Timer? _clockTimer;
   List<({String lessonName, String title, DateTime date, int daysLeft})>
@@ -103,15 +106,20 @@ class _TodayScreenState extends State<TodayScreen>
         data = await ApiClient.createWeeklyPlan();
         plan = WeeklyPlan.fromJson(data);
       }
+      final status = await ApiClient.getChecklistStatus(_today);
+      final missingDates = ((status['missingDates'] as List?) ?? [])
+          .map((d) => d.toString())
+          .toList();
       final todayLessonIds = plan.blocks
           .where((b) => b.date == _today)
           .map((b) => b.lessonId)
           .toSet();
       final loadedStudiedMinutes = <int, int>{};
-      final cl = await ApiClient.getChecklist(_today);
+      final cl = status['checklist'];
+      final submitted = cl != null;
       if (cl != null) {
         // Pre-fill studied minutes from saved completedBlocks
-        for (final item in (cl['items'] as List? ?? [])) {
+        for (final item in ((cl as Map)['items'] as List? ?? [])) {
           final lid = (item['lessonId'] as num).toInt();
           final cb = (item['completedBlocks'] as num? ?? 0).toInt();
           if (todayLessonIds.contains(lid)) {
@@ -153,11 +161,18 @@ class _TodayScreenState extends State<TodayScreen>
       if (!mounted) return;
       setState(() {
         _plan = plan;
+        _missingChecklistDates = missingDates;
+        _todayChecklistSubmitted = submitted;
         _studiedMinutes
           ..clear()
           ..addAll(loadedStudiedMinutes);
         _loading = false;
       });
+      if (missingDates.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _resolveMissingChecklists();
+        });
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -170,6 +185,14 @@ class _TodayScreenState extends State<TodayScreen>
     final seen = <int>{};
     return _todayBlocks.where((b) => seen.add(b.lessonId)).toList();
   }
+
+  List<ScheduledBlock> _primaryBlocksForDate(String date) {
+    final seen = <int>{};
+    return _blocksForDate(date).where((b) => seen.add(b.lessonId)).toList();
+  }
+
+  List<ScheduledBlock> _blocksForDate(String date) =>
+      _plan?.blocksForDate(date) ?? [];
 
   int get _totalPlannedMinutes {
     final seen = <int>{};
@@ -220,6 +243,244 @@ class _TodayScreenState extends State<TodayScreen>
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
     if (blocks.isEmpty) return '';
     return '${blocks.first.startTime} - ${blocks.last.endTime}';
+  }
+
+  DateTime _parseDateStr(String date) {
+    final parts = date.split('-').map(int.parse).toList();
+    return DateTime(parts[0], parts[1], parts[2]);
+  }
+
+  String _checklistTitleForDate(String date) {
+    const months = [
+      'Ocak',
+      'Şubat',
+      'Mart',
+      'Nisan',
+      'Mayıs',
+      'Haziran',
+      'Temmuz',
+      'Ağustos',
+      'Eylül',
+      'Ekim',
+      'Kasım',
+      'Aralık',
+    ];
+    const days = [
+      'Pazartesi',
+      'Salı',
+      'Çarşamba',
+      'Perşembe',
+      'Cuma',
+      'Cumartesi',
+      'Pazar',
+    ];
+    final dt = _parseDateStr(date);
+    return '${dt.day} ${months[dt.month - 1]} ${days[dt.weekday - 1]} checklist';
+  }
+
+  Future<void> _resolveMissingChecklists() async {
+    if (_resolvingMissingChecklists || _missingChecklistDates.isEmpty) return;
+    setState(() => _resolvingMissingChecklists = true);
+    var savedAny = false;
+    try {
+      for (final date in List<String>.from(_missingChecklistDates)) {
+        if (!mounted) return;
+        final saved = await _showChecklistSubmitDialog(
+          date: date,
+          blocks: _blocksForDate(date),
+        );
+        if (!saved) break;
+        savedAny = true;
+      }
+    } finally {
+      if (mounted) setState(() => _resolvingMissingChecklists = false);
+    }
+    if (savedAny && mounted) await _load();
+  }
+
+  Future<void> _saveTodayChecklist() async {
+    final saved = await _showChecklistSubmitDialog(
+      date: _today,
+      blocks: _todayBlocks,
+      initialStudiedMinutes: _studiedMinutes,
+    );
+    if (saved && mounted) await _load();
+  }
+
+  Future<bool> _showChecklistSubmitDialog({
+    required String date,
+    required List<ScheduledBlock> blocks,
+    Map<int, int>? initialStudiedMinutes,
+  }) async {
+    final uniqueBlocks = _primaryBlocksForDate(date);
+    final completedMap = <int, int>{};
+    for (final block in uniqueBlocks) {
+      final planned = blocks
+          .where((b) => b.lessonId == block.lessonId)
+          .fold(0, (sum, b) => sum + b.blockCount);
+      final minutes = initialStudiedMinutes?[block.lessonId] ?? 0;
+      completedMap[block.lessonId] = (minutes / 30)
+          .round()
+          .clamp(0, planned)
+          .toInt();
+    }
+
+    var stressLevel = 3;
+    var fatigueLevel = 3;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+          backgroundColor: kSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: EdgeInsets.all(22),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        _DialogIcon(icon: Icons.checklist_rounded),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _checklistTitleForDate(date),
+                            style: TextStyle(
+                              color: kText1,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          icon: Icon(Icons.close_rounded, color: kText2),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 18),
+                    _ChecklistMetricSlider(
+                      label: 'Stres',
+                      value: stressLevel,
+                      onChanged: (value) =>
+                          setDialogState(() => stressLevel = value),
+                    ),
+                    SizedBox(height: 10),
+                    _ChecklistMetricSlider(
+                      label: 'Yorgunluk',
+                      value: fatigueLevel,
+                      onChanged: (value) =>
+                          setDialogState(() => fatigueLevel = value),
+                    ),
+                    Divider(height: 28, color: kBorder),
+                    if (uniqueBlocks.isEmpty)
+                      _EmptyPanelState(
+                        icon: Icons.event_available_outlined,
+                        title: 'Planlanmış ders yok',
+                        subtitle:
+                            'Bu gün yalnızca günlük durum olarak kapanacak.',
+                      )
+                    else
+                      ...uniqueBlocks.map((block) {
+                        final planned = blocks
+                            .where((b) => b.lessonId == block.lessonId)
+                            .fold(0, (sum, b) => sum + b.blockCount);
+                        final completed = completedMap[block.lessonId] ?? 0;
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                block.lessonName,
+                                style: TextStyle(
+                                  color: kText1,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                '$completed / $planned blok tamamlandı',
+                                style: TextStyle(color: kText2, fontSize: 12),
+                              ),
+                              Slider(
+                                value: completed.toDouble(),
+                                min: 0,
+                                max: planned.toDouble(),
+                                divisions: planned > 0 ? planned : 1,
+                                label: completed.toString(),
+                                activeColor: kAccent,
+                                inactiveColor: kBorder,
+                                onChanged: (value) => setDialogState(
+                                  () => completedMap[block.lessonId] = value
+                                      .round(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        final items = uniqueBlocks.map((block) {
+                          final planned = blocks
+                              .where((b) => b.lessonId == block.lessonId)
+                              .fold(0, (sum, b) => sum + b.blockCount);
+                          final completed = completedMap[block.lessonId] ?? 0;
+                          return {
+                            'lessonId': block.lessonId,
+                            'plannedBlocks': planned,
+                            'completedBlocks': completed,
+                            'delayed': completed < planned,
+                          };
+                        }).toList();
+                        try {
+                          await ApiClient.submitChecklist(
+                            date: date,
+                            stressLevel: stressLevel,
+                            fatigueLevel: fatigueLevel,
+                            items: items,
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx, true);
+                        } catch (e) {
+                          if (!ctx.mounted) return;
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                e.toString().replaceAll('Exception: ', ''),
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      icon: Icon(Icons.check_rounded, size: 18),
+                      label: Text('Kaydet'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kAccent,
+                        padding: EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return result == true;
   }
 
   void _showSleepModal() {
@@ -294,6 +555,9 @@ class _TodayScreenState extends State<TodayScreen>
                           );
                           final right = _ChecklistPanel(
                             blocks: _primaryTodayBlocks,
+                            missingDates: _missingChecklistDates,
+                            submitted: _todayChecklistSubmitted,
+                            resolvingMissing: _resolvingMissingChecklists,
                             completedBlocks: _completedBlocks,
                             totalBlocks: _totalBlocks,
                             studiedMinutes: _totalStudiedMinutes,
@@ -305,6 +569,8 @@ class _TodayScreenState extends State<TodayScreen>
                             onMinutesChanged: (lessonId, value) => setState(
                               () => _studiedMinutes[lessonId] = value,
                             ),
+                            onCompleteMissing: _resolveMissingChecklists,
+                            onSaveChecklist: _saveTodayChecklist,
                           );
 
                           if (!wide) {
@@ -778,6 +1044,9 @@ class _QuickToolCard extends StatelessWidget {
 class _ChecklistPanel extends StatelessWidget {
   const _ChecklistPanel({
     required this.blocks,
+    required this.missingDates,
+    required this.submitted,
+    required this.resolvingMissing,
     required this.completedBlocks,
     required this.totalBlocks,
     required this.studiedMinutes,
@@ -786,9 +1055,14 @@ class _ChecklistPanel extends StatelessWidget {
     required this.studiedMinutesForLesson,
     required this.plannedMinutesForLesson,
     required this.onMinutesChanged,
+    required this.onCompleteMissing,
+    required this.onSaveChecklist,
   });
 
   final List<ScheduledBlock> blocks;
+  final List<String> missingDates;
+  final bool submitted;
+  final bool resolvingMissing;
   final int completedBlocks;
   final int totalBlocks;
   final int studiedMinutes;
@@ -797,6 +1071,8 @@ class _ChecklistPanel extends StatelessWidget {
   final int Function(int lessonId) studiedMinutesForLesson;
   final int Function(int lessonId) plannedMinutesForLesson;
   final void Function(int lessonId, int value) onMinutesChanged;
+  final VoidCallback onCompleteMissing;
+  final VoidCallback onSaveChecklist;
 
   @override
   Widget build(BuildContext context) {
@@ -813,33 +1089,146 @@ class _ChecklistPanel extends StatelessWidget {
         children: [
           _PanelTitle(icon: Icons.checklist_rounded, title: 'Checklist'),
           SizedBox(height: 16),
-          _ChecklistProgress(
-            completedBlocks: completedBlocks,
-            totalBlocks: totalBlocks,
-            studiedMinutes: studiedMinutes,
-            plannedMinutes: plannedMinutes,
-            progress: progress,
-          ),
-          Divider(height: 32, color: kBorder),
-          if (blocks.isEmpty)
-            _EmptyPanelState(
-              icon: Icons.event_available_outlined,
-              title: 'Bugün boş',
-              subtitle: 'Checklist göndermek için planlanmış ders yok.',
+          if (missingDates.isNotEmpty)
+            _ChecklistBlockedState(
+              missingDates: missingDates,
+              resolving: resolvingMissing,
+              onPressed: onCompleteMissing,
             )
-          else
-            ...List.generate(blocks.length, (i) {
-              final block = blocks[i];
-              final planned = plannedMinutesForLesson(block.lessonId);
-              return _ChecklistLessonRow(
-                block: block,
-                studiedMinutes: studiedMinutesForLesson(block.lessonId),
-                plannedMinutes: planned,
-                isLast: i == blocks.length - 1,
-                onMinutesChanged: (value) =>
-                    onMinutesChanged(block.lessonId, value),
-              );
-            }),
+          else ...[
+            _ChecklistProgress(
+              completedBlocks: completedBlocks,
+              totalBlocks: totalBlocks,
+              studiedMinutes: studiedMinutes,
+              plannedMinutes: plannedMinutes,
+              progress: progress,
+            ),
+            Divider(height: 32, color: kBorder),
+            if (blocks.isEmpty)
+              _EmptyPanelState(
+                icon: submitted
+                    ? Icons.task_alt_rounded
+                    : Icons.event_available_outlined,
+                title: submitted ? 'Submitted' : 'Bugün boş',
+                subtitle: submitted
+                    ? 'Bugünün checklisti kapatıldı.'
+                    : 'Bugünü kapatmak için checklist submit edebilirsin.',
+              )
+            else
+              ...List.generate(blocks.length, (i) {
+                final block = blocks[i];
+                final planned = plannedMinutesForLesson(block.lessonId);
+                return _ChecklistLessonRow(
+                  block: block,
+                  studiedMinutes: studiedMinutesForLesson(block.lessonId),
+                  plannedMinutes: planned,
+                  isLast: i == blocks.length - 1,
+                  enabled: !submitted,
+                  onMinutesChanged: (value) =>
+                      onMinutesChanged(block.lessonId, value),
+                );
+              }),
+            Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: submitted ? null : onSaveChecklist,
+                icon: Icon(
+                  submitted ? Icons.task_alt_rounded : Icons.check_rounded,
+                  size: 18,
+                ),
+                label: Text(submitted ? 'Submitted' : 'Submit'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: kAccent,
+                  disabledBackgroundColor: kBorder,
+                  disabledForegroundColor: kText2,
+                  padding: EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ChecklistBlockedState extends StatelessWidget {
+  const _ChecklistBlockedState({
+    required this.missingDates,
+    required this.resolving,
+    required this.onPressed,
+  });
+
+  final List<String> missingDates;
+  final bool resolving;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _EmptyPanelState(
+            icon: Icons.lock_clock_outlined,
+            title: 'Önce eksik günler',
+            subtitle:
+                'Bugünün checklisti için aynı haftadaki önceki checklistleri tamamla.',
+          ),
+          SizedBox(height: 14),
+          ...missingDates.map(
+            (date) => Container(
+              margin: EdgeInsets.only(bottom: 8),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: kBorder.withAlpha(60),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: kBorder),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event_note_outlined, color: kAccent, size: 17),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      date,
+                      style: TextStyle(
+                        color: kText1,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Spacer(),
+          FilledButton.icon(
+            onPressed: resolving ? null : onPressed,
+            icon: resolving
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: kText1,
+                    ),
+                  )
+                : Icon(Icons.checklist_rounded, size: 18),
+            label: Text(resolving ? 'Açılıyor...' : 'Eksikleri doldur'),
+            style: FilledButton.styleFrom(
+              backgroundColor: kAccent,
+              disabledBackgroundColor: kBorder,
+              padding: EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -914,6 +1303,7 @@ class _ChecklistLessonRow extends StatelessWidget {
     required this.studiedMinutes,
     required this.plannedMinutes,
     required this.isLast,
+    required this.enabled,
     required this.onMinutesChanged,
   });
 
@@ -921,6 +1311,7 @@ class _ChecklistLessonRow extends StatelessWidget {
   final int studiedMinutes;
   final int plannedMinutes;
   final bool isLast;
+  final bool enabled;
   final ValueChanged<int> onMinutesChanged;
 
   @override
@@ -940,15 +1331,18 @@ class _ChecklistLessonRow extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                block.lessonName,
-                style: TextStyle(
-                  color: kText1,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              child: Opacity(
+                opacity: enabled ? 1 : 0.62,
+                child: Text(
+                  block.lessonName,
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
             SizedBox(width: 12),
@@ -959,8 +1353,10 @@ class _ChecklistLessonRow extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(5),
               ),
-              onChanged: (value) =>
-                  onMinutesChanged(value == true ? plannedMinutes : 0),
+              onChanged: enabled
+                  ? (value) =>
+                        onMinutesChanged(value == true ? plannedMinutes : 0)
+                  : null,
             ),
           ],
         ),
@@ -1325,6 +1721,53 @@ class _DialogIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Icon(icon, color: kAccent, size: 22),
+    );
+  }
+}
+
+class _ChecklistMetricSlider extends StatelessWidget {
+  const _ChecklistMetricSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 74,
+          child: Text(
+            label,
+            style: TextStyle(color: kText1, fontWeight: FontWeight.w700),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.toDouble(),
+            min: 1,
+            max: 5,
+            divisions: 4,
+            label: value.toString(),
+            activeColor: kAccent,
+            inactiveColor: kBorder,
+            onChanged: (v) => onChanged(v.toInt()),
+          ),
+        ),
+        SizedBox(
+          width: 34,
+          child: Text(
+            '$value/5',
+            textAlign: TextAlign.end,
+            style: TextStyle(color: kText2, fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
 }
