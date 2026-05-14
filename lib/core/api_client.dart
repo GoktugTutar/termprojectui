@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Tüm backend HTTP isteklerini yöneten merkezi API katmanı.
 /// Base URL platforma göre otomatik seçilir (web, Android emülatör, diğer).
 class ApiClient {
-  static const String _tokenKey = 'jwt_token';
+  static final String _tokenKey = 'jwt_token';
 
   /// Platforma göre uygun base URL'yi döndürür.
   static String get _base {
@@ -126,14 +126,14 @@ class ApiClient {
   }
 
   /// Dijital ikiz öğrenci profilini getirir (GET /user/student-profile).
-static Future<Map<String, dynamic>> getStudentProfile() async {
-  final h = await _authHeaders();
-  final res = await http.get(
-    Uri.parse('$_base/user/student-profile'),
-    headers: h,
-  );
-  return Map<String, dynamic>.from(await _handle(res) as Map);
-}
+  static Future<Map<String, dynamic>> getStudentProfile() async {
+    final h = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$_base/user/student-profile'),
+      headers: h,
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
 
   // ── LESSON ──────────────────────────────────────────────────────────────────
 
@@ -179,10 +179,7 @@ static Future<Map<String, dynamic>> getStudentProfile() async {
   /// Dersi siler (DELETE /lesson/:id).
   static Future<void> deleteLesson(int id) async {
     final h = await _authHeaders();
-    final res = await http.delete(
-      Uri.parse('$_base/lesson/$id'),
-      headers: h,
-    );
+    final res = await http.delete(Uri.parse('$_base/lesson/$id'), headers: h);
     await _handle(res);
   }
 
@@ -269,10 +266,7 @@ static Future<Map<String, dynamic>> getStudentProfile() async {
   /// [date] formatı: "YYYY-MM-DD"
   static Future<Map<String, dynamic>?> getChecklist(String date) async {
     final h = await _authHeaders();
-    final res = await http.get(
-      Uri.parse('$_base/checklist/$date'),
-      headers: h,
-    );
+    final res = await http.get(Uri.parse('$_base/checklist/$date'), headers: h);
     if (res.statusCode == 404 || res.body == 'null' || res.body.isEmpty) {
       return null;
     }
@@ -339,10 +333,7 @@ static Future<Map<String, dynamic>> getStudentProfile() async {
   /// Backend modunu döndürür: { mode: "test"|"prod", current: string }
   static Future<Map<String, dynamic>> getMode() async {
     final h = await _authHeaders();
-    final res = await http.get(
-      Uri.parse('$_base/debug/mode'),
-      headers: h,
-    );
+    final res = await http.get(Uri.parse('$_base/debug/mode'), headers: h);
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 

@@ -30,7 +30,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     super.initState();
     _fabAnim = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: Duration(milliseconds: 250),
     );
     _loadData();
   }
@@ -74,10 +74,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   /// API'den dönen ham checklist verisini [DailyChecklist] modeline dönüştürür.
   /// Ders adlarını haftalık plan bloklarından tamamlar.
-  DailyChecklist _parseChecklist(
-    Map<String, dynamic> data,
-    WeeklyPlan? plan,
-  ) {
+  DailyChecklist _parseChecklist(Map<String, dynamic> data, WeeklyPlan? plan) {
     // Ders adı haritası: lessonId → lessonName
     final lessonNames = <int, String>{};
     if (plan != null) {
@@ -198,7 +195,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: const Text('Gunluk Kontrol Listesi'),
+          title: Text('Gunluk Kontrol Listesi'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -207,7 +204,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 // Stres seviyesi
                 Row(
                   children: [
-                    const Text('Stres: '),
+                    Text('Stres: '),
                     Expanded(
                       child: Slider(
                         value: stressLevel.toDouble(),
@@ -224,7 +221,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 // Yorgunluk seviyesi
                 Row(
                   children: [
-                    const Text('Yorgunluk: '),
+                    Text('Yorgunluk: '),
                     Expanded(
                       child: Slider(
                         value: fatigueLevel.toDouble(),
@@ -238,7 +235,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     Text('$fatigueLevel/5'),
                   ],
                 ),
-                const Divider(),
+                Divider(),
                 // Her ders için tamamlanan blok sayısı
                 ...uniqueBlocks.values.map((block) {
                   // Bu derse ait toplam planlanan blok
@@ -249,7 +246,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                   final delayed = delayedMap[block.lessonId] ?? false;
 
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.only(bottom: 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -257,15 +254,15 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                           block.isReview
                               ? '${block.lessonName} (Tekrar)'
                               : block.lessonName,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                         Text(
                           'Planlanan: $totalPlanned blok (${totalPlanned * 30} dk)',
-                          style: const TextStyle(fontSize: 12),
+                          style: TextStyle(fontSize: 12),
                         ),
                         Row(
                           children: [
-                            const Text('Tamamlanan blok: '),
+                            Text('Tamamlanan blok: '),
                             Expanded(
                               child: Slider(
                                 value: completed.toDouble(),
@@ -274,8 +271,8 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                                 divisions: totalPlanned > 0 ? totalPlanned : 1,
                                 label: completed.toString(),
                                 onChanged: (v) => setS(
-                                  () => completedMap[block.lessonId] =
-                                      v.toInt(),
+                                  () =>
+                                      completedMap[block.lessonId] = v.toInt(),
                                 ),
                               ),
                             ),
@@ -286,7 +283,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                         SwitchListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          title: const Text(
+                          title: Text(
                             'Ertelendi',
                             style: TextStyle(fontSize: 13),
                           ),
@@ -304,7 +301,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Iptal'),
+              child: Text('Iptal'),
             ),
             FilledButton(
               onPressed: () async {
@@ -339,7 +336,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 if (!mounted) return;
                 setState(() => _loading = false);
               },
-              child: const Text('Kaydet'),
+              child: Text('Kaydet'),
             ),
           ],
         ),
@@ -397,12 +394,12 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     size: 64,
                     color: cs.outline,
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Text(
                     'Henuz plan yok',
                     style: TextStyle(fontSize: 18, color: cs.outline),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Text(
                     wideLayout
                         ? 'Ustteki hizli islemlerden plan olusturabilirsin'
@@ -414,7 +411,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
             ),
           ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
 
@@ -422,13 +419,13 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       onTap: _fabOpen ? _closeFab : null,
       child: Scaffold(
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: CircularProgressIndicator())
             : RefreshIndicator(
                 onRefresh: _loadData,
                 child: wideLayout
                     ? Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1180),
+                          constraints: BoxConstraints(maxWidth: 1180),
                           child: scrollView,
                         ),
                       )
@@ -444,10 +441,10 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   /// Masaüstü hızlı işlem kartı.
   Widget _buildDesktopActions(ColorScheme cs) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20),
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -467,7 +464,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                         color: cs.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     Text(
                       'Haftalik plan olustur veya gunluk kontrol listesi kaydet.',
                       style: TextStyle(color: cs.onSurfaceVariant),
@@ -477,13 +474,13 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               ),
               FilledButton.icon(
                 onPressed: _generateWeekly,
-                icon: const Icon(Icons.calendar_month_rounded),
-                label: const Text('Haftalik Plan Olustur'),
+                icon: Icon(Icons.calendar_month_rounded),
+                label: Text('Haftalik Plan Olustur'),
               ),
               OutlinedButton.icon(
                 onPressed: _openSubmitChecklist,
-                icon: const Icon(Icons.checklist_rounded),
-                label: const Text('Kontrol Listesi Kaydet'),
+                icon: Icon(Icons.checklist_rounded),
+                label: Text('Kontrol Listesi Kaydet'),
               ),
             ],
           ),
@@ -499,7 +496,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         AnimatedSize(
-          duration: const Duration(milliseconds: 200),
+          duration: Duration(milliseconds: 200),
           child: _fabOpen
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -510,24 +507,24 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                       onTap: _openSubmitChecklist,
                       cs: cs,
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     _miniFab(
                       icon: Icons.calendar_month_rounded,
                       label: 'Haftalik Plan Olustur',
                       onTap: _generateWeekly,
                       cs: cs,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                   ],
                 )
-              : const SizedBox.shrink(),
+              : SizedBox.shrink(),
         ),
         FloatingActionButton(
           onPressed: _toggleFab,
           backgroundColor: _fabOpen ? _errorFabBgColor : _primaryFabBgColor,
           child: AnimatedRotation(
             turns: _fabOpen ? 0.125 : 0,
-            duration: const Duration(milliseconds: 250),
+            duration: Duration(milliseconds: 250),
             child: Icon(
               _fabOpen ? Icons.close : Icons.add,
               color: _fabOpen ? cs.onError : cs.onPrimary,
@@ -550,7 +547,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
@@ -558,13 +555,13 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 BoxShadow(
                   color: Colors.black.withAlpha(30),
                   blurRadius: 4,
-                  offset: const Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
-            child: Text(label, style: const TextStyle(fontSize: 12)),
+            child: Text(label, style: TextStyle(fontSize: 12)),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           FloatingActionButton.small(
             heroTag: label,
             onPressed: onTap,
@@ -579,10 +576,10 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   SliverToBoxAdapter _sectionHeader(String title) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Text(
           title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -594,24 +591,24 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   Widget _buildChecklistSummary(ColorScheme cs) {
     final cl = _todayChecklist!;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16),
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Icon(Icons.mood_outlined, color: cs.primary),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Text(
                     'Stres: ${cl.stressLevel}/5  •  Yorgunluk: ${cl.fatigueLevel}/5',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               ...cl.items.map(
                 (item) => ListTile(
                   dense: true,
@@ -620,13 +617,13 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     item.completedBlocks >= item.plannedBlocks
                         ? Icons.check_circle
                         : item.delayed
-                            ? Icons.cancel_outlined
-                            : Icons.radio_button_unchecked,
+                        ? Icons.cancel_outlined
+                        : Icons.radio_button_unchecked,
                     color: item.completedBlocks >= item.plannedBlocks
                         ? Colors.green
                         : item.delayed
-                            ? Colors.red
-                            : cs.primary,
+                        ? Colors.red
+                        : cs.primary,
                   ),
                   title: Text(item.lessonName),
                   subtitle: Text(
@@ -646,7 +643,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   /// Haftalık planı gün bazında liste olarak gösterir.
   Widget _buildWeeklyPlan(ColorScheme cs, String today) {
-    if (_plan == null) return const SizedBox.shrink();
+    if (_plan == null) return SizedBox.shrink();
 
     // 7 günü sırayla göster; her gün için o güne ait blokları listele
     final weekDays = List.generate(7, (i) {
@@ -655,14 +652,14 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     });
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: weekDays.map((date) {
           final blocks = _plan!.blocksForDate(date);
           final isToday = date == today;
 
           return Card(
-            margin: const EdgeInsets.only(bottom: 8),
+            margin: EdgeInsets.only(bottom: 8),
             color: isToday ? cs.primaryContainer.withAlpha(60) : null,
             child: ExpansionTile(
               initiallyExpanded: isToday,
@@ -687,14 +684,14 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 ),
               ),
               subtitle: blocks.isEmpty
-                  ? const Text('Ders yok')
+                  ? Text('Ders yok')
                   : Text(
                       '${blocks.length} blok  •  '
                       '${blocks.fold(0, (sum, b) => sum + b.blockCount) * 30} dk',
                     ),
               children: blocks.isEmpty
                   ? [
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.all(16),
                         child: Text('Bu gun icin planlanmis ders yok.'),
                       ),
@@ -716,22 +713,22 @@ class _ScheduleScreenState extends State<ScheduleScreen>
         block.isReview
             ? Icons.replay_outlined
             : block.completed
-                ? Icons.check_circle_outline
-                : Icons.book_outlined,
+            ? Icons.check_circle_outline
+            : Icons.book_outlined,
         color: block.isReview
             ? cs.tertiary
             : block.completed
-                ? Colors.green
-                : cs.primary,
+            ? Colors.green
+            : cs.primary,
         size: 20,
       ),
       title: Text(
         block.isReview ? '${block.lessonName} (Tekrar)' : block.lessonName,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Text('${block.startTime} – ${block.endTime}  •  $minutes dk'),
       trailing: block.completed
-          ? const Icon(Icons.check, color: Colors.green, size: 18)
+          ? Icon(Icons.check, color: Colors.green, size: 18)
           : null,
     );
   }

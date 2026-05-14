@@ -4,7 +4,7 @@ import '../core/api_client.dart';
 import '../core/app_time.dart';
 import '../theme.dart';
 
-const _kDanger  = Color(0xFFFF5C7A);
+const _kDanger = Color(0xFFFF5C7A);
 const _kWarning = Color(0xFFF2B14A);
 
 class ProfileScreen extends StatefulWidget {
@@ -66,10 +66,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _snack(String msg, {bool error = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: error ? Colors.red : null,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+    );
   }
 
   Future<void> _savePreferences() async {
@@ -114,8 +113,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: kSurface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => _BusySlotSheet(
         existing: existing,
         editIndex: editIndex,
@@ -130,20 +130,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     super.build(context);
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: kBg,
+      return Scaffold(
+        backgroundColor: Colors.transparent,
         body: Center(child: CircularProgressIndicator(color: kAccent)),
       );
     }
 
     final email = _user?['email']?.toString() ?? '';
-    final displayName =
-        email.isNotEmpty ? email.split('@').first : 'User';
-    final initial =
-        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
+    final displayName = email.isNotEmpty ? email.split('@').first : 'User';
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
 
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -152,40 +150,46 @@ class _ProfileScreenState extends State<ProfileScreen>
           backgroundColor: kSurface,
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+              constraints: BoxConstraints(maxWidth: 720),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 100),
                 children: [
                   // Header / kicker
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 12, 0, 18),
+                    padding: EdgeInsets.fromLTRB(0, 12, 0, 18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Setup',
-                            style: TextStyle(
-                                color: kText2,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8)),
+                      children: [
+                        Text(
+                          'Setup',
+                          style: TextStyle(
+                            color: kText2,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
                         SizedBox(height: 6),
-                        Text('Profile',
-                            style: TextStyle(
-                                color: kText1,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold)),
+                        Text(
+                          'Profile',
+                          style: TextStyle(
+                            color: kText1,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   // Avatar row
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 18),
+                    padding: EdgeInsets.only(bottom: 18),
                     child: Row(
                       children: [
                         Container(
                           width: 60,
                           height: 60,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [kAccent, Color(0xFF5AB6FF)],
                               begin: Alignment.topLeft,
@@ -194,25 +198,32 @@ class _ProfileScreenState extends State<ProfileScreen>
                             shape: BoxShape.circle,
                           ),
                           child: Center(
-                            child: Text(initial,
-                                style: const TextStyle(
-                                    color: kBg,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700)),
+                            child: Text(
+                              initial,
+                              style: TextStyle(
+                                color: kBg,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        SizedBox(width: 14),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(displayName,
-                                style: const TextStyle(
-                                    color: kText1,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700)),
-                            const Text('12 weeks · 314 blocks completed',
-                                style: TextStyle(
-                                    color: kText2, fontSize: 13)),
+                            Text(
+                              displayName,
+                              style: TextStyle(
+                                color: kText1,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              '12 weeks · 314 blocks completed',
+                              style: TextStyle(color: kText2, fontSize: 13),
+                            ),
                           ],
                         ),
                       ],
@@ -220,11 +231,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                   // Preferred study time
                   _SectionLabel('Preferred study time'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
+                    physics: NeverScrollableScrollPhysics(),
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                     childAspectRatio: 2.8,
@@ -235,8 +246,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         range: '08–11',
                         icon: Icons.wb_sunny_outlined,
                         pref: _preferredStudyTime,
-                        onTap: () => setState(
-                            () => _preferredStudyTime = 'morning'),
+                        onTap: () =>
+                            setState(() => _preferredStudyTime = 'morning'),
                       ),
                       _TimeChip(
                         v: 'afternoon',
@@ -244,8 +255,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         range: '12–15',
                         icon: Icons.wb_cloudy_outlined,
                         pref: _preferredStudyTime,
-                        onTap: () => setState(
-                            () => _preferredStudyTime = 'afternoon'),
+                        onTap: () =>
+                            setState(() => _preferredStudyTime = 'afternoon'),
                       ),
                       _TimeChip(
                         v: 'evening',
@@ -253,8 +264,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         range: '18–21',
                         icon: Icons.nights_stay_outlined,
                         pref: _preferredStudyTime,
-                        onTap: () => setState(
-                            () => _preferredStudyTime = 'evening'),
+                        onTap: () =>
+                            setState(() => _preferredStudyTime = 'evening'),
                       ),
                       _TimeChip(
                         v: 'night',
@@ -262,15 +273,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                         range: '21–24',
                         icon: Icons.bedtime_outlined,
                         pref: _preferredStudyTime,
-                        onTap: () => setState(
-                            () => _preferredStudyTime = 'night'),
+                        onTap: () =>
+                            setState(() => _preferredStudyTime = 'night'),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   // Study style
                   _SectionLabel('Study style'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Column(
                     children: [
                       _StyleCard(
@@ -279,152 +290,159 @@ class _ProfileScreenState extends State<ProfileScreen>
                         sub: '1 long block · max 2h',
                         rule: 'maxSessions=1, max=4 blocks',
                         value: _studyStyle,
-                        onChange: (s) =>
-                            setState(() => _studyStyle = s),
+                        onChange: (s) => setState(() => _studyStyle = s),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       _StyleCard(
                         v: 'distributed',
                         label: 'Distributed',
                         sub: '3 short blocks · spread across day',
                         rule: 'maxSessions=3, max=2 blocks',
                         value: _studyStyle,
-                        onChange: (s) =>
-                            setState(() => _studyStyle = s),
+                        onChange: (s) => setState(() => _studyStyle = s),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       _StyleCard(
                         v: 'normal',
                         label: 'Balanced',
                         sub: '2 medium blocks · default',
                         rule: 'maxSessions=2, max=3 blocks',
                         value: _studyStyle,
-                        onChange: (s) =>
-                            setState(() => _studyStyle = s),
+                        onChange: (s) => setState(() => _studyStyle = s),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   FilledButton(
                     onPressed: _saving ? null : _savePreferences,
                     style: FilledButton.styleFrom(
                       backgroundColor: kAccent,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 14),
+                      padding: EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: _saving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
-                        : const Text('Save preferences',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600)),
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(
+                            'Save preferences',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   // Busy slots
                   Row(
                     children: [
-                      Text('BUSY SLOTS · ${_busySlots.length}',
-                          style: const TextStyle(
-                              color: kText2,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8)),
-                      const Spacer(),
+                      Text(
+                        'BUSY SLOTS · ${_busySlots.length}',
+                        style: TextStyle(
+                          color: kText2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      Spacer(),
                       GestureDetector(
                         onTap: () => _openBusySlotSheet(),
                         child: Row(
-                          children: const [
-                            Icon(Icons.add,
-                                size: 12, color: kAccent),
+                          children: [
+                            Icon(Icons.add, size: 12, color: kAccent),
                             SizedBox(width: 4),
-                            Text('Add',
-                                style: TextStyle(
-                                    color: kAccent,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
+                            Text(
+                              'Add',
+                              style: TextStyle(
+                                color: kAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   if (_busySlots.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('No busy slots added yet.',
-                          style: TextStyle(
-                              color: kText2, fontSize: 13)),
+                      child: Text(
+                        'No busy slots added yet.',
+                        style: TextStyle(color: kText2, fontSize: 13),
+                      ),
                     )
                   else
                     Column(
                       children: List.generate(_busySlots.length, (i) {
                         final slot = _busySlots[i];
-                        final dayIdx =
-                            (slot['dayOfWeek'] as int? ?? 1) - 1;
-                        const dayLetters = [
-                          'M', 'T', 'W', 'T', 'F', 'S', 'S'
-                        ];
-                        final dayLetter =
-                            dayIdx >= 0 && dayIdx < 7
-                                ? dayLetters[dayIdx]
-                                : '?';
+                        final dayIdx = (slot['dayOfWeek'] as int? ?? 1) - 1;
+                        const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+                        final dayLetter = dayIdx >= 0 && dayIdx < 7
+                            ? dayLetters[dayIdx]
+                            : '?';
                         final fatigue =
-                            (slot['fatigueLevel'] as num?)?.toInt() ??
-                                3;
-                        final label =
-                            slot['label']?.toString() ?? '';
+                            (slot['fatigueLevel'] as num?)?.toInt() ?? 3;
+                        final label = slot['label']?.toString() ?? '';
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
+                          padding: EdgeInsets.only(bottom: 6),
                           child: GestureDetector(
                             onTap: () => _openBusySlotSheet(
-                                existing: slot, editIndex: i),
+                              existing: slot,
+                              editIndex: i,
+                            ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: kSurface,
-                                borderRadius:
-                                    BorderRadius.circular(12),
-                                border:
-                                    Border.all(color: kBorder),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kBorder),
                               ),
                               child: Row(
                                 children: [
                                   SizedBox(
                                     width: 28,
-                                    child: Text(dayLetter,
-                                        textAlign:
-                                            TextAlign.center,
-                                        style: const TextStyle(
-                                            color: kText2,
-                                            fontSize: 11,
-                                            fontWeight:
-                                                FontWeight.w700)),
+                                    child: Text(
+                                      dayLetter,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: kText2,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ),
-                                  const SizedBox(width: 10),
+                                  SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
                                         if (label.isNotEmpty)
-                                          Text(label,
-                                              style: const TextStyle(
-                                                  color: kText1,
-                                                  fontSize: 14,
-                                                  fontWeight:
-                                                      FontWeight
-                                                          .w600)),
+                                          Text(
+                                            label,
+                                            style: TextStyle(
+                                              color: kText1,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                         Text(
-                                            '${slot['startTime']} – ${slot['endTime']}',
-                                            style: const TextStyle(
-                                                color: kText2,
-                                                fontSize: 12)),
+                                          '${slot['startTime']} – ${slot['endTime']}',
+                                          style: TextStyle(
+                                            color: kText2,
+                                            fontSize: 12,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -436,30 +454,34 @@ class _ProfileScreenState extends State<ProfileScreen>
                         );
                       }),
                     ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   // Developer / Test mode (sadece MODE=test'te gösterilir)
                   if (_isTestMode) ...[
                     _SectionLabel('Developer'),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     _TestModeCard(onSave: _snack),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                   ],
                   // Logout
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: _logout,
-                      icon: const Icon(Icons.logout_rounded,
-                          size: 18, color: _kDanger),
-                      label: const Text('Sign out',
-                          style: TextStyle(color: _kDanger)),
+                      icon: Icon(
+                        Icons.logout_rounded,
+                        size: 18,
+                        color: _kDanger,
+                      ),
+                      label: Text(
+                        'Sign out',
+                        style: TextStyle(color: _kDanger),
+                      ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: _kDanger),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: _kDanger),
+                        padding: EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -482,12 +504,15 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text.toUpperCase(),
-        style: const TextStyle(
-            color: kText2,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8));
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        color: kText2,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+      ),
+    );
   }
 }
 
@@ -516,14 +541,12 @@ class _TimeChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 12),
+        duration: Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: on ? kAccent.withAlpha(46) : kSurface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: on ? kAccent : kBorder, width: 0.5),
+          border: Border.all(color: on ? kAccent : kBorder, width: 0.5),
         ),
         child: Row(
           children: [
@@ -534,22 +557,22 @@ class _TimeChip extends StatelessWidget {
                 color: on ? kAccent : kBorder,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon,
-                  color: on ? kBg : kText2, size: 15),
+              child: Icon(icon, color: on ? kBg : kText2, size: 15),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        color: on ? kText1 : kText2,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600)),
-                Text(range,
-                    style: const TextStyle(
-                        color: kText2, fontSize: 11)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: on ? kText1 : kText2,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(range, style: TextStyle(color: kText2, fontSize: 11)),
               ],
             ),
           ],
@@ -584,28 +607,23 @@ class _StyleCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => onChange(v),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 12),
+        duration: Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: on ? kAccent.withAlpha(46) : kSurface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: on ? kAccent : kBorder, width: 0.5),
+          border: Border.all(color: on ? kAccent : kBorder, width: 0.5),
         ),
         child: Row(
           children: [
             // Radio circle
             AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
+              duration: Duration(milliseconds: 150),
               width: 22,
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: on ? kAccent : kText2,
-                  width: 1.5,
-                ),
+                border: Border.all(color: on ? kAccent : kText2, width: 1.5),
                 color: on ? kAccent : Colors.transparent,
               ),
               child: on
@@ -613,38 +631,43 @@ class _StyleCard extends StatelessWidget {
                       child: Container(
                         width: 10,
                         height: 10,
-                        decoration: const BoxDecoration(
-                            color: kBg, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                          color: kBg,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     )
                   : null,
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: TextStyle(
-                          color: on ? kText1 : kText2,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600)),
-                  Text(sub,
-                      style: const TextStyle(
-                          color: kText2, fontSize: 12)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: on ? kText1 : kText2,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(sub, style: TextStyle(color: kText2, fontSize: 12)),
                 ],
               ),
             ),
             // Monospace rule
             SizedBox(
               width: 110,
-              child: Text(rule,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: kText2.withAlpha(180),
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                  )),
+              child: Text(
+                rule,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: kText2.withAlpha(180),
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                ),
+              ),
             ),
           ],
         ),
@@ -677,7 +700,7 @@ class _FatigueDots extends StatelessWidget {
         return Container(
           width: 4,
           height: 14,
-          margin: const EdgeInsets.only(right: 2),
+          margin: EdgeInsets.only(right: 2),
           decoration: BoxDecoration(
             color: filled ? dotColor : kBorder,
             borderRadius: BorderRadius.circular(1),
@@ -709,9 +732,9 @@ class _TestModeCardState extends State<_TestModeCard> {
       firstDate: DateTime(2024),
       lastDate: DateTime(2030),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-            colorScheme:
-                const ColorScheme.dark(primary: kAccent)),
+        data: Theme.of(
+          ctx,
+        ).copyWith(colorScheme: ColorScheme.dark(primary: kAccent)),
         child: child!,
       ),
     );
@@ -720,32 +743,34 @@ class _TestModeCardState extends State<_TestModeCard> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_now),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-            colorScheme:
-                const ColorScheme.dark(primary: kAccent)),
+        data: Theme.of(
+          ctx,
+        ).copyWith(colorScheme: ColorScheme.dark(primary: kAccent)),
         child: child!,
       ),
     );
     if (time == null || !mounted) return;
-    final dt = DateTime(date.year, date.month, date.day,
-        time.hour, time.minute);
+    final dt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
     try {
       await ApiClient.setTestClock(dt.toIso8601String());
       AppTime.setOverride(dt);
       setState(() => _now = dt);
-      widget.onSave(
-          'Test clock: ${dt.toIso8601String().substring(0, 16)}');
+      widget.onSave('Test clock: ${dt.toIso8601String().substring(0, 16)}');
     } catch (e) {
-      widget.onSave(
-          e.toString().replaceAll('Exception: ', ''),
-          error: true);
+      widget.onSave(e.toString().replaceAll('Exception: ', ''), error: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: kSurface,
         borderRadius: BorderRadius.circular(14),
@@ -763,61 +788,64 @@ class _TestModeCardState extends State<_TestModeCard> {
                   color: _kDanger.withAlpha(46),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.access_time,
-                    size: 14, color: _kDanger),
+                child: Icon(Icons.access_time, size: 14, color: _kDanger),
               ),
-              const SizedBox(width: 10),
-              const Expanded(
+              SizedBox(width: 10),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('mod=test',
-                        style: TextStyle(
-                            color: kText1,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
                     Text(
-                        'Override the system clock — algorithm reads from this.',
-                        style:
-                            TextStyle(color: kText2, fontSize: 12)),
+                      'mod=test',
+                      style: TextStyle(
+                        color: kText1,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Override the system clock — algorithm reads from this.',
+                      style: TextStyle(color: kText2, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
-              const Text('Now:',
-                  style:
-                      TextStyle(color: kText2, fontSize: 12)),
-              const SizedBox(width: 8),
+              Text('Now:', style: TextStyle(color: kText2, fontSize: 12)),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _now.toIso8601String().substring(0, 16).replaceAll('T', ' '),
-                  style: const TextStyle(
-                      color: kText1,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               GestureDetector(
                 onTap: _edit,
                 child: Container(
                   height: 36,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14),
+                  padding: EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
                     color: kAccent.withAlpha(46),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(color: kBorder),
                   ),
-                  child: const Center(
-                    child: Text('Edit',
-                        style: TextStyle(
-                            color: kAccent,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
+                  child: Center(
+                    child: Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: kAccent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -857,20 +885,19 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
   int _fatigue = 3;
   bool _saving = false;
 
-  static const _dayNames = [
-    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-  ];
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   void initState() {
     super.initState();
     _dayOfWeek = widget.existing?['dayOfWeek'] as int? ?? 1;
     _startCtrl = TextEditingController(
-        text: widget.existing?['startTime']?.toString() ?? '09:00');
+      text: widget.existing?['startTime']?.toString() ?? '09:00',
+    );
     _endCtrl = TextEditingController(
-        text: widget.existing?['endTime']?.toString() ?? '11:00');
-    _fatigue =
-        (widget.existing?['fatigueLevel'] as num?)?.toInt() ?? 3;
+      text: widget.existing?['endTime']?.toString() ?? '11:00',
+    );
+    _fatigue = (widget.existing?['fatigueLevel'] as num?)?.toInt() ?? 3;
   }
 
   @override
@@ -888,8 +915,9 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
 
   Future<void> _confirm() async {
     if (!_isValid()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Time format must be HH:MM')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Time format must be HH:MM')));
       return;
     }
     final slot = {
@@ -922,10 +950,9 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        padding: EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -935,153 +962,153 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: kBorder,
-                    borderRadius: BorderRadius.circular(2)),
+                  color: kBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Row(
               children: [
                 Text(
-                  widget.editIndex != null
-                      ? 'Edit busy slot'
-                      : 'Add busy slot',
-                  style: const TextStyle(
-                      color: kText1,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold),
+                  widget.editIndex != null ? 'Edit busy slot' : 'Add busy slot',
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const Spacer(),
+                Spacer(),
                 if (widget.editIndex != null)
                   GestureDetector(
                     onTap: _delete,
-                    child: const Icon(Icons.delete_outline,
-                        color: _kDanger),
+                    child: Icon(Icons.delete_outline, color: _kDanger),
                   ),
               ],
             ),
-            const SizedBox(height: 20),
-            const Text('DAY',
-                style: TextStyle(
-                    color: kText2,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8)),
-            const SizedBox(height: 8),
+            SizedBox(height: 20),
+            Text(
+              'DAY',
+              style: TextStyle(
+                color: kText2,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
+            ),
+            SizedBox(height: 8),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: List.generate(7, (i) {
                 final selected = i + 1 == _dayOfWeek;
                 return GestureDetector(
-                  onTap: () =>
-                      setState(() => _dayOfWeek = i + 1),
+                  onTap: () => setState(() => _dayOfWeek = i + 1),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                    duration: Duration(milliseconds: 120),
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: selected ? kAccent : kBorder,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(_dayNames[i],
-                        style: TextStyle(
-                            color: selected
-                                ? Colors.white
-                                : kText2,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13)),
+                    child: Text(
+                      _dayNames[i],
+                      style: TextStyle(
+                        color: selected ? Colors.white : kText2,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 );
               }),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _startCtrl,
-                    style: const TextStyle(color: kText1),
-                    decoration: const InputDecoration(
-                        labelText: 'Start',
-                        hintText: '09:00',
-                        hintStyle: TextStyle(color: kText2)),
+                    style: TextStyle(color: kText1),
+                    decoration: InputDecoration(
+                      labelText: 'Start',
+                      hintText: '09:00',
+                      hintStyle: TextStyle(color: kText2),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: _endCtrl,
-                    style: const TextStyle(color: kText1),
-                    decoration: const InputDecoration(
-                        labelText: 'End',
-                        hintText: '11:00',
-                        hintStyle: TextStyle(color: kText2)),
+                    style: TextStyle(color: kText1),
+                    decoration: InputDecoration(
+                      labelText: 'End',
+                      hintText: '11:00',
+                      hintStyle: TextStyle(color: kText2),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Row(
               children: [
-                const Text('Fatigue',
-                    style:
-                        TextStyle(color: kText2, fontSize: 13)),
-                const SizedBox(width: 12),
+                Text('Fatigue', style: TextStyle(color: kText2, fontSize: 13)),
+                SizedBox(width: 12),
                 ...List.generate(5, (i) {
                   final n = i + 1;
                   final sel = n == _fatigue;
                   return GestureDetector(
                     onTap: () => setState(() => _fatigue = n),
                     child: AnimatedContainer(
-                      duration:
-                          const Duration(milliseconds: 120),
+                      duration: Duration(milliseconds: 120),
                       width: 36,
                       height: 36,
-                      margin: const EdgeInsets.only(right: 6),
+                      margin: EdgeInsets.only(right: 6),
                       decoration: BoxDecoration(
                         color: sel ? kAccent : kBorder,
-                        borderRadius:
-                            BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Center(
-                        child: Text('$n',
-                            style: TextStyle(
-                                color: sel
-                                    ? Colors.white
-                                    : kText2,
-                                fontWeight: FontWeight.w600)),
+                        child: Text(
+                          '$n',
+                          style: TextStyle(
+                            color: sel ? Colors.white : kText2,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                   );
                 }),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: _saving ? null : _confirm,
                 style: FilledButton.styleFrom(
                   backgroundColor: kAccent,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 14),
+                  padding: EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : Text(
-                        widget.editIndex != null
-                            ? 'Update'
-                            : 'Add',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600)),
+                        widget.editIndex != null ? 'Update' : 'Add',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ],

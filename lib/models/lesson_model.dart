@@ -5,20 +5,19 @@ class LessonExam {
 
   LessonExam({required this.id, required this.examDate});
 
-  factory LessonExam.fromJson(Map<String, dynamic> j) => LessonExam(
-    id: j['id'] as int,
-    examDate: j['examDate'] as String,
-  );
+  factory LessonExam.fromJson(Map<String, dynamic> j) =>
+      LessonExam(id: j['id'] as int, examDate: j['examDate'] as String);
 
   /// Tarihin sadece YYYY-MM-DD kısmını döndürür.
-  String get dateOnly => examDate.length >= 10 ? examDate.substring(0, 10) : examDate;
+  String get dateOnly =>
+      examDate.length >= 10 ? examDate.substring(0, 10) : examDate;
 }
 
 /// Ödev / deadline tarihini temsil eden model.
 class LessonDeadline {
   final int id;
   final String deadlineDate; // ISO string (orn: "2026-05-25T00:00:00.000Z")
-  final String? title;       // Opsiyonel başlık (orn: "Proje teslimi")
+  final String? title; // Opsiyonel başlık (orn: "Proje teslimi")
 
   LessonDeadline({required this.id, required this.deadlineDate, this.title});
 
@@ -29,7 +28,8 @@ class LessonDeadline {
   );
 
   /// Tarihin sadece YYYY-MM-DD kısmını döndürür.
-  String get dateOnly => deadlineDate.length >= 10 ? deadlineDate.substring(0, 10) : deadlineDate;
+  String get dateOnly =>
+      deadlineDate.length >= 10 ? deadlineDate.substring(0, 10) : deadlineDate;
 }
 
 /// Backend /lesson endpoint'inden gelen ders modeli.

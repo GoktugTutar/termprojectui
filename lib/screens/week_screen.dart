@@ -21,7 +21,7 @@ class _BusySlot {
   final String endTime;
   final int fatigueLevel;
 
-  const _BusySlot({
+  _BusySlot({
     required this.dayOfWeek,
     required this.startTime,
     required this.endTime,
@@ -29,11 +29,11 @@ class _BusySlot {
   });
 
   factory _BusySlot.fromJson(Map<String, dynamic> j) => _BusySlot(
-        dayOfWeek: (j['dayOfWeek'] as num).toInt(),
-        startTime: j['startTime'] as String,
-        endTime: j['endTime'] as String,
-        fatigueLevel: (j['fatigueLevel'] as num? ?? 1).toInt(),
-      );
+    dayOfWeek: (j['dayOfWeek'] as num).toInt(),
+    startTime: j['startTime'] as String,
+    endTime: j['endTime'] as String,
+    fatigueLevel: (j['fatigueLevel'] as num? ?? 1).toInt(),
+  );
 }
 
 class WeekScreen extends StatefulWidget {
@@ -57,8 +57,18 @@ class _WeekScreenState extends State<WeekScreen>
 
   static const _dowLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _monthShorts = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -108,9 +118,9 @@ class _WeekScreenState extends State<WeekScreen>
         _loading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Plan yeniden oluşturuldu!')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Plan yeniden oluşturuldu!')));
       }
     } catch (e) {
       if (!mounted) return;
@@ -129,7 +139,9 @@ class _WeekScreenState extends State<WeekScreen>
   List<String> get _weekDates {
     if (_plan == null) return [];
     return List.generate(7, (i) {
-      final dt = DateTime.parse(_plan!.weekStart).toLocal().add(Duration(days: i));
+      final dt = DateTime.parse(
+        _plan!.weekStart,
+      ).toLocal().add(Duration(days: i));
       return dt.toIso8601String().substring(0, 10);
     });
   }
@@ -138,7 +150,7 @@ class _WeekScreenState extends State<WeekScreen>
     if (_plan == null) return '';
     try {
       final ws = DateTime.parse(_plan!.weekStart).toLocal();
-      final we = ws.add(const Duration(days: 6));
+      final we = ws.add(Duration(days: 6));
       return '${ws.day} ${_monthShorts[ws.month - 1]} – ${we.day} ${_monthShorts[we.month - 1]}';
     } catch (_) {
       return '';
@@ -151,7 +163,7 @@ class _WeekScreenState extends State<WeekScreen>
     final wide = MediaQuery.sizeOf(context).width >= 720;
 
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -160,13 +172,12 @@ class _WeekScreenState extends State<WeekScreen>
             if (!wide && _plan != null) _buildDayStrip(),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: kAccent))
+                  ? Center(child: CircularProgressIndicator(color: kAccent))
                   : _plan == null
-                      ? _buildEmpty()
-                      : wide
-                          ? _buildWideGrid()
-                          : _buildNarrowGrid(),
+                  ? _buildEmpty()
+                  : wide
+                  ? _buildWideGrid()
+                  : _buildNarrowGrid(),
             ),
           ],
         ),
@@ -177,14 +188,14 @@ class _WeekScreenState extends State<WeekScreen>
   /// Üst başlık: kicker + tarih aralığı + Recalculate butonu.
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+      padding: EdgeInsets.fromLTRB(20, 14, 20, 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'THIS WEEK',
                 style: TextStyle(
                   fontSize: 10,
@@ -193,10 +204,10 @@ class _WeekScreenState extends State<WeekScreen>
                   letterSpacing: 0.8,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(
                 _weekLabel.isNotEmpty ? _weekLabel : 'Week',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: kText1,
@@ -204,18 +215,17 @@ class _WeekScreenState extends State<WeekScreen>
               ),
             ],
           ),
-          const Spacer(),
+          Spacer(),
           GestureDetector(
             onTap: _recalculate,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 color: kAccent.withAlpha(30),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: kAccent.withAlpha(60)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.auto_awesome_rounded, color: kAccent, size: 13),
                   SizedBox(width: 5),
@@ -242,7 +252,7 @@ class _WeekScreenState extends State<WeekScreen>
     return SizedBox(
       height: 56,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+        padding: EdgeInsets.fromLTRB(8, 4, 8, 6),
         child: Row(
           children: [
             SizedBox(width: _gutterW),
@@ -250,21 +260,20 @@ class _WeekScreenState extends State<WeekScreen>
               final date = _weekDates.length > i ? _weekDates[i] : '';
               final isToday = date == today;
               final isSelected = i == _selectedDayIndex;
-              final dayNum =
-                  date.length >= 10 ? date.substring(8, 10) : '?';
+              final dayNum = date.length >= 10 ? date.substring(8, 10) : '?';
               return Expanded(
                 child: GestureDetector(
                   onTap: () => setState(() => _selectedDayIndex = i),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    duration: Duration(milliseconds: 150),
+                    margin: EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       color: isToday
                           ? kAccent.withAlpha(20)
                           : isSelected
-                              ? kSurface
-                              : Colors.transparent,
+                          ? kSurface
+                          : Colors.transparent,
                       border: isSelected && !isToday
                           ? Border.all(color: kBorder)
                           : null,
@@ -281,7 +290,7 @@ class _WeekScreenState extends State<WeekScreen>
                             letterSpacing: 0.04,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Text(
                           dayNum,
                           style: TextStyle(
@@ -304,8 +313,7 @@ class _WeekScreenState extends State<WeekScreen>
 
   /// Dar ekran tek gün grid görünümü.
   Widget _buildNarrowGrid() {
-    final date =
-        _weekDates.isEmpty ? '' : _weekDates[_selectedDayIndex];
+    final date = _weekDates.isEmpty ? '' : _weekDates[_selectedDayIndex];
     final dow = _selectedDayIndex + 1; // 1=Pzt … 7=Paz
     final blocks = _plan?.blocksForDate(date) ?? [];
     final busy = _busySlots.where((b) => b.dayOfWeek == dow).toList();
@@ -334,21 +342,18 @@ class _WeekScreenState extends State<WeekScreen>
       children: [
         // Gün başlık satırı (geniş ekranda gün şeridinin yerini alır)
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+          padding: EdgeInsets.fromLTRB(8, 0, 8, 0),
           child: Row(
             children: [
               SizedBox(width: _gutterW),
               ...List.generate(7, (i) {
-                final date =
-                    _weekDates.length > i ? _weekDates[i] : '';
+                final date = _weekDates.length > i ? _weekDates[i] : '';
                 final isToday = date == today;
-                final dayNum =
-                    date.length >= 10 ? date.substring(8, 10) : '';
+                final dayNum = date.length >= 10 ? date.substring(8, 10) : '';
                 return Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 1),
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    margin: EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       color: isToday
@@ -366,7 +371,7 @@ class _WeekScreenState extends State<WeekScreen>
                             letterSpacing: 0.04,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Text(
                           dayNum,
                           style: TextStyle(
@@ -404,11 +409,10 @@ class _WeekScreenState extends State<WeekScreen>
       context: context,
       backgroundColor: kSurface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) =>
-          _BlockDetailSheet(block: block, color: color),
+      builder: (_) => _BlockDetailSheet(block: block, color: color),
     );
   }
 
@@ -417,34 +421,36 @@ class _WeekScreenState extends State<WeekScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.calendar_month_outlined,
-              color: kText2, size: 48),
-          const SizedBox(height: 12),
-          const Text(
+          Icon(Icons.calendar_month_outlined, color: kText2, size: 48),
+          SizedBox(height: 12),
+          Text(
             'No weekly plan',
             style: TextStyle(
-                color: kText1,
-                fontSize: 18,
-                fontWeight: FontWeight.w600),
+              color: kText1,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: 6),
-          const Text('Run the algorithm to generate a plan.',
-              style: TextStyle(color: kText2)),
-          const SizedBox(height: 24),
+          SizedBox(height: 6),
+          Text(
+            'Run the algorithm to generate a plan.',
+            style: TextStyle(color: kText2),
+          ),
+          SizedBox(height: 24),
           GestureDetector(
             onTap: _recalculate,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 color: kAccent,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text(
+              child: Text(
                 'Create Plan',
                 style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -481,9 +487,9 @@ class _TimeGrid extends StatelessWidget {
 
     return SingleChildScrollView(
       controller: vScroll,
-      physics: const BouncingScrollPhysics(),
+      physics: BouncingScrollPhysics(),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 110),
+        padding: EdgeInsets.fromLTRB(8, 4, 8, 110),
         child: SizedBox(
           height: _totalH,
           child: Row(
@@ -503,7 +509,7 @@ class _TimeGrid extends StatelessWidget {
                       child: Text(
                         '${(hour % 24).toString().padLeft(2, '0')}:00',
                         textAlign: TextAlign.right,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: kText2,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -520,9 +526,8 @@ class _TimeGrid extends StatelessWidget {
                 final isToday = date == todayDate;
                 final dow = _dateToDow(date);
                 final busy = busyByDow[dow] ?? [];
-                final showNow = isToday &&
-                    now.hour >= _startHour &&
-                    now.hour < _endHour;
+                final showNow =
+                    isToday && now.hour >= _startHour && now.hour < _endHour;
                 return Expanded(
                   child: _DayColumn(
                     isToday: isToday,
@@ -572,8 +577,7 @@ class _DayColumn extends StatelessWidget {
   final void Function(ScheduledBlock) onBlockTap;
 
   /// Dakika → piksel Y ofseti (08:00 = 0).
-  double _minToTop(int minutes) =>
-      (minutes - _startHour * 60) * _slotH / 30;
+  double _minToTop(int minutes) => (minutes - _startHour * 60) * _slotH / 30;
 
   /// İki zaman arasındaki piksel yüksekliği.
   double _minToHeight(int sm, int em) => (em - sm) * _slotH / 30;
@@ -581,7 +585,7 @@ class _DayColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 1),
+      margin: EdgeInsets.symmetric(horizontal: 1),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         color: isToday ? kAccent.withAlpha(10) : Colors.transparent,
@@ -590,29 +594,31 @@ class _DayColumn extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           // Tam-saat yatay çizgiler
-          ...List.generate(_endHour - _startHour, (i) => Positioned(
-                top: i * 2 * _slotH,
-                left: 0,
-                right: 0,
-                child: Container(height: 0.5, color: kBorder),
-              )),
+          ...List.generate(
+            _endHour - _startHour,
+            (i) => Positioned(
+              top: i * 2 * _slotH,
+              left: 0,
+              right: 0,
+              child: Container(height: 0.5, color: kBorder),
+            ),
+          ),
           // Yarım-saat işaret çizgileri (daha soluk)
-          ...List.generate(_endHour - _startHour, (i) => Positioned(
-                top: (i * 2 + 1) * _slotH,
-                left: 0,
-                right: 0,
-                child: Container(
-                    height: 0.5,
-                    color: kBorder.withAlpha(100)),
-              )),
+          ...List.generate(
+            _endHour - _startHour,
+            (i) => Positioned(
+              top: (i * 2 + 1) * _slotH,
+              left: 0,
+              right: 0,
+              child: Container(height: 0.5, color: kBorder.withAlpha(100)),
+            ),
+          ),
           // Busy slotlar: çapraz çizgili + kesikli border + yorgunluk noktası
           ...busySlots.map((b) {
             final sm = _timeToMin(b.startTime);
             final em = _timeToMin(b.endTime);
-            if (sm < _startHour * 60 ||
-                em > _endHour * 60 ||
-                sm >= em) {
-              return const SizedBox.shrink();
+            if (sm < _startHour * 60 || em > _endHour * 60 || sm >= em) {
+              return SizedBox.shrink();
             }
             final top = _minToTop(sm);
             final height = _minToHeight(sm, em);
@@ -633,18 +639,15 @@ class _DayColumn extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                      color: kBorder.withAlpha(160), width: 0.5),
+                  border: Border.all(color: kBorder.withAlpha(160), width: 0.5),
                   color: Colors.white.withAlpha(10),
                 ),
                 child: CustomPaint(
                   painter: _StripedPainter(Colors.white.withAlpha(18)),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(4, 3, 4, 3),
+                    padding: EdgeInsets.fromLTRB(4, 3, 4, 3),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
@@ -657,8 +660,8 @@ class _DayColumn extends StatelessWidget {
                                 color: dotColor,
                               ),
                             ),
-                            const SizedBox(width: 3),
-                            const Text(
+                            SizedBox(width: 3),
+                            Text(
                               'BUSY',
                               style: TextStyle(
                                 fontSize: 8,
@@ -680,14 +683,14 @@ class _DayColumn extends StatelessWidget {
           ...blocks.map((b) {
             final sm = _timeToMin(b.startTime);
             final em = _timeToMin(b.endTime);
-            if (sm < _startHour * 60 ||
-                em > _endHour * 60 ||
-                sm >= em) {
-              return const SizedBox.shrink();
+            if (sm < _startHour * 60 || em > _endHour * 60 || sm >= em) {
+              return SizedBox.shrink();
             }
             final top = _minToTop(sm);
-            final height =
-                (_minToHeight(sm, em) - 2).clamp(14.0, double.infinity);
+            final height = (_minToHeight(sm, em) - 2).clamp(
+              14.0,
+              double.infinity,
+            );
             final color = lessonColor(b.lessonId);
             return Positioned(
               top: top + 1,
@@ -699,34 +702,32 @@ class _DayColumn extends StatelessWidget {
                 child: Opacity(
                   opacity: b.completed ? 0.5 : 1.0,
                   child: Container(
-                    clipBehavior: b.isReview
-                        ? Clip.antiAlias
-                        : Clip.none,
+                    clipBehavior: b.isReview ? Clip.antiAlias : Clip.none,
                     decoration: BoxDecoration(
                       color: b.isReview
                           ? Colors.transparent
                           : color.withAlpha(38),
                       borderRadius: BorderRadius.circular(5),
                       border: Border(
-                        left:
-                            BorderSide(color: color, width: 3),
+                        left: BorderSide(color: color, width: 3),
                         top: BorderSide(
-                            color: color.withAlpha(100),
-                            width: 0.5),
+                          color: color.withAlpha(100),
+                          width: 0.5,
+                        ),
                         right: BorderSide(
-                            color: color.withAlpha(100),
-                            width: 0.5),
+                          color: color.withAlpha(100),
+                          width: 0.5,
+                        ),
                         bottom: BorderSide(
-                            color: color.withAlpha(100),
-                            width: 0.5),
+                          color: color.withAlpha(100),
+                          width: 0.5,
+                        ),
                       ),
                     ),
                     child: b.isReview
                         ? CustomPaint(
-                            painter: _StripedPainter(
-                                color.withAlpha(0x33)),
-                            child: _BlockContent(
-                                block: b, color: color),
+                            painter: _StripedPainter(color.withAlpha(0x33)),
+                            child: _BlockContent(block: b, color: color),
                           )
                         : _BlockContent(block: b, color: color),
                   ),
@@ -746,14 +747,14 @@ class _DayColumn extends StatelessWidget {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: _kDanger,
                       shape: BoxShape.circle,
                     ),
                   ),
                   Expanded(
                     child: Container(
-                      margin: const EdgeInsets.only(top: 2.25),
+                      margin: EdgeInsets.only(top: 2.25),
                       height: 1.5,
                       color: _kDanger,
                     ),
@@ -777,7 +778,7 @@ class _BlockContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(5, 3, 4, 3),
+      padding: EdgeInsets.fromLTRB(5, 3, 4, 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -794,7 +795,7 @@ class _BlockContent extends StatelessWidget {
           ),
           if (block.isReview)
             Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: EdgeInsets.only(top: 2),
               child: Text(
                 '↻ REVIEW',
                 style: TextStyle(
@@ -815,7 +816,7 @@ class _BlockContent extends StatelessWidget {
 
 /// Çapraz çizgi deseni boyayan CustomPainter — busy slot ve review blok arka planı.
 class _StripedPainter extends CustomPainter {
-  const _StripedPainter(this.color);
+  _StripedPainter(this.color);
 
   final Color color;
 
@@ -826,17 +827,17 @@ class _StripedPainter extends CustomPainter {
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
     const step = 7.0;
-    for (double i = -size.height;
-        i < size.width + size.height;
-        i += step) {
+    for (double i = -size.height; i < size.width + size.height; i += step) {
       canvas.drawLine(
-          Offset(i, 0), Offset(i + size.height, size.height), paint);
+        Offset(i, 0),
+        Offset(i + size.height, size.height),
+        paint,
+      );
     }
   }
 
   @override
-  bool shouldRepaint(covariant _StripedPainter old) =>
-      old.color != color;
+  bool shouldRepaint(covariant _StripedPainter old) => old.color != color;
 }
 
 // ── Block Detail Sheet ────────────────────────────────────────────────────────
@@ -932,7 +933,6 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
         items: items,
       );
 
-
       if (!mounted) return;
 
       final today = AppTime.now().toIso8601String().substring(0, 10);
@@ -945,8 +945,8 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
             isLate && isIncomplete && _studiedMinutes > 0
                 ? 'Logged ${_studiedMinutes}m for ${widget.block.date} — tap Recalculate in the week view to update your plan.'
                 : _studiedMinutes == 0
-                    ? 'Marked as not studied'
-                    : 'Saved: \${_studiedMinutes}m studied',
+                ? 'Marked as not studied'
+                : 'Saved: \${_studiedMinutes}m studied',
           ),
           backgroundColor: kSurface,
           duration: Duration(seconds: isLate && isIncomplete ? 5 : 3),
@@ -955,10 +955,12 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
     if (mounted) setState(() => _submitting = false);
   }
@@ -990,38 +992,42 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                  color: kBorder, borderRadius: BorderRadius.circular(2)),
+                color: kBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          const Text('Study block',
-              style: TextStyle(fontSize: 13, color: kText2)),
-          const SizedBox(height: 8),
+          SizedBox(height: 16),
+          Text('Study block', style: TextStyle(fontSize: 13, color: kText2)),
+          SizedBox(height: 8),
           Row(
             children: [
               Container(
                 width: 14,
                 height: 14,
-                decoration:
-                    BoxDecoration(color: widget.color, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  shape: BoxShape.circle,
+                ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: Text(
                   widget.block.lessonName,
-                  style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: kText1),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: kText1,
+                  ),
                 ),
               ),
             ],
           ),
           Text(
             '${widget.block.date} · ${widget.block.startTime} – ${widget.block.endTime}',
-            style: const TextStyle(fontSize: 13, color: kText2),
+            style: TextStyle(fontSize: 13, color: kText2),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           if (widget.block.isReview)
             _DetailRow(
               icon: Icons.repeat_rounded,
@@ -1036,8 +1042,8 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
           ),
           // Studied time input
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            margin: const EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            margin: EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
               color: kBorder.withAlpha(80),
               borderRadius: BorderRadius.circular(12),
@@ -1054,17 +1060,21 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                          color: kBorder,
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Icon(Icons.timer_outlined,
-                          size: 16,
-                          color: _isFull ? kAccent : kText2),
+                        color: kBorder,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.timer_outlined,
+                        size: 16,
+                        color: _isFull ? kAccent : kText2,
+                      ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
-                      child: Text('Time studied',
-                          style:
-                              const TextStyle(fontSize: 13, color: kText2)),
+                      child: Text(
+                        'Time studied',
+                        style: TextStyle(fontSize: 13, color: kText2),
+                      ),
                     ),
                     Text(
                       _studiedMinutes == 0
@@ -1078,7 +1088,7 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
@@ -1086,20 +1096,22 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
                     minHeight: 4,
                     backgroundColor: kBorder,
                     valueColor: AlwaysStoppedAnimation(
-                        _isFull ? kAccent : widget.color),
+                      _isFull ? kAccent : widget.color,
+                    ),
                   ),
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.timer_outlined,
-                        size: 13, color: kText2),
+                    Icon(Icons.timer_outlined, size: 13, color: kText2),
                     Expanded(
                       child: Slider(
                         value: _studiedMinutes.toDouble(),
                         min: 0,
                         max: (_plannedMinutes * 1.5).ceilToDouble(),
-                        divisions:
-                            ((_plannedMinutes * 1.5) / 10).ceil().clamp(1, 999),
+                        divisions: ((_plannedMinutes * 1.5) / 10).ceil().clamp(
+                          1,
+                          999,
+                        ),
                         activeColor: _isFull ? kAccent : widget.color,
                         inactiveColor: kBorder,
                         onChanged: (v) =>
@@ -1108,17 +1120,18 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
                     ),
                     Text(
                       '${_studiedMinutes}m',
-                      style: const TextStyle(
-                          color: kText2,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: kText2,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             height: 46,
@@ -1127,18 +1140,21 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: _submitting
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : Text(
                       _studiedMinutes == 0 ? 'Mark as skipped' : 'Save',
-                      style:
-                          const TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
             ),
           ),
@@ -1165,10 +1181,9 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: kBorder.withAlpha(80),
           borderRadius: BorderRadius.circular(12),
@@ -1182,21 +1197,19 @@ class _DetailRow extends StatelessWidget {
                 color: kBorder,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child:
-                  Icon(icon, size: 16, color: tone ?? kText2),
+              child: Icon(icon, size: 16, color: tone ?? kText2),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: kText2)),
+              child: Text(label, style: TextStyle(fontSize: 13, color: kText2)),
             ),
             Text(
               value,
               style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: tone ?? kText1),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: tone ?? kText1,
+              ),
             ),
           ],
         ),
@@ -1211,6 +1224,5 @@ class _DetailRow extends StatelessWidget {
 int _timeToMin(String t) {
   final parts = t.split(':');
   if (parts.length < 2) return 0;
-  return (int.tryParse(parts[0]) ?? 0) * 60 +
-      (int.tryParse(parts[1]) ?? 0);
+  return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
 }

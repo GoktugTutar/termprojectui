@@ -3,10 +3,10 @@ class ScheduledBlock {
   final int id;
   final int lessonId;
   final String lessonName;
-  final String date;      // YYYY-MM-DD
+  final String date; // YYYY-MM-DD
   final String startTime; // HH:MM
-  final String endTime;   // HH:MM
-  final int blockCount;   // 1 blok = 30 dakika
+  final String endTime; // HH:MM
+  final int blockCount; // 1 blok = 30 dakika
   final bool isReview;
   final bool completed;
 
@@ -27,7 +27,9 @@ class ScheduledBlock {
     lessonId: j['lessonId'] as int,
     lessonName:
         (j['lesson'] as Map<String, dynamic>?)?['name']?.toString() ?? 'Ders',
-    date: DateTime.parse(j['date'] as String).toLocal().toIso8601String().substring(0, 10),
+    date: DateTime.parse(
+      j['date'] as String,
+    ).toLocal().toIso8601String().substring(0, 10),
     startTime: j['startTime'] as String,
     endTime: j['endTime'] as String,
     blockCount: (j['blockCount'] as num).toInt(),
@@ -44,7 +46,9 @@ class WeeklyPlan {
   WeeklyPlan({required this.weekStart, required this.blocks});
 
   factory WeeklyPlan.fromJson(Map<String, dynamic> j) => WeeklyPlan(
-    weekStart: DateTime.parse(j['weekStart'] as String).toLocal().toIso8601String().substring(0, 10),
+    weekStart: DateTime.parse(
+      j['weekStart'] as String,
+    ).toLocal().toIso8601String().substring(0, 10),
     blocks: ((j['blocks'] as List?) ?? [])
         .map((b) => ScheduledBlock.fromJson(b as Map<String, dynamic>))
         .toList(),

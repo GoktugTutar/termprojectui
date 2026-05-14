@@ -62,7 +62,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainScaffold()),
+        MaterialPageRoute(builder: (_) => MainScaffold()),
       );
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
@@ -84,7 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainScaffold()),
+        MaterialPageRoute(builder: (_) => MainScaffold()),
       );
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
@@ -106,7 +106,7 @@ class _AuthScreenState extends State<AuthScreen> {
   void _goTo(int index) {
     _pageController.animateToPage(
       index,
-      duration: const Duration(milliseconds: 360),
+      duration: Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
     );
   }
@@ -144,8 +144,8 @@ class _AuthScreenState extends State<AuthScreen> {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: _darkMode
-                      ? const Alignment(0.15, -0.3)
-                      : const Alignment(0.0, -0.15),
+                      ? Alignment(0.15, -0.3)
+                      : Alignment(0.0, -0.15),
                   radius: 1.0,
                   colors: [
                     palette.glow.withAlpha(_darkMode ? 50 : 70),
@@ -158,9 +158,9 @@ class _AuthScreenState extends State<AuthScreen> {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 18),
+                SizedBox(height: 18),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -174,7 +174,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Expanded(
                   child: Center(
                     child: LayoutBuilder(
@@ -210,14 +210,14 @@ class _AuthScreenState extends State<AuthScreen> {
                                         child: TextButton.icon(
                                           onPressed: () => _goTo(1),
                                           iconAlignment: IconAlignment.end,
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.arrow_outward_rounded,
                                             size: 18,
                                           ),
-                                          label: const Text('Sign Up'),
+                                          label: Text('Sign Up'),
                                           style: TextButton.styleFrom(
                                             foregroundColor: palette.accent,
-                                            textStyle: const TextStyle(
+                                            textStyle: TextStyle(
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
@@ -234,14 +234,14 @@ class _AuthScreenState extends State<AuthScreen> {
                                         alignment: Alignment.bottomLeft,
                                         child: TextButton.icon(
                                           onPressed: () => _goTo(0),
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.arrow_back_rounded,
                                             size: 18,
                                           ),
-                                          label: const Text('Back to Sign In'),
+                                          label: Text('Back to Sign In'),
                                           style: TextButton.styleFrom(
                                             foregroundColor: palette.accent,
-                                            textStyle: const TextStyle(
+                                            textStyle: TextStyle(
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
@@ -251,7 +251,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              SizedBox(height: 12),
                               _AuthPager(
                                 currentIndex: _pageIndex,
                                 palette: palette,
@@ -281,15 +281,15 @@ class _AuthScreenState extends State<AuthScreen> {
   }) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: EdgeInsets.symmetric(horizontal: 22),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(38),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
               width: 840,
-              constraints: const BoxConstraints(minHeight: 470),
-              padding: const EdgeInsets.all(30),
+              constraints: BoxConstraints(minHeight: 470),
+              padding: EdgeInsets.all(30),
               decoration: BoxDecoration(
                 color: palette.panel.withAlpha(_darkMode ? 215 : 185),
                 borderRadius: BorderRadius.circular(38),
@@ -298,7 +298,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   BoxShadow(
                     color: palette.shadow,
                     blurRadius: 30,
-                    offset: const Offset(0, 18),
+                    offset: Offset(0, 18),
                   ),
                 ],
               ),
@@ -314,7 +314,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       color: palette.text,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Text(
                     subtitle,
                     style: TextStyle(
@@ -323,9 +323,9 @@ class _AuthScreenState extends State<AuthScreen> {
                       color: palette.muted,
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  SizedBox(height: 22),
                   Expanded(child: SingleChildScrollView(child: child)),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   footer,
                 ],
               ),
@@ -351,7 +351,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 v == null || !v.contains('@') ? 'Gecerli e-posta girin' : null,
             palette: palette,
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           _field(
             controller: _loginPass,
             label: 'Sifre',
@@ -368,19 +368,21 @@ class _AuthScreenState extends State<AuthScreen> {
                 v == null || v.length < 6 ? 'En az 6 karakter' : null,
             palette: palette,
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           FilledButton(
             onPressed: _loading ? null : _login,
             style: FilledButton.styleFrom(
               backgroundColor: palette.accent,
-              foregroundColor: _darkMode ? Colors.white : palette.backgroundStart,
-              padding: const EdgeInsets.symmetric(vertical: 18),
+              foregroundColor: _darkMode
+                  ? Colors.white
+                  : palette.backgroundStart,
+              padding: EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
             ),
             child: _loading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
@@ -388,7 +390,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       color: Colors.white,
                     ),
                   )
-                : const Text(
+                : Text(
                     'Sign In',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
@@ -414,7 +416,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 v == null || !v.contains('@') ? 'Gecerli e-posta girin' : null,
             palette: palette,
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           _field(
             controller: _regPass,
             label: 'Sifre',
@@ -431,7 +433,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 v == null || v.length < 6 ? 'En az 6 karakter' : null,
             palette: palette,
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           _field(
             controller: _regPassConfirm,
             label: 'Sifre Tekrar',
@@ -445,23 +447,24 @@ class _AuthScreenState extends State<AuthScreen> {
               onPressed: () =>
                   setState(() => _regConfirmObscure = !_regConfirmObscure),
             ),
-            validator: (v) =>
-                v != _regPass.text ? 'Sifreler eslesmiyor' : null,
+            validator: (v) => v != _regPass.text ? 'Sifreler eslesmiyor' : null,
             palette: palette,
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           FilledButton(
             onPressed: _loading ? null : _register,
             style: FilledButton.styleFrom(
               backgroundColor: palette.accent,
-              foregroundColor: _darkMode ? Colors.white : palette.backgroundStart,
-              padding: const EdgeInsets.symmetric(vertical: 18),
+              foregroundColor: _darkMode
+                  ? Colors.white
+                  : palette.backgroundStart,
+              padding: EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
             ),
             child: _loading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
@@ -469,7 +472,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       color: Colors.white,
                     ),
                   )
-                : const Text(
+                : Text(
                     'Kayit Ol ve Basla',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
@@ -506,7 +509,7 @@ class _AuthScreenState extends State<AuthScreen> {
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: palette.inputFill,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.border),
@@ -538,7 +541,7 @@ class _ModeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: palette.panel.withAlpha(180),
         borderRadius: BorderRadius.circular(999),
@@ -553,7 +556,7 @@ class _ModeSwitch extends StatelessWidget {
             palette: palette,
             onTap: () => onChanged(false),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _ModePill(
             selected: darkMode,
             label: 'Dark',
@@ -585,8 +588,8 @@ class _ModePill extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        duration: Duration(milliseconds: 220),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? palette.accent : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -621,7 +624,7 @@ class _AuthPager extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: palette.panel.withAlpha(110),
         borderRadius: BorderRadius.circular(999),
@@ -634,7 +637,7 @@ class _AuthPager extends StatelessWidget {
             palette: palette,
             onTap: () => onTap(0),
           ),
-          const SizedBox(width: 18),
+          SizedBox(width: 18),
           _PagerDot(
             active: currentIndex == 1,
             palette: palette,
@@ -663,7 +666,7 @@ class _PagerDot extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
+        duration: Duration(milliseconds: 220),
         width: active ? 70 : 20,
         height: 20,
         decoration: BoxDecoration(
@@ -676,7 +679,7 @@ class _PagerDot extends StatelessWidget {
 }
 
 class _AuthPalette {
-  const _AuthPalette({
+  _AuthPalette({
     required this.backgroundStart,
     required this.backgroundMid,
     required this.backgroundEnd,
@@ -693,7 +696,7 @@ class _AuthPalette {
   });
 
   factory _AuthPalette.dark() {
-    return const _AuthPalette(
+    return _AuthPalette(
       backgroundStart: Color(0xFF0D0B11),
       backgroundMid: Color(0xFF09070B),
       backgroundEnd: Color(0xFF050507),
@@ -711,7 +714,7 @@ class _AuthPalette {
   }
 
   factory _AuthPalette.light() {
-    return const _AuthPalette(
+    return _AuthPalette(
       backgroundStart: Color(0xFFEAF6DE),
       backgroundMid: Color(0xFFE6F2D9),
       backgroundEnd: Color(0xFFDDECCB),

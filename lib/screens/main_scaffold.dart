@@ -19,14 +19,6 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _index = 0;
 
-  static const _screens = <Widget>[
-    TodayScreen(),
-    WeekScreen(),
-    LessonsScreen(),
-    InsightsScreen(),
-    ProfileScreen(),
-  ];
-
   static const _destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Bugün'),
     (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Hafta'),
@@ -37,36 +29,48 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= _kWideBreakpoint;
+    return AnimatedBuilder(
+      animation: appTheme,
+      builder: (context, _) {
+        final width = MediaQuery.sizeOf(context).width;
+        final wide = width >= _kWideBreakpoint;
+        final screens = <Widget>[
+          TodayScreen(),
+          WeekScreen(),
+          LessonsScreen(),
+          InsightsScreen(),
+          ProfileScreen(),
+        ];
 
-    if (wide) {
-      return Scaffold(
-        backgroundColor: kBg,
-        body: Row(
-          children: [
-            _SideNav(
-              currentIndex: _index,
-              onTap: (i) => setState(() => _index = i),
-              destinations: _destinations,
+        if (wide) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Row(
+              children: [
+                _SideNav(
+                  currentIndex: _index,
+                  onTap: (i) => setState(() => _index = i),
+                  destinations: _destinations,
+                ),
+                Container(width: 1, color: kBorder),
+                Expanded(
+                  child: IndexedStack(index: _index, children: screens),
+                ),
+              ],
             ),
-            Container(width: 1, color: kBorder),
-            Expanded(
-              child: IndexedStack(index: _index, children: _screens),
-            ),
-          ],
-        ),
-      );
-    }
+          );
+        }
 
-    return Scaffold(
-      backgroundColor: kBg,
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: _BottomNav(
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
-        destinations: _destinations,
-      ),
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: IndexedStack(index: _index, children: screens),
+          bottomNavigationBar: _BottomNav(
+            currentIndex: _index,
+            onTap: (i) => setState(() => _index = i),
+            destinations: _destinations,
+          ),
+        );
+      },
     );
   }
 }
@@ -93,7 +97,7 @@ class _SideNav extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(20, 24, 20, 28),
               child: Text(
                 'Study\nPlanner',
@@ -105,17 +109,23 @@ class _SideNav extends StatelessWidget {
                 ),
               ),
             ),
+            _ThemeToggle(
+              expanded: true,
+              margin: EdgeInsets.fromLTRB(12, 0, 12, 16),
+            ),
             ...List.generate(destinations.length, (i) {
               final (unsel, sel, label) = destinations[i];
               final selected = i == currentIndex;
               return GestureDetector(
                 onTap: () => onTap(i),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  duration: Duration(milliseconds: 180),
+                  margin: EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: selected ? kAccent.withAlpha(30) : Colors.transparent,
+                    color: selected
+                        ? kAccent.withAlpha(30)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -125,12 +135,14 @@ class _SideNav extends StatelessWidget {
                         color: selected ? kAccent : kText2,
                         size: 20,
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Text(
                         label,
                         style: TextStyle(
                           color: selected ? kAccent : kText2,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                           fontSize: 15,
                         ),
                       ),
@@ -139,6 +151,7 @@ class _SideNav extends StatelessWidget {
                 ),
               );
             }),
+            Spacer(),
           ],
         ),
       ),
@@ -162,7 +175,7 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: kSurface,
         border: Border(top: BorderSide(color: kBorder)),
       ),
@@ -171,40 +184,98 @@ class _BottomNav extends StatelessWidget {
         child: SizedBox(
           height: 60,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(destinations.length, (i) {
-              final (unsel, sel, label) = destinations[i];
-              final selected = i == currentIndex;
-              return GestureDetector(
-                onTap: () => onTap(i),
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 68,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        selected ? sel : unsel,
-                        color: selected ? kAccent : kText2,
-                        size: 22,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 10,
+            children: [
+              ...List.generate(destinations.length, (i) {
+                final (unsel, sel, label) = destinations[i];
+                final selected = i == currentIndex;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => onTap(i),
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          selected ? sel : unsel,
                           color: selected ? kAccent : kText2,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                          size: 22,
                         ),
-                      ),
-                    ],
+                        SizedBox(height: 3),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: selected ? kAccent : kText2,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+              SizedBox(width: 52, child: _ThemeToggle(expanded: false)),
+            ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ThemeToggle extends StatelessWidget {
+  const _ThemeToggle({required this.expanded, this.margin = EdgeInsets.zero});
+
+  final bool expanded;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: appTheme,
+      builder: (context, _) {
+        final light = appTheme.isLight;
+        final icon = light
+            ? Icons.dark_mode_outlined
+            : Icons.light_mode_outlined;
+        final label = light ? 'Dark mode' : 'Light mode';
+        return GestureDetector(
+          onTap: appTheme.toggle,
+          child: AnimatedContainer(
+            duration: Duration(milliseconds: 180),
+            width: expanded ? double.infinity : 52,
+            height: expanded ? null : 48,
+            margin: margin,
+            padding: EdgeInsets.symmetric(
+              horizontal: expanded ? 14 : 0,
+              vertical: expanded ? 12 : 0,
+            ),
+            decoration: BoxDecoration(
+              color: kAccent.withAlpha(24),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kAccent.withAlpha(45)),
+            ),
+            child: expanded
+                ? Row(
+                    children: [
+                      Icon(icon, color: kAccent, size: 20),
+                      SizedBox(width: 12),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: kAccent,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(child: Icon(icon, color: kAccent, size: 22)),
+          ),
+        );
+      },
     );
   }
 }

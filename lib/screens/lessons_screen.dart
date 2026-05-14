@@ -4,7 +4,7 @@ import '../core/api_client.dart';
 import '../models/lesson_model.dart';
 import '../theme.dart';
 
-const _kDanger  = Color(0xFFFF5C7A);
+const _kDanger = Color(0xFFFF5C7A);
 const _kWarning = Color(0xFFF2B14A);
 
 class LessonsScreen extends StatefulWidget {
@@ -34,14 +34,13 @@ class _LessonsScreenState extends State<LessonsScreen>
       final raw = await ApiClient.getLessons();
       if (!mounted) return;
       setState(() {
-        _lessons = raw
-            .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
-            .toList()
-          ..sort((a, b) {
-            final ua = _daysToExam(a) ?? 9999;
-            final ub = _daysToExam(b) ?? 9999;
-            return ua.compareTo(ub);
-          });
+        _lessons =
+            raw.map((l) => Lesson.fromJson(l as Map<String, dynamic>)).toList()
+              ..sort((a, b) {
+                final ua = _daysToExam(a) ?? 9999;
+                final ub = _daysToExam(b) ?? 9999;
+                return ua.compareTo(ub);
+              });
         _loading = false;
       });
     } catch (_) {
@@ -68,8 +67,9 @@ class _LessonsScreenState extends State<LessonsScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: kSurface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => _LessonSheet(lesson: lesson, onSaved: _load),
     );
   }
@@ -78,19 +78,18 @@ class _LessonsScreenState extends State<LessonsScreen>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+            constraints: BoxConstraints(maxWidth: 720),
             child: Column(
               children: [
                 _buildHeader(),
                 Expanded(
                   child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: kAccent))
+                      ? Center(child: CircularProgressIndicator(color: kAccent))
                       : RefreshIndicator(
                           onRefresh: _load,
                           color: kAccent,
@@ -98,8 +97,7 @@ class _LessonsScreenState extends State<LessonsScreen>
                           child: _lessons.isEmpty
                               ? _buildEmpty()
                               : ListView.builder(
-                                  padding: const EdgeInsets.fromLTRB(
-                                      20, 8, 20, 100),
+                                  padding: EdgeInsets.fromLTRB(20, 8, 20, 100),
                                   itemCount: _lessons.length,
                                   itemBuilder: (ctx, i) => _LessonCard(
                                     lesson: _lessons[i],
@@ -118,33 +116,39 @@ class _LessonsScreenState extends State<LessonsScreen>
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openSheet(),
         backgroundColor: kAccent,
-        child: const Icon(Icons.add, color: kBg),
+        child: Icon(Icons.add, color: kBg),
       ),
     );
   }
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Step 4 · Step 6',
-              style: TextStyle(
-                  color: kText2,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8)),
-          const SizedBox(height: 6),
-          const Text('Lessons',
-              style: TextStyle(
-                  color: kText1,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
+          Text(
+            'Step 4 · Step 6',
+            style: TextStyle(
+              color: kText2,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Lessons',
+            style: TextStyle(
+              color: kText1,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 6),
           Text(
             '${_lessons.length} active · weight & priority computed weekly',
-            style: const TextStyle(color: kText2, fontSize: 14),
+            style: TextStyle(color: kText2, fontSize: 14),
           ),
         ],
       ),
@@ -156,16 +160,21 @@ class _LessonsScreenState extends State<LessonsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.book_outlined, color: kText2, size: 48),
-          const SizedBox(height: 12),
-          const Text('No lessons yet',
-              style: TextStyle(
-                  color: kText1,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          const Text('Tap + to add your first lesson.',
-              style: TextStyle(color: kText2)),
+          Icon(Icons.book_outlined, color: kText2, size: 48),
+          SizedBox(height: 12),
+          Text(
+            'No lessons yet',
+            style: TextStyle(
+              color: kText1,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Tap + to add your first lesson.',
+            style: TextStyle(color: kText2),
+          ),
         ],
       ),
     );
@@ -215,8 +224,7 @@ class _LessonCard extends StatelessWidget {
       }
     }
 
-    final totalDelay =
-        lesson.keyfiDelayCount + lesson.zorunluDelayCount;
+    final totalDelay = lesson.keyfiDelayCount + lesson.zorunluDelayCount;
 
     // Exam date string
     String examValue = '—';
@@ -227,14 +235,14 @@ class _LessonCard extends StatelessWidget {
     final needsMoreStr = lesson.needsMoreTime == 1
         ? '+1'
         : lesson.needsMoreTime == -1
-            ? '–1'
-            : '0';
+        ? '–1'
+        : '0';
 
     return GestureDetector(
       onTap: onOpen,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(bottom: 10),
+        padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: kSurface,
           borderRadius: BorderRadius.circular(16),
@@ -258,34 +266,38 @@ class _LessonCard extends StatelessWidget {
                     child: Text(
                       initials,
                       style: TextStyle(
-                          color: color,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.4),
+                        color: color,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.4,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(lesson.lessonName,
-                          style: const TextStyle(
-                              color: kText1,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
+                      Text(
+                        lesson.lessonName,
+                        style: TextStyle(
+                          color: kText1,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 4),
                       Row(
                         children: [
                           _DiffBars(
-                              difficulty: lesson.difficulty,
-                              color: color),
-                          const SizedBox(width: 8),
+                            difficulty: lesson.difficulty,
+                            color: color,
+                          ),
+                          SizedBox(width: 8),
                           Text(
                             'difficulty ${lesson.difficulty}',
-                            style: const TextStyle(
-                                color: kText2, fontSize: 12),
+                            style: TextStyle(color: kText2, fontSize: 12),
                           ),
                         ],
                       ),
@@ -295,24 +307,30 @@ class _LessonCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(priority,
-                        style: TextStyle(
-                            color: priorityColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4)),
+                    Text(
+                      priority,
+                      style: TextStyle(
+                        color: priorityColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
                     if (daysToExam != null)
-                      Text('${daysToExam!.clamp(0, 9999)}d to exam',
-                          style: const TextStyle(
-                              color: kText2,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600)),
+                      Text(
+                        '${daysToExam!.clamp(0, 9999)}d to exam',
+                        style: TextStyle(
+                          color: kText2,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                   ],
                 ),
               ],
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: EdgeInsets.symmetric(vertical: 10),
               child: Divider(height: 1, thickness: 0.5, color: kBorder),
             ),
             Row(
@@ -358,7 +376,7 @@ class _DiffBars extends StatelessWidget {
         return Container(
           width: 3,
           height: heights[i],
-          margin: const EdgeInsets.only(right: 2),
+          margin: EdgeInsets.only(right: 2),
           decoration: BoxDecoration(
             color: filled ? color : kBorder,
             borderRadius: BorderRadius.circular(1),
@@ -393,27 +411,36 @@ class _Pico extends StatelessWidget {
           Row(
             children: [
               Icon(icon, size: 12, color: kText2),
-              const SizedBox(width: 5),
-              Text(label.toUpperCase(),
-                  style: const TextStyle(
-                      color: kText2,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.4)),
+              SizedBox(width: 5),
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 3),
-          Text(value,
-              style: TextStyle(
-                  color: tone ?? kText1,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600)),
+          SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              color: tone ?? kText1,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           if (sub != null)
-            Text(sub!,
-                style: const TextStyle(
-                    color: kAccent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              sub!,
+              style: TextStyle(
+                color: kAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
         ],
       ),
     );
@@ -423,7 +450,7 @@ class _Pico extends StatelessWidget {
 // ── Deadline entry / chip helpers ────────────────────────────────────────────
 
 class _DeadlineEntry {
-  const _DeadlineEntry({required this.title, required this.date});
+  _DeadlineEntry({required this.title, required this.date});
   final String title;
   final DateTime date;
 }
@@ -443,8 +470,8 @@ class _DeadlineChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: pending ? kAccent.withAlpha(20) : kBorder,
         borderRadius: BorderRadius.circular(10),
@@ -454,27 +481,32 @@ class _DeadlineChip extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.assignment_outlined,
-              size: 14, color: pending ? kAccent : kText2),
-          const SizedBox(width: 8),
+          Icon(
+            Icons.assignment_outlined,
+            size: 14,
+            color: pending ? kAccent : kText2,
+          ),
+          SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        color: pending ? kAccent : kText1,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: pending ? kAccent : kText1,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 if (sub != null)
-                  Text(sub!,
-                      style: const TextStyle(color: kText2, fontSize: 11)),
+                  Text(sub!, style: TextStyle(color: kText2, fontSize: 11)),
               ],
             ),
           ),
           GestureDetector(
             onTap: onDelete,
-            child: const Icon(Icons.close, size: 14, color: kText2),
+            child: Icon(Icons.close, size: 14, color: kText2),
           ),
         ],
       ),
@@ -499,12 +531,12 @@ class _LessonSheetState extends State<_LessonSheet> {
   int _difficulty = 3;
   bool _saving = false;
   bool _hasExam = false;
-  DateTime _examDate = DateTime.now().add(const Duration(days: 14));
+  DateTime _examDate = DateTime.now().add(Duration(days: 14));
   List<LessonDeadline> _existingDeadlines = [];
   final List<_DeadlineEntry> _pendingDeadlines = [];
   bool _showDeadlineForm = false;
   final _deadlineTitleCtrl = TextEditingController();
-  DateTime _deadlineDate = DateTime.now().add(const Duration(days: 7));
+  DateTime _deadlineDate = DateTime.now().add(Duration(days: 7));
 
   bool get _isEdit => widget.lesson != null;
 
@@ -568,10 +600,12 @@ class _LessonSheetState extends State<_LessonSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -581,23 +615,20 @@ class _LessonSheetState extends State<_LessonSheet> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: kSurface,
-        title: const Text('Delete lesson',
-            style: TextStyle(color: kText1)),
+        title: Text('Delete lesson', style: TextStyle(color: kText1)),
         content: Text(
           'Delete "${widget.lesson!.lessonName}"?',
-          style: const TextStyle(color: kText2),
+          style: TextStyle(color: kText2),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: kText2)),
+            child: Text('Cancel', style: TextStyle(color: kText2)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-                backgroundColor: _kDanger),
-            child: const Text('Delete'),
+            style: FilledButton.styleFrom(backgroundColor: _kDanger),
+            child: Text('Delete'),
           ),
         ],
       ),
@@ -610,10 +641,12 @@ class _LessonSheetState extends State<_LessonSheet> {
       widget.onSaved();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -623,20 +656,21 @@ class _LessonSheetState extends State<_LessonSheet> {
       setState(() => _existingDeadlines.remove(d));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        padding: EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,47 +680,48 @@ class _LessonSheetState extends State<_LessonSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: kBorder,
-                    borderRadius: BorderRadius.circular(2)),
+                  color: kBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             // Sheet head
             Row(
               children: [
                 Text(
                   _isEdit ? 'Edit lesson' : 'New lesson',
-                  style: const TextStyle(
-                      color: kText1,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const Spacer(),
+                Spacer(),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                        color: kBorder,
-                        shape: BoxShape.circle),
-                    child: const Icon(Icons.close,
-                        size: 16, color: kText2),
+                      color: kBorder,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.close, size: 16, color: kText2),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             // Name field
-            const Text('Name',
-                style: TextStyle(color: kText2, fontSize: 13)),
-            const SizedBox(height: 8),
+            Text('Name', style: TextStyle(color: kText2, fontSize: 13)),
+            SizedBox(height: 8),
             TextField(
               controller: _nameCtrl,
-              style: const TextStyle(color: kText1),
+              style: TextStyle(color: kText1),
               decoration: InputDecoration(
                 hintText: 'e.g. Linear Algebra',
-                hintStyle: const TextStyle(color: kText2),
+                hintStyle: TextStyle(color: kText2),
                 filled: true,
                 fillColor: kBorder,
                 border: OutlineInputBorder(
@@ -695,35 +730,29 @@ class _LessonSheetState extends State<_LessonSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             // Difficulty
-            const Text('Difficulty · 1 easy – 5 brutal',
-                style: TextStyle(color: kText2, fontSize: 13)),
-            const SizedBox(height: 8),
+            Text(
+              'Difficulty · 1 easy – 5 brutal',
+              style: TextStyle(color: kText2, fontSize: 13),
+            ),
+            SizedBox(height: 8),
             Row(
               children: List.generate(5, (i) {
                 final n = i + 1;
                 final selected = n == _difficulty;
                 return Expanded(
                   child: GestureDetector(
-                    onTap: () =>
-                        setState(() => _difficulty = n),
+                    onTap: () => setState(() => _difficulty = n),
                     child: AnimatedContainer(
-                      duration:
-                          const Duration(milliseconds: 150),
+                      duration: Duration(milliseconds: 150),
                       height: 46,
-                      margin: EdgeInsets.only(
-                          right: i < 4 ? 6 : 0),
+                      margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
                       decoration: BoxDecoration(
-                        color: selected
-                            ? kAccent.withAlpha(46)
-                            : kBorder,
-                        borderRadius:
-                            BorderRadius.circular(12),
+                        color: selected ? kAccent.withAlpha(46) : kBorder,
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: selected
-                              ? kAccent
-                              : Colors.transparent,
+                          color: selected ? kAccent : Colors.transparent,
                           width: 0.5,
                         ),
                       ),
@@ -731,9 +760,7 @@ class _LessonSheetState extends State<_LessonSheet> {
                         child: Text(
                           '$n',
                           style: TextStyle(
-                            color: selected
-                                ? kAccent
-                                : kText2,
+                            color: selected ? kAccent : kText2,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -744,25 +771,24 @@ class _LessonSheetState extends State<_LessonSheet> {
                 );
               }),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             // Exam
-            const Text('Exam scheduled',
-                style: TextStyle(color: kText2, fontSize: 13)),
-            const SizedBox(height: 8),
+            Text(
+              'Exam scheduled',
+              style: TextStyle(color: kText2, fontSize: 13),
+            ),
+            SizedBox(height: 8),
             Row(
               children: [
                 GestureDetector(
-                  onTap: () =>
-                      setState(() => _hasExam = !_hasExam),
+                  onTap: () => setState(() => _hasExam = !_hasExam),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
+                    duration: Duration(milliseconds: 150),
                     height: 30,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: _hasExam ? kAccent : kBorder,
-                      borderRadius:
-                          BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Center(
                       child: Text(
@@ -777,66 +803,68 @@ class _LessonSheetState extends State<_LessonSheet> {
                   ),
                 ),
                 if (_hasExam) ...[
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(child: _buildDatePicker()),
                 ],
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             _buildDeadlinesSection(),
             if (_isEdit) ...[
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               GestureDetector(
                 onTap: _delete,
                 child: Container(
                   width: double.infinity,
                   height: 46,
-                  margin: const EdgeInsets.only(top: 8),
+                  margin: EdgeInsets.only(top: 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: _kDanger.withAlpha(100)),
+                    border: Border.all(color: _kDanger.withAlpha(100)),
                   ),
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.delete_outline,
-                          size: 14, color: _kDanger),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.delete_outline, size: 14, color: _kDanger),
                       SizedBox(width: 6),
-                      Text('Delete lesson',
-                          style: TextStyle(
-                              color: _kDanger,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600)),
+                      Text(
+                        'Delete lesson',
+                        style: TextStyle(
+                          color: _kDanger,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ],
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: kAccent,
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 14),
+                  padding: EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2))
-                    : const Text('Save',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600)),
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        'Save',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ],
@@ -854,10 +882,9 @@ class _LessonSheetState extends State<_LessonSheet> {
           firstDate: DateTime.now(),
           lastDate: DateTime(2100),
           builder: (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme:
-                  const ColorScheme.dark(primary: kAccent),
-            ),
+            data: Theme.of(
+              ctx,
+            ).copyWith(colorScheme: ColorScheme.dark(primary: kAccent)),
             child: child!,
           ),
         );
@@ -865,20 +892,18 @@ class _LessonSheetState extends State<_LessonSheet> {
       },
       child: Container(
         height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: kBorder,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined,
-                size: 16, color: kAccent),
-            const SizedBox(width: 10),
+            Icon(Icons.calendar_today_outlined, size: 16, color: kAccent),
+            SizedBox(width: 10),
             Text(
               _examDate.toIso8601String().substring(0, 10),
-              style: const TextStyle(
-                  color: kText1, fontSize: 14),
+              style: TextStyle(color: kText1, fontSize: 14),
             ),
           ],
         ),
@@ -890,34 +915,37 @@ class _LessonSheetState extends State<_LessonSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Deadlines / Homework',
-            style: TextStyle(color: kText2, fontSize: 13)),
-        const SizedBox(height: 8),
+        Text(
+          'Deadlines / Homework',
+          style: TextStyle(color: kText2, fontSize: 13),
+        ),
+        SizedBox(height: 8),
         if (_existingDeadlines.isNotEmpty) ...[
-          ..._existingDeadlines.map((d) => _DeadlineChip(
-                label: (d.title != null && d.title!.isNotEmpty)
-                    ? d.title!
-                    : d.dateOnly,
-                sub: (d.title != null && d.title!.isNotEmpty)
-                    ? d.dateOnly
-                    : null,
-                onDelete: () => _deleteExistingDeadline(d),
-              )),
-          const SizedBox(height: 4),
+          ..._existingDeadlines.map(
+            (d) => _DeadlineChip(
+              label: (d.title != null && d.title!.isNotEmpty)
+                  ? d.title!
+                  : d.dateOnly,
+              sub: (d.title != null && d.title!.isNotEmpty) ? d.dateOnly : null,
+              onDelete: () => _deleteExistingDeadline(d),
+            ),
+          ),
+          SizedBox(height: 4),
         ],
         if (_pendingDeadlines.isNotEmpty) ...[
-          ..._pendingDeadlines.asMap().entries.map((e) => _DeadlineChip(
-                label: e.value.title.isNotEmpty
-                    ? e.value.title
-                    : e.value.date.toIso8601String().substring(0, 10),
-                sub: e.value.title.isNotEmpty
-                    ? e.value.date.toIso8601String().substring(0, 10)
-                    : null,
-                onDelete: () =>
-                    setState(() => _pendingDeadlines.removeAt(e.key)),
-                pending: true,
-              )),
-          const SizedBox(height: 4),
+          ..._pendingDeadlines.asMap().entries.map(
+            (e) => _DeadlineChip(
+              label: e.value.title.isNotEmpty
+                  ? e.value.title
+                  : e.value.date.toIso8601String().substring(0, 10),
+              sub: e.value.title.isNotEmpty
+                  ? e.value.date.toIso8601String().substring(0, 10)
+                  : null,
+              onDelete: () => setState(() => _pendingDeadlines.removeAt(e.key)),
+              pending: true,
+            ),
+          ),
+          SizedBox(height: 4),
         ],
         if (_showDeadlineForm)
           _buildDeadlineForm()
@@ -929,19 +957,21 @@ class _LessonSheetState extends State<_LessonSheet> {
               decoration: BoxDecoration(
                 color: kBorder,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: kAccent.withAlpha(80), width: 0.5),
+                border: Border.all(color: kAccent.withAlpha(80), width: 0.5),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
+                children: [
                   Icon(Icons.add, size: 14, color: kAccent),
                   SizedBox(width: 6),
-                  Text('Add deadline',
-                      style: TextStyle(
-                          color: kAccent,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    'Add deadline',
+                    style: TextStyle(
+                      color: kAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -956,10 +986,10 @@ class _LessonSheetState extends State<_LessonSheet> {
       children: [
         TextField(
           controller: _deadlineTitleCtrl,
-          style: const TextStyle(color: kText1),
+          style: TextStyle(color: kText1),
           decoration: InputDecoration(
             hintText: 'Title (optional) · e.g. "Project 2"',
-            hintStyle: const TextStyle(color: kText2),
+            hintStyle: TextStyle(color: kText2),
             filled: true,
             fillColor: kBorder,
             border: OutlineInputBorder(
@@ -968,9 +998,9 @@ class _LessonSheetState extends State<_LessonSheet> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _buildDeadlineDatePicker(),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -985,27 +1015,31 @@ class _LessonSheetState extends State<_LessonSheet> {
                     color: kBorder,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Center(
-                    child: Text('Cancel',
-                        style: TextStyle(
-                            color: kText2,
-                            fontWeight: FontWeight.w600)),
+                  child: Center(
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: kText2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Expanded(
               child: GestureDetector(
                 onTap: () => setState(() {
-                  _pendingDeadlines.add(_DeadlineEntry(
-                    title: _deadlineTitleCtrl.text.trim(),
-                    date: _deadlineDate,
-                  ));
+                  _pendingDeadlines.add(
+                    _DeadlineEntry(
+                      title: _deadlineTitleCtrl.text.trim(),
+                      date: _deadlineDate,
+                    ),
+                  );
                   _showDeadlineForm = false;
                   _deadlineTitleCtrl.clear();
-                  _deadlineDate =
-                      DateTime.now().add(const Duration(days: 7));
+                  _deadlineDate = DateTime.now().add(Duration(days: 7));
                 }),
                 child: Container(
                   height: 40,
@@ -1014,11 +1048,14 @@ class _LessonSheetState extends State<_LessonSheet> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: kAccent, width: 0.5),
                   ),
-                  child: const Center(
-                    child: Text('Add',
-                        style: TextStyle(
-                            color: kAccent,
-                            fontWeight: FontWeight.w700)),
+                  child: Center(
+                    child: Text(
+                      'Add',
+                      style: TextStyle(
+                        color: kAccent,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1038,10 +1075,9 @@ class _LessonSheetState extends State<_LessonSheet> {
           firstDate: DateTime.now(),
           lastDate: DateTime(2100),
           builder: (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme:
-                  const ColorScheme.dark(primary: kAccent),
-            ),
+            data: Theme.of(
+              ctx,
+            ).copyWith(colorScheme: ColorScheme.dark(primary: kAccent)),
             child: child!,
           ),
         );
@@ -1049,19 +1085,18 @@ class _LessonSheetState extends State<_LessonSheet> {
       },
       child: Container(
         height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: kBorder,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            const Icon(Icons.event_outlined,
-                size: 16, color: kAccent),
-            const SizedBox(width: 10),
+            Icon(Icons.event_outlined, size: 16, color: kAccent),
+            SizedBox(width: 10),
             Text(
               _deadlineDate.toIso8601String().substring(0, 10),
-              style: const TextStyle(color: kText1, fontSize: 14),
+              style: TextStyle(color: kText1, fontSize: 14),
             ),
           ],
         ),
