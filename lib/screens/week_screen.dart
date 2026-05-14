@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -37,7 +39,9 @@ class _BusySlot {
 }
 
 class WeekScreen extends StatefulWidget {
-  const WeekScreen({super.key});
+  const WeekScreen({super.key, this.reloadSignal = 0});
+
+  final int reloadSignal;
 
   @override
   State<WeekScreen> createState() => _WeekScreenState();
@@ -52,6 +56,8 @@ class _WeekScreenState extends State<WeekScreen>
   List<_BusySlot> _busySlots = [];
   bool _loading = true;
   int _selectedDayIndex = 0;
+  String _lastToday = '';
+  Timer? _clockTimer;
 
   final _vScroll = ScrollController();
 
@@ -75,11 +81,32 @@ class _WeekScreenState extends State<WeekScreen>
   void initState() {
     super.initState();
     _selectedDayIndex = (AppTime.now().weekday - 1).clamp(0, 6);
+    _lastToday = AppTime.todayStr();
+    _clockTimer = Timer.periodic(Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      final today = AppTime.todayStr();
+      if (today != _lastToday) {
+        _lastToday = today;
+        _selectedDayIndex = (AppTime.now().weekday - 1).clamp(0, 6);
+        _load();
+        return;
+      }
+      setState(() {});
+    });
     _load();
   }
 
   @override
+  void didUpdateWidget(covariant WeekScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reloadSignal != oldWidget.reloadSignal) {
+      _load();
+    }
+  }
+
+  @override
   void dispose() {
+    _clockTimer?.cancel();
     _vScroll.dispose();
     super.dispose();
   }
@@ -96,9 +123,11 @@ class _WeekScreenState extends State<WeekScreen>
       final busyList = ((results[1]['busySlots'] as List?) ?? [])
           .map((b) => _BusySlot.fromJson(b as Map<String, dynamic>))
           .toList();
+      final today = AppTime.todayStr();
       setState(() {
         _plan = WeeklyPlan.fromJson(results[0]);
         _busySlots = busyList;
+        _lastToday = today;
         _loading = false;
       });
     } catch (_) {
@@ -185,7 +214,7 @@ class _WeekScreenState extends State<WeekScreen>
     );
   }
 
-  /// Üst başlık: kicker + tarih aralığı + Recalculate butonu.
+  /// Üst başlık: kicker + tarih aralığı.
   Widget _buildHeader() {
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 14, 20, 8),
@@ -248,7 +277,7 @@ class _WeekScreenState extends State<WeekScreen>
 
   /// Dar ekran gün seçici şeridi — bugün accent-soft arka plan, seçili gün border.
   Widget _buildDayStrip() {
-    final today = AppTime.now().toIso8601String().substring(0, 10);
+    final today = AppTime.todayStr();
     return SizedBox(
       height: 56,
       child: Padding(
@@ -321,7 +350,7 @@ class _WeekScreenState extends State<WeekScreen>
       dates: [date],
       blocksByDate: {date: blocks},
       busyByDow: {dow: busy},
-      todayDate: AppTime.now().toIso8601String().substring(0, 10),
+      todayDate: AppTime.todayStr(),
       vScroll: _vScroll,
       onBlockTap: _showBlockDetail,
     );
@@ -329,7 +358,7 @@ class _WeekScreenState extends State<WeekScreen>
 
   /// Geniş ekran 7 sütun grid görünümü.
   Widget _buildWideGrid() {
-    final today = AppTime.now().toIso8601String().substring(0, 10);
+    final today = AppTime.todayStr();
     final blocksByDate = {
       for (final d in _weekDates)
         d: _plan?.blocksForDate(d) ?? <ScheduledBlock>[],
@@ -582,6 +611,72 @@ class _DayColumn extends StatelessWidget {
   /// İki zaman arasındaki piksel yüksekliği.
   double _minToHeight(int sm, int em) => (em - sm) * _slotH / 30;
 
+  Widget _blockNameOverlay(ScheduledBlock block) {
+    final sm = _timeToMin(block.startTime);
+    final em = _timeToMin(block.endTime);
+    if (sm < _startHour * 60 || em > _endHour * 60 || sm >= em) {
+      return SizedBox.shrink();
+    }
+
+    final color = lessonColor(block.lessonId);
+    final name = block.lessonName.trim().isEmpty
+        ? 'Ders'
+        : block.lessonName.trim();
+    final label = block.isReview ? '$name (Tekrar)' : name;
+
+    return Positioned(
+      top: _minToTop(sm) + 3,
+      left: 5,
+      right: 5,
+      height: 20,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: kSurface.withAlpha(appTheme.isLight ? 245 : 235),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: color.withAlpha(175), width: 0.7),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(appTheme.isLight ? 22 : 80),
+                blurRadius: 7,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 5),
+            child: Row(
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 9,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      color: kText1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -702,39 +797,44 @@ class _DayColumn extends StatelessWidget {
                 child: Opacity(
                   opacity: b.completed ? 0.5 : 1.0,
                   child: Container(
-                    clipBehavior: b.isReview ? Clip.antiAlias : Clip.none,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: b.isReview
                           ? Colors.transparent
                           : color.withAlpha(38),
                       borderRadius: BorderRadius.circular(5),
-                      border: Border(
-                        left: BorderSide(color: color, width: 3),
-                        top: BorderSide(
-                          color: color.withAlpha(100),
-                          width: 0.5,
-                        ),
-                        right: BorderSide(
-                          color: color.withAlpha(100),
-                          width: 0.5,
-                        ),
-                        bottom: BorderSide(
-                          color: color.withAlpha(100),
-                          width: 0.5,
-                        ),
+                      border: Border.all(
+                        color: color.withAlpha(100),
+                        width: 0.5,
                       ),
                     ),
-                    child: b.isReview
-                        ? CustomPaint(
-                            painter: _StripedPainter(color.withAlpha(0x33)),
-                            child: _BlockContent(block: b, color: color),
-                          )
-                        : _BlockContent(block: b, color: color),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 3,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: color),
+                          ),
+                        ),
+                        b.isReview
+                            ? CustomPaint(
+                                painter: _StripedPainter(color.withAlpha(0x33)),
+                                child: _BlockContent(block: b, color: color),
+                              )
+                            : _BlockContent(block: b, color: color),
+                      ],
+                    ),
                   ),
                 ),
               ),
             );
           }),
+          // Ders adları her çalışma slotunun en üstünde ayrı katman olarak görünür.
+          ...blocks.map(_blockNameOverlay),
           // Now çizgisi (sadece bugün)
           if (showNow)
             Positioned(
@@ -768,7 +868,7 @@ class _DayColumn extends StatelessWidget {
   }
 }
 
-/// Blok içerik etiketi: ders adı + isteğe bağlı REVIEW/EXAM rozeti.
+/// Ders adı ayrı overlay olarak çizildiği için blok içinde sadece ek zaman bilgisi kalır.
 class _BlockContent extends StatelessWidget {
   const _BlockContent({required this.block, required this.color});
 
@@ -777,37 +877,28 @@ class _BlockContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(5, 3, 4, 3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            block.lessonName,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 0.02,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (block.isReview)
-            Padding(
-              padding: EdgeInsets.only(top: 2),
-              child: Text(
-                '↻ REVIEW',
-                style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.w700,
-                  color: color.withAlpha(215),
-                  letterSpacing: 0.04,
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showTime = constraints.maxHeight >= 42;
+        if (!showTime) return SizedBox.shrink();
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(7, 26, 4, 3),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Text(
+              '${block.startTime} - ${block.endTime}',
+              style: TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+                color: color.withAlpha(220),
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -935,7 +1026,7 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
 
       if (!mounted) return;
 
-      final today = AppTime.now().toIso8601String().substring(0, 10);
+      final today = AppTime.todayStr();
       final isLate = widget.block.date.compareTo(today) < 0;
       final isIncomplete = _completedBlocks < widget.block.blockCount;
 

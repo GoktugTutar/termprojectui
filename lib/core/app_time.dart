@@ -13,13 +13,13 @@ class AppTime {
       if (mode['mode'] == 'test') {
         final current = mode['current'] as String?;
         if (current != null && current.isNotEmpty) {
-          _override = DateTime.parse(current);
+          setOverride(DateTime.parse(current));
         }
       } else {
-        _override = null; // prod → gerçek saat
+        clearOverride(); // prod → gerçek saat
       }
     } catch (_) {
-      _override = null; // bağlanamazsa gerçek saati kullan
+      clearOverride(); // bağlanamazsa gerçek saati kullan
     }
   }
 
@@ -28,10 +28,20 @@ class AppTime {
   static DateTime now() => _override ?? DateTime.now();
 
   /// Bugünün tarihini YYYY-MM-DD formatında döndürür.
-  static String todayStr() => now().toIso8601String().substring(0, 10);
+  static String todayStr() {
+    final dt = now().toLocal();
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
 
   /// Test modunda çalışma zamanı saat override'ını günceller.
   static void setOverride(DateTime dt) {
-    _override = dt;
+    _override = dt.toLocal();
+  }
+
+  static void clearOverride() {
+    _override = null;
   }
 }

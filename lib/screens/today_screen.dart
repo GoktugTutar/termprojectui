@@ -40,6 +40,7 @@ class _TodayScreenState extends State<TodayScreen>
   String _today = '';
   final Map<int, int> _studiedMinutes = {}; // lessonId → minutes studied
   String _quickNote = '';
+  Timer? _clockTimer;
   List<({String lessonName, String title, DateTime date, int daysLeft})>
   _upcomingDeadlines = [];
 
@@ -47,6 +48,19 @@ class _TodayScreenState extends State<TodayScreen>
   void initState() {
     super.initState();
     _today = _todayStr();
+    _clockTimer = Timer.periodic(Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      final today = _todayStr();
+      if (today != _today) {
+        setState(() {
+          _today = today;
+          _studiedMinutes.clear();
+        });
+        _load();
+        return;
+      }
+      setState(() {});
+    });
     _load();
 
     final hour = AppTime.now().hour;
@@ -55,13 +69,19 @@ class _TodayScreenState extends State<TodayScreen>
         if (!mounted) return;
         final prefs = await SharedPreferences.getInstance();
         final lastAsked = prefs.getString('sleep_modal_date') ?? '';
-        final today = AppTime.now().toIso8601String().substring(0, 10);
+        final today = AppTime.todayStr();
         if (lastAsked != today) _showSleepModal();
       });
     }
   }
 
-  String _todayStr() => AppTime.now().toIso8601String().substring(0, 10);
+  String _todayStr() => AppTime.todayStr();
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -83,13 +103,20 @@ class _TodayScreenState extends State<TodayScreen>
         data = await ApiClient.createWeeklyPlan();
         plan = WeeklyPlan.fromJson(data);
       }
+      final todayLessonIds = plan.blocks
+          .where((b) => b.date == _today)
+          .map((b) => b.lessonId)
+          .toSet();
+      final loadedStudiedMinutes = <int, int>{};
       final cl = await ApiClient.getChecklist(_today);
       if (cl != null) {
         // Pre-fill studied minutes from saved completedBlocks
         for (final item in (cl['items'] as List? ?? [])) {
           final lid = (item['lessonId'] as num).toInt();
           final cb = (item['completedBlocks'] as num? ?? 0).toInt();
-          _studiedMinutes[lid] = cb * 30;
+          if (todayLessonIds.contains(lid)) {
+            loadedStudiedMinutes[lid] = cb * 30;
+          }
         }
       }
       // Load upcoming deadlines
@@ -126,6 +153,9 @@ class _TodayScreenState extends State<TodayScreen>
       if (!mounted) return;
       setState(() {
         _plan = plan;
+        _studiedMinutes
+          ..clear()
+          ..addAll(loadedStudiedMinutes);
         _loading = false;
       });
     } catch (_) {
@@ -156,8 +186,14 @@ class _TodayScreenState extends State<TodayScreen>
     return total;
   }
 
-  int get _totalStudiedMinutes =>
-      _studiedMinutes.values.fold(0, (a, b) => a + b);
+  Set<int> get _todayLessonIds => _todayBlocks.map((b) => b.lessonId).toSet();
+
+  int get _totalStudiedMinutes {
+    final todayLessonIds = _todayLessonIds;
+    return _studiedMinutes.entries
+        .where((entry) => todayLessonIds.contains(entry.key))
+        .fold(0, (sum, entry) => sum + entry.value);
+  }
 
   int get _completedBlocks => (_totalStudiedMinutes / 30).floor();
   int get _totalBlocks => (_totalPlannedMinutes / 30).floor();
@@ -188,10 +224,7 @@ class _TodayScreenState extends State<TodayScreen>
 
   void _showSleepModal() {
     SharedPreferences.getInstance().then((prefs) {
-      prefs.setString(
-        'sleep_modal_date',
-        AppTime.now().toIso8601String().substring(0, 10),
-      );
+      prefs.setString('sleep_modal_date', AppTime.todayStr());
     });
     showDialog(
       context: context,

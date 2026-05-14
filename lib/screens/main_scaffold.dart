@@ -18,6 +18,7 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _index = 0;
+  int _weekReloadSignal = 0;
 
   static const _destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Bugün'),
@@ -36,7 +37,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         final wide = width >= _kWideBreakpoint;
         final screens = <Widget>[
           TodayScreen(),
-          WeekScreen(),
+          WeekScreen(reloadSignal: _weekReloadSignal),
           LessonsScreen(),
           InsightsScreen(),
           ProfileScreen(),
@@ -49,7 +50,7 @@ class _MainScaffoldState extends State<MainScaffold> {
               children: [
                 _SideNav(
                   currentIndex: _index,
-                  onTap: (i) => setState(() => _index = i),
+                  onTap: _selectTab,
                   destinations: _destinations,
                 ),
                 Container(width: 1, color: kBorder),
@@ -66,12 +67,21 @@ class _MainScaffoldState extends State<MainScaffold> {
           body: IndexedStack(index: _index, children: screens),
           bottomNavigationBar: _BottomNav(
             currentIndex: _index,
-            onTap: (i) => setState(() => _index = i),
+            onTap: _selectTab,
             destinations: _destinations,
           ),
         );
       },
     );
+  }
+
+  void _selectTab(int index) {
+    setState(() {
+      _index = index;
+      if (index == 1) {
+        _weekReloadSignal++;
+      }
+    });
   }
 }
 
