@@ -297,6 +297,20 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Son 35 günün checklist durumunu getirir (profil ısı haritası).
+  /// Yanıt: [{date, hasBlocks, hasChecklist}, ...]
+  static Future<List<Map<String, dynamic>>> getChecklistHistory() async {
+    final h = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$_base/checklist/history'),
+      headers: h,
+    );
+    final data = await _handle(res);
+    return (data as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// Belirli bir günün checklist durumunu getirir.
   /// Yanıt: {date, blocked, missingDates, checklist}
   static Future<Map<String, dynamic>> getChecklistStatus(String date) async {

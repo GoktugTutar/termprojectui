@@ -244,32 +244,6 @@ class _WeekScreenState extends State<WeekScreen>
               ),
             ],
           ),
-          Spacer(),
-          GestureDetector(
-            onTap: _recalculate,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: kAccent.withAlpha(30),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: kAccent.withAlpha(60)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.auto_awesome_rounded, color: kAccent, size: 13),
-                  SizedBox(width: 5),
-                  Text(
-                    'Recalculate',
-                    style: TextStyle(
-                      color: kAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1035,7 +1009,7 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
         SnackBar(
           content: Text(
             isLate && isIncomplete && _studiedMinutes > 0
-                ? 'Logged ${_studiedMinutes}m for ${widget.block.date} — tap Recalculate in the week view to update your plan.'
+                ? 'Logged ${_studiedMinutes}m for ${widget.block.date}.'
                 : _studiedMinutes == 0
                 ? 'Marked as not studied'
                 : 'Saved: \${_studiedMinutes}m studied',

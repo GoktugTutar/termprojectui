@@ -23,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Map<String, dynamic>? _user;
   bool _loading = true;
   bool _isTestMode = false;
+  List<Map<String, dynamic>> _checklistHistory = [];
 
   String _preferredStudyTime = 'morning';
   String _studyStyle = 'normal';
@@ -38,13 +39,15 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final results = await Future.wait<Map<String, dynamic>>([
+      final results = await Future.wait([
         ApiClient.getMe(),
         ApiClient.getMode(),
+        ApiClient.getChecklistHistory(),
       ]);
       if (!mounted) return;
-      final user = results[0];
-      final modeInfo = results[1];
+      final user = results[0] as Map<String, dynamic>;
+      final modeInfo = results[1] as Map<String, dynamic>;
+      final history = results[2] as List<Map<String, dynamic>>;
       setState(() {
         _user = user;
         _preferredStudyTime =
@@ -58,6 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 .toList(),
           );
         _isTestMode = modeInfo['mode']?.toString() == 'test';
+        _checklistHistory = history;
         _loading = false;
       });
     } catch (_) {
@@ -550,6 +554,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _TestModeCard(onSave: _snack),
                     SizedBox(height: 24),
                   ],
+                  // Checklist geçmişi ısı haritası
+                  if (_checklistHistory.isNotEmpty) ...[
+                    _SectionLabel('Checklist geçmişi'),
+                    SizedBox(height: 10),
+                    _ChecklistHeatmap(history: _checklistHistory),
+                    SizedBox(height: 24),
+                  ],
                   // Logout
                   SizedBox(
                     width: double.infinity,
@@ -940,6 +951,188 @@ class _TestModeCardState extends State<_TestModeCard> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Checklist heatmap ─────────────────────────────────────────────────────────
+
+class _ChecklistHeatmap extends StatelessWidget {
+  const _ChecklistHeatmap({required this.history});
+
+  final List<Map<String, dynamic>> history;
+
+  static const _dayLabels = ['P', 'S', 'Ç', 'P', 'C', 'C', 'P'];
+
+  @override
+  Widget build(BuildContext context) {
+    // history öğelerini haftalar halinde grupla (Pazartesi başlangıçlı)
+    // İlk öğenin hangi gün olduğunu bul
+    final weeks = <List<Map<String, dynamic>?>>[];
+    if (history.isEmpty) return const SizedBox.shrink();
+
+    final firstDate = DateTime.parse(history.first['date'] as String);
+    // Pazartesi = 1, önceki günleri null ile doldur
+    final leadingNulls = (firstDate.weekday - 1) % 7;
+    final padded = <Map<String, dynamic>?>[
+      ...List.filled(leadingNulls, null),
+      ...history,
+    ];
+
+    for (int i = 0; i < padded.length; i += 7) {
+      final week = padded.sublist(i, (i + 7).clamp(0, padded.length));
+      // 7'ye tamamla
+      while (week.length < 7) {
+        week.add(null);
+      }
+      weeks.add(week);
+    }
+
+    return Container(
+      padding: EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Gün etiketleri
+          Row(
+            children: List.generate(7, (i) {
+              return Expanded(
+                child: Center(
+                  child: Text(
+                    _dayLabels[i],
+                    style: TextStyle(
+                      color: kText2,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+          SizedBox(height: 6),
+          // Haftalar
+          ...weeks.map((week) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: 5),
+              child: Row(
+                children: List.generate(7, (i) {
+                  final day = i < week.length ? week[i] : null;
+                  return Expanded(child: _HeatmapCell(day: day));
+                }),
+              ),
+            );
+          }),
+          SizedBox(height: 8),
+          // Legend
+          Row(
+            children: [
+              _LegendDot(color: const Color(0xFF34C759)),
+              SizedBox(width: 4),
+              Text(
+                'Tamamlandı',
+                style: TextStyle(color: kText2, fontSize: 11),
+              ),
+              SizedBox(width: 14),
+              _LegendDot(color: const Color(0xFFFF5C7A)),
+              SizedBox(width: 4),
+              Text(
+                'Girilmedi',
+                style: TextStyle(color: kText2, fontSize: 11),
+              ),
+              SizedBox(width: 14),
+              _LegendDot(color: kBorder),
+              SizedBox(width: 4),
+              Text(
+                'Boş gün',
+                style: TextStyle(color: kText2, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeatmapCell extends StatelessWidget {
+  const _HeatmapCell({required this.day});
+
+  final Map<String, dynamic>? day;
+
+  @override
+  Widget build(BuildContext context) {
+    if (day == null) {
+      return AspectRatio(aspectRatio: 1, child: SizedBox.shrink());
+    }
+
+    final hasBlocks = day!['hasBlocks'] as bool? ?? false;
+    final hasChecklist = day!['hasChecklist'] as bool? ?? false;
+    final dateStr = day!['date'] as String? ?? '';
+    final dayNum = dateStr.isNotEmpty ? int.tryParse(dateStr.split('-').last) : null;
+
+    final Color color;
+    if (!hasBlocks) {
+      color = kBorder.withAlpha(120);
+    } else if (hasChecklist) {
+      color = const Color(0xFF34C759);
+    } else {
+      final date = DateTime.tryParse(dateStr);
+      final now = AppTime.now();
+      final todayDate = DateTime(now.year, now.month, now.day);
+      final isTodayOrFuture = date != null &&
+          !DateTime(date.year, date.month, date.day).isBefore(todayDate);
+      color = isTodayOrFuture ? kBorder.withAlpha(120) : const Color(0xFFFF5C7A);
+    }
+
+    final bool darkText = color == const Color(0xFF34C759) || color == const Color(0xFFFF5C7A);
+
+    return Padding(
+      padding: EdgeInsets.all(2),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: dayNum != null
+              ? Center(
+                  child: Text(
+                    '$dayNum',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: darkText ? Colors.white.withAlpha(220) : kText2,
+                    ),
+                  ),
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(3),
       ),
     );
   }

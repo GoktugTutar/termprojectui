@@ -14,6 +14,19 @@ const kWarning = Color(0xFFF2B14A);
 const kDanger = Color(0xFFFF5C7A);
 const _kHeaderToCardOffset = 114.0;
 
+String _formatDateLabel(String date) {
+  const months = [
+    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+  ];
+  const days = [
+    'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar',
+  ];
+  final parts = date.split('-').map(int.parse).toList();
+  final dt = DateTime(parts[0], parts[1], parts[2]);
+  return '${dt.day} ${months[dt.month - 1]} ${days[dt.weekday - 1]}';
+}
+
 String _formatMinutes(int minutes) {
   if (minutes <= 0) return '0m';
   final hours = minutes ~/ 60;
@@ -245,38 +258,8 @@ class _TodayScreenState extends State<TodayScreen>
     return '${blocks.first.startTime} - ${blocks.last.endTime}';
   }
 
-  DateTime _parseDateStr(String date) {
-    final parts = date.split('-').map(int.parse).toList();
-    return DateTime(parts[0], parts[1], parts[2]);
-  }
-
-  String _checklistTitleForDate(String date) {
-    const months = [
-      'Ocak',
-      'Şubat',
-      'Mart',
-      'Nisan',
-      'Mayıs',
-      'Haziran',
-      'Temmuz',
-      'Ağustos',
-      'Eylül',
-      'Ekim',
-      'Kasım',
-      'Aralık',
-    ];
-    const days = [
-      'Pazartesi',
-      'Salı',
-      'Çarşamba',
-      'Perşembe',
-      'Cuma',
-      'Cumartesi',
-      'Pazar',
-    ];
-    final dt = _parseDateStr(date);
-    return '${dt.day} ${months[dt.month - 1]} ${days[dt.weekday - 1]} checklist';
-  }
+  String _checklistTitleForDate(String date) =>
+      '${_formatDateLabel(date)} checklist';
 
   Future<void> _resolveMissingChecklists() async {
     if (_resolvingMissingChecklists || _missingChecklistDates.isEmpty) return;
@@ -327,6 +310,8 @@ class _TodayScreenState extends State<TodayScreen>
 
     var stressLevel = 3;
     var fatigueLevel = 3;
+    var saving = false;
+    String? errorMsg;
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -428,44 +413,85 @@ class _TodayScreenState extends State<TodayScreen>
                         );
                       }),
                     SizedBox(height: 8),
-                    FilledButton.icon(
-                      onPressed: () async {
-                        final items = uniqueBlocks.map((block) {
-                          final planned = blocks
-                              .where((b) => b.lessonId == block.lessonId)
-                              .fold(0, (sum, b) => sum + b.blockCount);
-                          final completed = completedMap[block.lessonId] ?? 0;
-                          return {
-                            'lessonId': block.lessonId,
-                            'plannedBlocks': planned,
-                            'completedBlocks': completed,
-                            'delayed': completed < planned,
-                          };
-                        }).toList();
-                        try {
-                          await ApiClient.submitChecklist(
-                            date: date,
-                            stressLevel: stressLevel,
-                            fatigueLevel: fatigueLevel,
-                            items: items,
-                          );
-                          if (ctx.mounted) Navigator.pop(ctx, true);
-                        } catch (e) {
-                          if (!ctx.mounted) return;
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                e.toString().replaceAll('Exception: ', ''),
-                              ),
-                              backgroundColor: Colors.red,
+                    if (errorMsg != null)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 10),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withAlpha(30),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withAlpha(100),
                             ),
-                          );
-                        }
-                      },
-                      icon: Icon(Icons.check_rounded, size: 18),
-                      label: Text('Kaydet'),
+                          ),
+                          child: Text(
+                            errorMsg!,
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    FilledButton.icon(
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              setDialogState(() {
+                                saving = true;
+                                errorMsg = null;
+                              });
+                              final items = uniqueBlocks.map((block) {
+                                final planned = blocks
+                                    .where(
+                                      (b) => b.lessonId == block.lessonId,
+                                    )
+                                    .fold(0, (sum, b) => sum + b.blockCount);
+                                final completed =
+                                    completedMap[block.lessonId] ?? 0;
+                                return {
+                                  'lessonId': block.lessonId,
+                                  'plannedBlocks': planned,
+                                  'completedBlocks': completed,
+                                  'delayed': completed < planned,
+                                };
+                              }).toList();
+                              try {
+                                await ApiClient.submitChecklist(
+                                  date: date,
+                                  stressLevel: stressLevel,
+                                  fatigueLevel: fatigueLevel,
+                                  items: items,
+                                );
+                                if (ctx.mounted) Navigator.pop(ctx, true);
+                              } catch (e) {
+                                if (!ctx.mounted) return;
+                                setDialogState(() {
+                                  saving = false;
+                                  errorMsg = e
+                                      .toString()
+                                      .replaceAll('Exception: ', '');
+                                });
+                              }
+                            },
+                      icon: saving
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(Icons.check_rounded, size: 18),
+                      label: Text(saving ? 'Kaydediliyor...' : 'Kaydet'),
                       style: FilledButton.styleFrom(
                         backgroundColor: kAccent,
+                        disabledBackgroundColor: kBorder,
                         padding: EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -1085,6 +1111,7 @@ class _ChecklistPanel extends StatelessWidget {
         border: Border.all(color: kBorder),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _PanelTitle(icon: Icons.checklist_rounded, title: 'Checklist'),
@@ -1128,7 +1155,7 @@ class _ChecklistPanel extends StatelessWidget {
                       onMinutesChanged(block.lessonId, value),
                 );
               }),
-            Spacer(),
+            SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -1169,68 +1196,67 @@ class _ChecklistBlockedState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _EmptyPanelState(
-            icon: Icons.lock_clock_outlined,
-            title: 'Önce eksik günler',
-            subtitle:
-                'Bugünün checklisti için aynı haftadaki önceki checklistleri tamamla.',
-          ),
-          SizedBox(height: 14),
-          ...missingDates.map(
-            (date) => Container(
-              margin: EdgeInsets.only(bottom: 8),
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: kBorder.withAlpha(60),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: kBorder),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.event_note_outlined, color: kAccent, size: 17),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      date,
-                      style: TextStyle(
-                        color: kText1,
-                        fontWeight: FontWeight.w700,
-                      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _EmptyPanelState(
+          icon: Icons.lock_clock_outlined,
+          title: 'Önce eksik günler',
+          subtitle:
+              'Bugünün checklisti için aynı haftadaki önceki checklistleri tamamla.',
+        ),
+        SizedBox(height: 14),
+        ...missingDates.map(
+          (date) => Container(
+            margin: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: kBorder.withAlpha(60),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.event_note_outlined, color: kAccent, size: 17),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _formatDateLabel(date),
+                    style: TextStyle(
+                      color: kText1,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          Spacer(),
-          FilledButton.icon(
-            onPressed: resolving ? null : onPressed,
-            icon: resolving
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: kText1,
-                    ),
-                  )
-                : Icon(Icons.checklist_rounded, size: 18),
-            label: Text(resolving ? 'Açılıyor...' : 'Eksikleri doldur'),
-            style: FilledButton.styleFrom(
-              backgroundColor: kAccent,
-              disabledBackgroundColor: kBorder,
-              padding: EdgeInsets.symmetric(vertical: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+        ),
+        SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: resolving ? null : onPressed,
+          icon: resolving
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: kText1,
+                  ),
+                )
+              : Icon(Icons.checklist_rounded, size: 18),
+          label: Text(resolving ? 'Açılıyor...' : 'Eksikleri doldur'),
+          style: FilledButton.styleFrom(
+            backgroundColor: kAccent,
+            disabledBackgroundColor: kBorder,
+            padding: EdgeInsets.symmetric(vertical: 13),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
