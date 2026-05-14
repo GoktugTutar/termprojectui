@@ -135,6 +135,28 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
+  /// Aktif dönemi sonlandırır (POST /user/end-term).
+  static Future<void> endTerm() async {
+    final h = await _authHeaders();
+    final res = await http.post(
+      Uri.parse('$_base/user/end-term'),
+      headers: h,
+      body: '{}',
+    );
+    await _handle(res);
+  }
+
+  /// Aktif dönemi kapatıp yeni boş dönem başlatır (POST /user/start-term).
+  static Future<Map<String, dynamic>> startTerm({String? name}) async {
+    final h = await _authHeaders();
+    final res = await http.post(
+      Uri.parse('$_base/user/start-term'),
+      headers: h,
+      body: json.encode({'name': name}),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
   // ── LESSON ──────────────────────────────────────────────────────────────────
 
   /// Kullanıcının tüm derslerini listeler (GET /lesson).

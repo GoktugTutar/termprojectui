@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../core/app_time.dart';
 import '../theme.dart';
+import 'new_term_screen.dart';
 
 const _kDanger = Color(0xFFFF5C7A);
 const _kWarning = Color(0xFFF2B14A);
@@ -100,6 +101,49 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
     if (!mounted) return;
     setState(() => _saving = false);
+  }
+
+  Future<void> _endTerm() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: kSurface,
+        title: Text('Dönemi Bitir', style: TextStyle(color: kText1)),
+        content: Text(
+          'Aktif dönem sonlandırılacak. Dersler ve veriler silinmez, yalnızca dönem kapatılır.',
+          style: TextStyle(color: kText2),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('İptal', style: TextStyle(color: kText2)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: _kDanger),
+            child: Text('Bitir'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      await ApiClient.endTerm();
+      if (!mounted) return;
+      _snack('Dönem sonlandırıldı.');
+    } catch (e) {
+      if (!mounted) return;
+      _snack(e.toString().replaceAll('Exception: ', ''), error: true);
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+  }
+
+  void _startNewTerm() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NewTermScreen()),
+    );
   }
 
   Future<void> _logout() async {
@@ -454,6 +498,50 @@ class _ProfileScreenState extends State<ProfileScreen>
                         );
                       }),
                     ),
+                  SizedBox(height: 24),
+                  // Dönem yönetimi
+                  _SectionLabel('Dönem'),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : _endTerm,
+                          icon: Icon(
+                            Icons.archive_outlined,
+                            size: 16,
+                            color: _kDanger,
+                          ),
+                          label: Text(
+                            'Dönemi Bitir',
+                            style: TextStyle(color: _kDanger),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: _kDanger),
+                            padding: EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _saving ? null : _startNewTerm,
+                          icon: Icon(Icons.add_circle_outline, size: 16),
+                          label: Text('Yeni Dönem'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: kAccent,
+                            padding: EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   SizedBox(height: 24),
                   // Developer / Test mode (sadece MODE=test'te gösterilir)
                   if (_isTestMode) ...[
