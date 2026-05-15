@@ -119,7 +119,13 @@ class _TodayScreenState extends State<TodayScreen>
         data = await ApiClient.createWeeklyPlan();
         plan = WeeklyPlan.fromJson(data);
       }
-      final status = await ApiClient.getChecklistStatus(_today);
+      final results = await Future.wait([
+        ApiClient.getChecklistStatus(_today),
+        ApiClient.getLessons().catchError((_) => <dynamic>[]),
+      ]);
+      final status = results[0] as Map<String, dynamic>;
+      final raw = results[1] as List<dynamic>;
+
       final missingDates = ((status['missingDates'] as List?) ?? [])
           .map((d) => d.toString())
           .toList();
@@ -131,7 +137,6 @@ class _TodayScreenState extends State<TodayScreen>
       final cl = status['checklist'];
       final submitted = cl != null;
       if (cl != null) {
-        // Pre-fill studied minutes from saved completedBlocks
         for (final item in ((cl as Map)['items'] as List? ?? [])) {
           final lid = (item['lessonId'] as num).toInt();
           final cb = (item['completedBlocks'] as num? ?? 0).toInt();
@@ -140,36 +145,29 @@ class _TodayScreenState extends State<TodayScreen>
           }
         }
       }
-      // Load upcoming deadlines
-      try {
-        final raw = await ApiClient.getLessons();
-        final now = AppTime.now();
-        final deadlines =
-            <
-              ({String lessonName, String title, DateTime date, int daysLeft})
-            >[];
-        for (final l in raw) {
-          final lessonName = (l['name'] as String? ?? '');
-          final dlList = (l['deadlines'] as List?) ?? [];
-          for (final d in dlList) {
-            final date = DateTime.tryParse(d['deadlineDate'] as String? ?? '');
-            if (date == null) continue;
-            final daysLeft = date
-                .difference(DateTime(now.year, now.month, now.day))
-                .inDays;
-            if (daysLeft >= 0 && daysLeft <= 14) {
-              deadlines.add((
-                lessonName: lessonName,
-                title: (d['title'] as String?) ?? '',
-                date: date,
-                daysLeft: daysLeft,
-              ));
-            }
+      final now = AppTime.now();
+      final deadlines =
+          <({String lessonName, String title, DateTime date, int daysLeft})>[];
+      for (final l in raw) {
+        final lessonName = (l['name'] as String? ?? '');
+        final dlList = (l['deadlines'] as List?) ?? [];
+        for (final d in dlList) {
+          final date = DateTime.tryParse(d['deadlineDate'] as String? ?? '');
+          if (date == null) continue;
+          final daysLeft = date
+              .difference(DateTime(now.year, now.month, now.day))
+              .inDays;
+          if (daysLeft >= 0 && daysLeft <= 14) {
+            deadlines.add((
+              lessonName: lessonName,
+              title: (d['title'] as String?) ?? '',
+              date: date,
+              daysLeft: daysLeft,
+            ));
           }
         }
-        deadlines.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
-        if (mounted) setState(() => _upcomingDeadlines = deadlines);
-      } catch (_) {}
+      }
+      deadlines.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
 
       if (!mounted) return;
       setState(() {
@@ -179,6 +177,7 @@ class _TodayScreenState extends State<TodayScreen>
         _studiedMinutes
           ..clear()
           ..addAll(loadedStudiedMinutes);
+        _upcomingDeadlines = deadlines;
         _loading = false;
       });
       if (missingDates.isNotEmpty) {
@@ -582,6 +581,7 @@ class _TodayScreenState extends State<TodayScreen>
                           final right = _ChecklistPanel(
                             blocks: _primaryTodayBlocks,
                             missingDates: _missingChecklistDates,
+                            todayDate: _today,
                             submitted: _todayChecklistSubmitted,
                             resolvingMissing: _resolvingMissingChecklists,
                             completedBlocks: _completedBlocks,
@@ -1071,6 +1071,7 @@ class _ChecklistPanel extends StatelessWidget {
   const _ChecklistPanel({
     required this.blocks,
     required this.missingDates,
+    required this.todayDate,
     required this.submitted,
     required this.resolvingMissing,
     required this.completedBlocks,
@@ -1087,6 +1088,7 @@ class _ChecklistPanel extends StatelessWidget {
 
   final List<ScheduledBlock> blocks;
   final List<String> missingDates;
+  final String todayDate;
   final bool submitted;
   final bool resolvingMissing;
   final int completedBlocks;
@@ -1102,6 +1104,15 @@ class _ChecklistPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (missingDates.isNotEmpty) {
+      return _StackedChecklistView(
+        missingDates: missingDates,
+        todayDate: todayDate,
+        resolving: resolvingMissing,
+        onFillMissing: onCompleteMissing,
+      );
+    }
+
     return Container(
       constraints: BoxConstraints(minHeight: 620),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
@@ -1116,147 +1127,214 @@ class _ChecklistPanel extends StatelessWidget {
         children: [
           _PanelTitle(icon: Icons.checklist_rounded, title: 'Checklist'),
           SizedBox(height: 16),
-          if (missingDates.isNotEmpty)
-            _ChecklistBlockedState(
-              missingDates: missingDates,
-              resolving: resolvingMissing,
-              onPressed: onCompleteMissing,
+          _ChecklistProgress(
+            completedBlocks: completedBlocks,
+            totalBlocks: totalBlocks,
+            studiedMinutes: studiedMinutes,
+            plannedMinutes: plannedMinutes,
+            progress: progress,
+          ),
+          Divider(height: 32, color: kBorder),
+          if (blocks.isEmpty)
+            _EmptyPanelState(
+              icon: submitted
+                  ? Icons.task_alt_rounded
+                  : Icons.event_available_outlined,
+              title: submitted ? 'Submitted' : 'Bugün boş',
+              subtitle: submitted
+                  ? 'Bugünün checklisti kapatıldı.'
+                  : 'Bugünü kapatmak için checklist submit edebilirsin.',
             )
-          else ...[
-            _ChecklistProgress(
-              completedBlocks: completedBlocks,
-              totalBlocks: totalBlocks,
-              studiedMinutes: studiedMinutes,
-              plannedMinutes: plannedMinutes,
-              progress: progress,
-            ),
-            Divider(height: 32, color: kBorder),
-            if (blocks.isEmpty)
-              _EmptyPanelState(
-                icon: submitted
-                    ? Icons.task_alt_rounded
-                    : Icons.event_available_outlined,
-                title: submitted ? 'Submitted' : 'Bugün boş',
-                subtitle: submitted
-                    ? 'Bugünün checklisti kapatıldı.'
-                    : 'Bugünü kapatmak için checklist submit edebilirsin.',
-              )
-            else
-              ...List.generate(blocks.length, (i) {
-                final block = blocks[i];
-                final planned = plannedMinutesForLesson(block.lessonId);
-                return _ChecklistLessonRow(
-                  block: block,
-                  studiedMinutes: studiedMinutesForLesson(block.lessonId),
-                  plannedMinutes: planned,
-                  isLast: i == blocks.length - 1,
-                  enabled: !submitted,
-                  onMinutesChanged: (value) =>
-                      onMinutesChanged(block.lessonId, value),
-                );
-              }),
-            SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: submitted ? null : onSaveChecklist,
-                icon: Icon(
-                  submitted ? Icons.task_alt_rounded : Icons.check_rounded,
-                  size: 18,
-                ),
-                label: Text(submitted ? 'Submitted' : 'Submit'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: kAccent,
-                  disabledBackgroundColor: kBorder,
-                  disabledForegroundColor: kText2,
-                  padding: EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+          else
+            ...List.generate(blocks.length, (i) {
+              final block = blocks[i];
+              final planned = plannedMinutesForLesson(block.lessonId);
+              return _ChecklistLessonRow(
+                block: block,
+                studiedMinutes: studiedMinutesForLesson(block.lessonId),
+                plannedMinutes: planned,
+                isLast: i == blocks.length - 1,
+                enabled: !submitted,
+                onMinutesChanged: (value) =>
+                    onMinutesChanged(block.lessonId, value),
+              );
+            }),
+          SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: submitted ? null : onSaveChecklist,
+              icon: Icon(
+                submitted ? Icons.task_alt_rounded : Icons.check_rounded,
+                size: 18,
+              ),
+              label: Text(submitted ? 'Submitted' : 'Submit'),
+              style: FilledButton.styleFrom(
+                backgroundColor: kAccent,
+                disabledBackgroundColor: kBorder,
+                disabledForegroundColor: kText2,
+                padding: EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _ChecklistBlockedState extends StatelessWidget {
-  const _ChecklistBlockedState({
+class _StackedChecklistView extends StatelessWidget {
+  const _StackedChecklistView({
     required this.missingDates,
+    required this.todayDate,
     required this.resolving,
-    required this.onPressed,
+    required this.onFillMissing,
   });
 
-  final List<String> missingDates;
+  final List<String> missingDates; // oldest first
+  final String todayDate;
   final bool resolving;
-  final VoidCallback onPressed;
+  final VoidCallback onFillMissing;
+
+  static const double _kPeekVisible = 44.0;
+  static const double _kFrontOverlap = 8.0;
 
   @override
   Widget build(BuildContext context) {
+    // backCards[0] = second-oldest missing (closest to front card)
+    // backCards[last] = today (farthest back)
+    final backCards = [...missingDates.skip(1), todayDate];
+
     return Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EmptyPanelState(
-          icon: Icons.lock_clock_outlined,
-          title: 'Önce eksik günler',
-          subtitle:
-              'Bugünün checklisti için aynı haftadaki önceki checklistleri tamamla.',
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Back cards rendered from most-back (lowest z) to closest-to-front (highest z).
+            // Each card peeks below the card in front of it by _kPeekVisible pixels.
+            for (int i = backCards.length - 1; i >= 0; i--)
+              _buildPeekCard(
+                date: backCards[i],
+                peekLevel: i + 1,
+                isToday: i == backCards.length - 1,
+              ),
+            // Front card (oldest missing) — rendered last = highest z-order.
+            _buildFrontCard(),
+          ],
         ),
-        SizedBox(height: 14),
-        ...missingDates.map(
-          (date) => Container(
-            margin: EdgeInsets.only(bottom: 8),
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: kBorder.withAlpha(60),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kBorder),
-            ),
+        // Reserve layout space so peek cards don't overlap following widgets.
+        SizedBox(height: backCards.length * _kPeekVisible + 4),
+      ],
+    );
+  }
+
+  Widget _buildPeekCard({
+    required String date,
+    required int peekLevel,
+    required bool isToday,
+  }) {
+    // bottom: -(_kPeekVisible * peekLevel) places the card so that exactly
+    // _kPeekVisible pixels are visible below the front card, and _kFrontOverlap
+    // pixels are hidden behind the card in front of it.
+    return Positioned(
+      bottom: -(_kPeekVisible * peekLevel),
+      left: 0,
+      right: 0,
+      height: _kFrontOverlap + _kPeekVisible,
+      child: Container(
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: kBorder),
+        ),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
             child: Row(
               children: [
-                Icon(Icons.event_note_outlined, color: kAccent, size: 17),
-                SizedBox(width: 8),
+                Icon(
+                  isToday ? Icons.today_outlined : Icons.event_note_outlined,
+                  color: kText2,
+                  size: 14,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _formatDateLabel(date),
+                    isToday ? 'Bugün' : _formatDateLabel(date),
                     style: TextStyle(
-                      color: kText1,
-                      fontWeight: FontWeight.w700,
+                      color: kText2,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
+                Icon(Icons.lock_outline_rounded, color: kBorder, size: 13),
               ],
             ),
           ),
         ),
-        SizedBox(height: 18),
-        FilledButton.icon(
-          onPressed: resolving ? null : onPressed,
-          icon: resolving
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: kText1,
-                  ),
-                )
-              : Icon(Icons.checklist_rounded, size: 18),
-          label: Text(resolving ? 'Açılıyor...' : 'Eksikleri doldur'),
-          style: FilledButton.styleFrom(
-            backgroundColor: kAccent,
-            disabledBackgroundColor: kBorder,
-            padding: EdgeInsets.symmetric(vertical: 13),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+      ),
+    );
+  }
+
+  Widget _buildFrontCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: kBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(28),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PanelTitle(
+            icon: Icons.lock_clock_outlined,
+            title: _formatDateLabel(missingDates.first),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Bugünün checklistine geçmek için önce bu günü doldurman gerekiyor.',
+            style: TextStyle(color: kText2, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: resolving ? null : onFillMissing,
+            icon: resolving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.edit_note_rounded, size: 18),
+            label: Text(resolving ? 'Açılıyor...' : 'Doldur'),
+            style: FilledButton.styleFrom(
+              backgroundColor: kAccent,
+              disabledBackgroundColor: kBorder,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

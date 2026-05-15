@@ -27,6 +27,9 @@ class AppTime {
   /// Test modunda backend saati, prod modunda DateTime.now().
   static DateTime now() => _override ?? DateTime.now();
 
+  /// Backend test modundaysa true döner.
+  static bool get isTestMode => _override != null;
+
   /// Bugünün tarihini YYYY-MM-DD formatında döndürür.
   static String todayStr() {
     final dt = now().toLocal();

@@ -555,7 +555,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     SizedBox(height: 24),
                   ],
                   // Checklist geçmişi ısı haritası
-                  if (_checklistHistory.isNotEmpty) ...[
+                  if (_isTestMode && _checklistHistory.isNotEmpty) ...[
                     _SectionLabel('Checklist geçmişi'),
                     SizedBox(height: 10),
                     _ChecklistHeatmap(history: _checklistHistory),
@@ -963,7 +963,36 @@ class _ChecklistHeatmap extends StatelessWidget {
 
   final List<Map<String, dynamic>> history;
 
-  static const _dayLabels = ['P', 'S', 'Ç', 'P', 'C', 'C', 'P'];
+  static const _dayLabels = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  static const _dayNames = [
+    'Pazartesi',
+    'Salı',
+    'Çarşamba',
+    'Perşembe',
+    'Cuma',
+    'Cumartesi',
+    'Pazar',
+  ];
+  static const _monthNames = [
+    'Ocak',
+    'Şubat',
+    'Mart',
+    'Nisan',
+    'Mayıs',
+    'Haziran',
+    'Temmuz',
+    'Ağustos',
+    'Eylül',
+    'Ekim',
+    'Kasım',
+    'Aralık',
+  ];
+
+  String _formatTodayLabel(String dateStr) {
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return dateStr;
+    return '${date.day} ${_monthNames[date.month - 1]} ${_dayNames[date.weekday - 1]}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -972,6 +1001,9 @@ class _ChecklistHeatmap extends StatelessWidget {
     final weeks = <List<Map<String, dynamic>?>>[];
     if (history.isEmpty) return const SizedBox.shrink();
 
+    final todayStr = AppTime.todayStr();
+    final todayDate = DateTime.tryParse(todayStr);
+    final todayWeekdayIndex = todayDate == null ? -1 : todayDate.weekday - 1;
     final firstDate = DateTime.parse(history.first['date'] as String);
     // Pazartesi = 1, önceki günleri null ile doldur
     final leadingNulls = (firstDate.weekday - 1) % 7;
@@ -999,19 +1031,40 @@ class _ChecklistHeatmap extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: kAccent.withAlpha(38),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: kAccent.withAlpha(120)),
+                ),
+                child: Icon(Icons.today_outlined, size: 15, color: kAccent),
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Bugün: ${_formatTodayLabel(todayStr)}',
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
           // Gün etiketleri
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: List.generate(7, (i) {
               return Expanded(
-                child: Center(
-                  child: Text(
-                    _dayLabels[i],
-                    style: TextStyle(
-                      color: kText2,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                child: _DayHeader(
+                  label: _dayLabels[i],
+                  isToday: i == todayWeekdayIndex,
                 ),
               );
             }),
@@ -1024,7 +1077,9 @@ class _ChecklistHeatmap extends StatelessWidget {
               child: Row(
                 children: List.generate(7, (i) {
                   final day = i < week.length ? week[i] : null;
-                  return Expanded(child: _HeatmapCell(day: day));
+                  return Expanded(
+                    child: _HeatmapCell(day: day, todayStr: todayStr),
+                  );
                 }),
               ),
             );
@@ -1035,24 +1090,15 @@ class _ChecklistHeatmap extends StatelessWidget {
             children: [
               _LegendDot(color: const Color(0xFF34C759)),
               SizedBox(width: 4),
-              Text(
-                'Tamamlandı',
-                style: TextStyle(color: kText2, fontSize: 11),
-              ),
+              Text('Tamamlandı', style: TextStyle(color: kText2, fontSize: 11)),
               SizedBox(width: 14),
               _LegendDot(color: const Color(0xFFFF5C7A)),
               SizedBox(width: 4),
-              Text(
-                'Girilmedi',
-                style: TextStyle(color: kText2, fontSize: 11),
-              ),
+              Text('Girilmedi', style: TextStyle(color: kText2, fontSize: 11)),
               SizedBox(width: 14),
               _LegendDot(color: kBorder),
               SizedBox(width: 4),
-              Text(
-                'Boş gün',
-                style: TextStyle(color: kText2, fontSize: 11),
-              ),
+              Text('Boş gün', style: TextStyle(color: kText2, fontSize: 11)),
             ],
           ),
         ],
@@ -1061,10 +1107,61 @@ class _ChecklistHeatmap extends StatelessWidget {
   }
 }
 
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.label, required this.isToday});
+
+  final String label;
+  final bool isToday;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: isToday ? kAccent.withAlpha(55) : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: isToday
+                  ? Border.all(color: kAccent.withAlpha(150))
+                  : Border.all(color: Colors.transparent),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isToday ? kText1 : kText2,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 3),
+          if (isToday)
+            Text(
+              'Bugün',
+              style: TextStyle(
+                color: kAccent,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HeatmapCell extends StatelessWidget {
-  const _HeatmapCell({required this.day});
+  const _HeatmapCell({required this.day, required this.todayStr});
 
   final Map<String, dynamic>? day;
+  final String todayStr;
 
   @override
   Widget build(BuildContext context) {
@@ -1075,7 +1172,10 @@ class _HeatmapCell extends StatelessWidget {
     final hasBlocks = day!['hasBlocks'] as bool? ?? false;
     final hasChecklist = day!['hasChecklist'] as bool? ?? false;
     final dateStr = day!['date'] as String? ?? '';
-    final dayNum = dateStr.isNotEmpty ? int.tryParse(dateStr.split('-').last) : null;
+    final isToday = dateStr == todayStr;
+    final dayNum = dateStr.isNotEmpty
+        ? int.tryParse(dateStr.split('-').last)
+        : null;
 
     final Color color;
     if (!hasBlocks) {
@@ -1086,34 +1186,121 @@ class _HeatmapCell extends StatelessWidget {
       final date = DateTime.tryParse(dateStr);
       final now = AppTime.now();
       final todayDate = DateTime(now.year, now.month, now.day);
-      final isTodayOrFuture = date != null &&
+      final isTodayOrFuture =
+          date != null &&
           !DateTime(date.year, date.month, date.day).isBefore(todayDate);
-      color = isTodayOrFuture ? kBorder.withAlpha(120) : const Color(0xFFFF5C7A);
+      color = isTodayOrFuture
+          ? kBorder.withAlpha(120)
+          : const Color(0xFFFF5C7A);
     }
 
-    final bool darkText = color == const Color(0xFF34C759) || color == const Color(0xFFFF5C7A);
+    final bool darkText =
+        color == const Color(0xFF34C759) || color == const Color(0xFFFF5C7A);
 
-    return Padding(
-      padding: EdgeInsets.all(2),
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: Container(
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showTodayLabel = isToday && constraints.maxWidth >= 42;
+        return Padding(
+          padding: EdgeInsets.all(2),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(4),
+                border: isToday ? Border.all(color: kAccent, width: 2) : null,
+                boxShadow: isToday
+                    ? [
+                        BoxShadow(
+                          color: kAccent.withAlpha(70),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: dayNum != null
+                  ? _HeatmapCellText(
+                      dayNum: dayNum,
+                      isToday: isToday,
+                      showTodayLabel: showTodayLabel,
+                      textColor: darkText
+                          ? Colors.white.withAlpha(230)
+                          : kText1.withAlpha(220),
+                    )
+                  : null,
+            ),
           ),
-          child: dayNum != null
-              ? Center(
+        );
+      },
+    );
+  }
+}
+
+class _HeatmapCellText extends StatelessWidget {
+  const _HeatmapCellText({
+    required this.dayNum,
+    required this.isToday,
+    required this.showTodayLabel,
+    required this.textColor,
+  });
+
+  final int dayNum;
+  final bool isToday;
+  final bool showTodayLabel;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isToday) {
+      return Center(
+        child: Text(
+          '$dayNum',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+          ),
+        ),
+      );
+    }
+
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$dayNum',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: textColor,
+              ),
+            ),
+            if (showTodayLabel) ...[
+              SizedBox(height: 3),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: kAccent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   child: Text(
-                    '$dayNum',
+                    'Bugün',
                     style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: darkText ? Colors.white.withAlpha(220) : kText2,
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                )
-              : null,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
