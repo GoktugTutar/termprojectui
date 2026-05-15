@@ -169,7 +169,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         editIndex: editIndex,
         busySlots: _busySlots,
         onChanged: () => setState(() {}),
-        onSave: _saveBusySlots,
+
       ),
     );
   }
@@ -502,6 +502,33 @@ class _ProfileScreenState extends State<ProfileScreen>
                         );
                       }),
                     ),
+                  SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _saving ? null : _saveBusySlots,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kAccent,
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _saving
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              'Save busy slots',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                    ),
+                  ),
                   SizedBox(height: 24),
                   // Dönem yönetimi
                   _SectionLabel('Dönem'),
@@ -1333,14 +1360,12 @@ class _BusySlotSheet extends StatefulWidget {
     this.editIndex,
     required this.busySlots,
     required this.onChanged,
-    required this.onSave,
   });
 
   final Map<String, dynamic>? existing;
   final int? editIndex;
   final List<Map<String, dynamic>> busySlots;
   final VoidCallback onChanged;
-  final Future<void> Function() onSave;
 
   @override
   State<_BusySlotSheet> createState() => _BusySlotSheetState();
@@ -1351,7 +1376,6 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
   late TextEditingController _startCtrl;
   late TextEditingController _endCtrl;
   int _fatigue = 3;
-  bool _saving = false;
 
   static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -1400,9 +1424,6 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
       widget.busySlots.add(slot);
     }
     widget.onChanged();
-    setState(() => _saving = true);
-    await widget.onSave();
-    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -1410,7 +1431,6 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
     if (widget.editIndex != null) {
       widget.busySlots.removeAt(widget.editIndex!);
       widget.onChanged();
-      widget.onSave();
     }
     Navigator.pop(context);
   }
@@ -1556,7 +1576,7 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _saving ? null : _confirm,
+                onPressed: _confirm,
                 style: FilledButton.styleFrom(
                   backgroundColor: kAccent,
                   padding: EdgeInsets.symmetric(vertical: 14),
@@ -1564,16 +1584,7 @@ class _BusySlotSheetState extends State<_BusySlotSheet> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _saving
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Text(
+                child: Text(
                         widget.editIndex != null ? 'Update' : 'Add',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
