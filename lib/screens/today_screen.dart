@@ -16,11 +16,27 @@ const _kHeaderToCardOffset = 114.0;
 
 String _formatDateLabel(String date) {
   const months = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+    'Ocak',
+    'Şubat',
+    'Mart',
+    'Nisan',
+    'Mayıs',
+    'Haziran',
+    'Temmuz',
+    'Ağustos',
+    'Eylül',
+    'Ekim',
+    'Kasım',
+    'Aralık',
   ];
   const days = [
-    'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar',
+    'Pazartesi',
+    'Salı',
+    'Çarşamba',
+    'Perşembe',
+    'Cuma',
+    'Cumartesi',
+    'Pazar',
   ];
   final parts = date.split('-').map(int.parse).toList();
   final dt = DateTime(parts[0], parts[1], parts[2]);
@@ -104,15 +120,18 @@ class _TodayScreenState extends State<TodayScreen>
     try {
       Map<String, dynamic> data = await ApiClient.getWeekPlan();
       WeeklyPlan plan = WeeklyPlan.fromJson(data);
-      // Auto-create if no plan, or today falls outside the plan's week
+      // Backend carries forward previous plans; only Sunday can request a fresh plan.
       final today = AppTime.now();
-      bool needsNewPlan = plan.blocks.isEmpty;
+      bool needsNewPlan =
+          plan.blocks.isEmpty && today.weekday == DateTime.sunday;
       if (!needsNewPlan && plan.weekStart.isNotEmpty) {
         // Plan covers weekStart to weekStart+6 days
         final ws = DateTime.parse(plan.weekStart);
         final we = ws.add(Duration(days: 6));
         final todayDate = DateTime(today.year, today.month, today.day);
-        needsNewPlan = todayDate.isBefore(ws) || todayDate.isAfter(we);
+        needsNewPlan =
+            today.weekday == DateTime.sunday &&
+            (todayDate.isBefore(ws) || todayDate.isAfter(we));
       }
 
       if (needsNewPlan) {
@@ -429,10 +448,7 @@ class _TodayScreenState extends State<TodayScreen>
                           ),
                           child: Text(
                             errorMsg!,
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 13,
-                            ),
+                            style: TextStyle(color: Colors.red, fontSize: 13),
                           ),
                         ),
                       ),
@@ -446,9 +462,7 @@ class _TodayScreenState extends State<TodayScreen>
                               });
                               final items = uniqueBlocks.map((block) {
                                 final planned = blocks
-                                    .where(
-                                      (b) => b.lessonId == block.lessonId,
-                                    )
+                                    .where((b) => b.lessonId == block.lessonId)
                                     .fold(0, (sum, b) => sum + b.blockCount);
                                 final completed =
                                     completedMap[block.lessonId] ?? 0;
@@ -471,9 +485,10 @@ class _TodayScreenState extends State<TodayScreen>
                                 if (!ctx.mounted) return;
                                 setDialogState(() {
                                   saving = false;
-                                  errorMsg = e
-                                      .toString()
-                                      .replaceAll('Exception: ', '');
+                                  errorMsg = e.toString().replaceAll(
+                                    'Exception: ',
+                                    '',
+                                  );
                                 });
                               }
                             },
