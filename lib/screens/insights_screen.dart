@@ -37,10 +37,12 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Future<void> _load() async {
+    print('_load called');
     setState(() => _loading = true);
     try {
       final msgs = await ApiClient.getFeedbackMessages();
       final rawLessons = await ApiClient.getLessons();
+
 
       // Fetch student profile (single call replaces 7 checklist calls)
       Map<String, dynamic>? profile;
@@ -60,19 +62,30 @@ class _InsightsScreenState extends State<InsightsScreen>
         if (hasOverload) multiplierStr = '0.85';
       } catch (_) {}
 
+      // Parse lessons outside setState so errors are catchable
+      final lessons = <Lesson>[];
+      for (final l in rawLessons) {
+        try {
+          lessons.add(Lesson.fromJson(l as Map<String, dynamic>));
+        } catch (e) {
+          debugPrint('[INSIGHTS] lesson parse error: $e  raw=$l');
+        }
+      }
+      debugPrint('[INSIGHTS] rawLessons=${rawLessons.length} parsed=${lessons.length}');
+
       if (!mounted) return;
       setState(() {
         _messages = msgs;
-        _lessons = rawLessons
-            .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
-            .toList();
+        _lessons = lessons;
         _profile = profile;
         _multiplierStr = multiplierStr;
         _completionStr = completionStr;
         _stressStr = stressStr;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[INSIGHTS] _load error: $e');
+      debugPrint('[INSIGHTS] $st');
       if (!mounted) return;
       setState(() => _loading = false);
     }

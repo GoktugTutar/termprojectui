@@ -122,16 +122,22 @@ class _TodayScreenState extends State<TodayScreen>
       WeeklyPlan plan = WeeklyPlan.fromJson(data);
       // Backend carries forward previous plans; only Sunday can request a fresh plan.
       final today = AppTime.now();
-      bool needsNewPlan =
-          plan.blocks.isEmpty && today.weekday == DateTime.sunday;
-      if (!needsNewPlan && plan.weekStart.isNotEmpty) {
-        // Plan covers weekStart to weekStart+6 days
+      // Determine the start of the current week (Monday)
+      final todayDate = DateTime(today.year, today.month, today.day);
+      final currentWeekStart = todayDate.subtract(
+        Duration(days: today.weekday == DateTime.sunday ? 6 : today.weekday - 1),
+      );
+
+      // Create a new plan if:
+      // 1. It's Sunday and we don't have a plan for next week yet, OR
+      // 2. The existing plan belongs to a past week
+      bool needsNewPlan = false;
+      if (plan.weekStart.isNotEmpty) {
         final ws = DateTime.parse(plan.weekStart);
-        final we = ws.add(Duration(days: 6));
-        final todayDate = DateTime(today.year, today.month, today.day);
-        needsNewPlan =
-            today.weekday == DateTime.sunday &&
-            (todayDate.isBefore(ws) || todayDate.isAfter(we));
+        final planIsCurrentWeek = !ws.isBefore(currentWeekStart);
+        needsNewPlan = !planIsCurrentWeek;
+      } else {
+        needsNewPlan = true;
       }
 
       if (needsNewPlan) {
