@@ -135,9 +135,11 @@ class _TodayScreenState extends State<TodayScreen>
       if (plan.weekStart.isNotEmpty) {
         final ws = DateTime.parse(plan.weekStart);
         final planIsCurrentWeek = !ws.isBefore(currentWeekStart);
-        needsNewPlan = !planIsCurrentWeek;
+        needsNewPlan = !planIsCurrentWeek || plan.blocks.isEmpty;
+        debugPrint('[TODAY] plan.weekStart=' + plan.weekStart + ' currentWeekStart=' + currentWeekStart.toString() + ' blocks=' + plan.blocks.length.toString() + ' needsNewPlan=' + needsNewPlan.toString());
       } else {
         needsNewPlan = true;
+        debugPrint('[TODAY] plan.weekStart is empty, needsNewPlan=true');
       }
 
       if (needsNewPlan) {
