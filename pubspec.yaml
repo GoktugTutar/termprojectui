@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
      
-  intl: ^0.19.0
+  intl: ^0.20.2
   cupertino_icons: ^1.0.8
   http: ^1.2.0
   shared_preferences: ^2.3.2
@@ -39,7 +39,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
    
-     
+  avatar_maker: ^1.4.0 
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

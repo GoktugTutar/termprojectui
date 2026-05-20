@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'today_screen.dart';
 import 'week_screen.dart';
-import 'lessons_screen.dart';
 import 'insights_screen.dart';
 import 'profile_screen.dart';
-
-// >= 720px → NavigationRail (sidebar), < 720px → BottomNavigationBar
-const _kWideBreakpoint = 720.0;
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -23,7 +19,6 @@ class _MainScaffoldState extends State<MainScaffold> {
   static const _destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Bugün'),
     (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Hafta'),
-    (Icons.book_outlined, Icons.book_rounded, 'Dersler'),
     (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Analiz'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
   ];
@@ -33,43 +28,25 @@ class _MainScaffoldState extends State<MainScaffold> {
     return AnimatedBuilder(
       animation: appTheme,
       builder: (context, _) {
-        final width = MediaQuery.sizeOf(context).width;
-        final wide = width >= _kWideBreakpoint;
+        final navbar = _TopNav(
+          currentIndex: _index,
+          onTap: _selectTab,
+          destinations: _destinations,
+        );
+
         final screens = <Widget>[
-          TodayScreen(),
-          WeekScreen(reloadSignal: _weekReloadSignal),
-          LessonsScreen(),
-          InsightsScreen(),
-          ProfileScreen(),
+          _FullScreenFrame(navbar: navbar, child: TodayScreen()),
+          _FullScreenFrame(
+            navbar: navbar,
+            child: WeekScreen(reloadSignal: _weekReloadSignal),
+          ),
+          _FullScreenFrame(navbar: navbar, child: InsightsScreen()),
+          _FullScreenFrame(navbar: navbar, child: ProfileScreen()),
         ];
 
-        if (wide) {
-          return Scaffold(
-            backgroundColor: Colors.transparent,
-            body: Row(
-              children: [
-                _SideNav(
-                  currentIndex: _index,
-                  onTap: _selectTab,
-                  destinations: _destinations,
-                ),
-                Container(width: 1, color: kBorder),
-                Expanded(
-                  child: IndexedStack(index: _index, children: screens),
-                ),
-              ],
-            ),
-          );
-        }
-
         return Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: kBg,
           body: IndexedStack(index: _index, children: screens),
-          bottomNavigationBar: _BottomNav(
-            currentIndex: _index,
-            onTap: _selectTab,
-            destinations: _destinations,
-          ),
         );
       },
     );
@@ -85,10 +62,8 @@ class _MainScaffoldState extends State<MainScaffold> {
   }
 }
 
-// ── Sidebar (web / tablet) ────────────────────────────────────────────────────
-
-class _SideNav extends StatelessWidget {
-  const _SideNav({
+class _TopNav extends StatelessWidget {
+  const _TopNav({
     required this.currentIndex,
     required this.onTap,
     required this.destinations,
@@ -101,28 +76,25 @@ class _SideNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 220,
-      color: kSurface,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: kSurface.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: kBorder.withValues(alpha: 0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 26,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 28),
-              child: Text(
-                'Study\nPlanner',
-                style: TextStyle(
-                  color: kText1,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  height: 1.2,
-                ),
-              ),
-            ),
-            _ThemeToggle(
-              expanded: true,
-              margin: EdgeInsets.fromLTRB(12, 0, 12, 16),
-            ),
             ...List.generate(destinations.length, (i) {
               final (unsel, sel, label) = destinations[i];
               final selected = i == currentIndex;
@@ -130,38 +102,30 @@ class _SideNav extends StatelessWidget {
                 onTap: () => onTap(i),
                 child: AnimatedContainer(
                   duration: Duration(milliseconds: 180),
-                  margin: EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  margin: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   decoration: BoxDecoration(
                     color: selected
-                        ? kAccent.withAlpha(30)
+                        ? kAccent.withAlpha(24)
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         selected ? sel : unsel,
                         color: selected ? kAccent : kText2,
-                        size: 20,
+                        size: 18,
                       ),
-                      SizedBox(width: 12),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: selected ? kAccent : kText2,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          fontSize: 15,
-                        ),
-                      ),
+                      SizedBox(width: 6),
                     ],
                   ),
                 ),
               );
             }),
-            Spacer(),
+            SizedBox(width: 6),
+            _ThemeToggle(expanded: false),
           ],
         ),
       ),
@@ -171,75 +135,10 @@ class _SideNav extends StatelessWidget {
 
 // ── Bottom nav (mobile) ───────────────────────────────────────────────────────
 
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({
-    required this.currentIndex,
-    required this.onTap,
-    required this.destinations,
-  });
-
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-  final List<(IconData, IconData, String)> destinations;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: kSurface,
-        border: Border(top: BorderSide(color: kBorder)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: [
-              ...List.generate(destinations.length, (i) {
-                final (unsel, sel, label) = destinations[i];
-                final selected = i == currentIndex;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onTap(i),
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          selected ? sel : unsel,
-                          color: selected ? kAccent : kText2,
-                          size: 22,
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: selected ? kAccent : kText2,
-                            fontWeight: selected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-              SizedBox(width: 52, child: _ThemeToggle(expanded: false)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ThemeToggle extends StatelessWidget {
-  const _ThemeToggle({required this.expanded, this.margin = EdgeInsets.zero});
+  const _ThemeToggle({required this.expanded});
 
   final bool expanded;
-  final EdgeInsets margin;
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +156,6 @@ class _ThemeToggle extends StatelessWidget {
             duration: Duration(milliseconds: 180),
             width: expanded ? double.infinity : 52,
             height: expanded ? null : 48,
-            margin: margin,
             padding: EdgeInsets.symmetric(
               horizontal: expanded ? 14 : 0,
               vertical: expanded ? 12 : 0,
@@ -286,6 +184,96 @@ class _ThemeToggle extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Dotted Pattern Painter ────────────────────────────────────────────────────
+
+class _DottedPatternPainter extends CustomPainter {
+  final Color color;
+  final double dotSpacing;
+  final double dotSize;
+
+  _DottedPatternPainter({
+    required this.color,
+    this.dotSpacing = 24,
+    this.dotSize = 2,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    for (double y = 0; y < size.height; y += dotSpacing) {
+      for (double x = 0; x < size.width; x += dotSpacing) {
+        canvas.drawCircle(Offset(x, y), dotSize, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DottedPatternPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.dotSpacing != dotSpacing ||
+        oldDelegate.dotSize != dotSize;
+  }
+}
+
+// ── Full Screen Frame ────────────────────────────────────────────────────────
+
+class _FullScreenFrame extends StatelessWidget {
+  const _FullScreenFrame({required this.child, required this.navbar});
+
+  final Widget child;
+  final Widget navbar;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        margin: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kBorder.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              // Pattern background
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _DottedPatternPainter(
+                    color: kBorder.withValues(alpha: 0.25),
+                    dotSpacing: 20,
+                    dotSize: 1.5,
+                  ),
+                ),
+              ),
+              // Content with navbar
+              Column(
+                children: [
+                  // Navbar at top
+                  Padding(padding: EdgeInsets.all(12), child: navbar),
+                  // Content below
+                  Expanded(child: child),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

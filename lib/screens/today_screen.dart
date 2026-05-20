@@ -14,6 +14,36 @@ const kWarning = Color(0xFFF2B14A);
 const kDanger = Color(0xFFFF5C7A);
 const _kHeaderToCardOffset = 114.0;
 
+BoxDecoration _keycapDecoration({
+  Color? color,
+  Color? borderColor,
+  double radius = 8,
+  bool pressed = false,
+}) {
+  final light = appTheme.isLight;
+  final shadow = light
+      ? Colors.black.withAlpha(185)
+      : Colors.black.withAlpha(210);
+  final ambient = light
+      ? Colors.black.withAlpha(28)
+      : Colors.black.withAlpha(72);
+
+  return BoxDecoration(
+    color: color ?? kSurface,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(
+      color: borderColor ?? (light ? kText1.withAlpha(180) : kBorder),
+      width: 1.6,
+    ),
+    boxShadow: pressed
+        ? [BoxShadow(color: shadow, blurRadius: 0, offset: Offset(3, 3))]
+        : [
+            BoxShadow(color: shadow, blurRadius: 0, offset: Offset(8, 8)),
+            BoxShadow(color: ambient, blurRadius: 16, offset: Offset(0, 8)),
+          ],
+  );
+}
+
 String _formatDateLabel(String date) {
   const months = [
     'Ocak',
@@ -70,11 +100,18 @@ class _TodayScreenState extends State<TodayScreen>
   final Map<int, int> _studiedMinutes = {}; // lessonId → minutes studied
   List<String> _missingChecklistDates = [];
   bool _todayChecklistSubmitted = false;
-  bool _resolvingMissingChecklists = false;
   String _quickNote = '';
   Timer? _clockTimer;
-  List<({String lessonName, String title, DateTime date, int daysLeft})>
-  _upcomingDeadlines = [];
+  List<
+    ({
+      String lessonName,
+      String title,
+      DateTime date,
+      int daysLeft,
+      bool isExam,
+    })
+  >
+  _upcomingEvents = [];
 
   @override
   void initState() {
@@ -125,7 +162,9 @@ class _TodayScreenState extends State<TodayScreen>
       // Determine the start of the current week (Monday)
       final todayDate = DateTime(today.year, today.month, today.day);
       final currentWeekStart = todayDate.subtract(
-        Duration(days: today.weekday == DateTime.sunday ? 6 : today.weekday - 1),
+        Duration(
+          days: today.weekday == DateTime.sunday ? 6 : today.weekday - 1,
+        ),
       );
 
       // Create a new plan if:
@@ -171,10 +210,35 @@ class _TodayScreenState extends State<TodayScreen>
         }
       }
       final now = AppTime.now();
-      final deadlines =
-          <({String lessonName, String title, DateTime date, int daysLeft})>[];
+      final events =
+          <
+            ({
+              String lessonName,
+              String title,
+              DateTime date,
+              int daysLeft,
+              bool isExam,
+            })
+          >[];
       for (final l in raw) {
         final lessonName = (l['name'] as String? ?? '');
+        final examList = (l['exams'] as List?) ?? [];
+        for (final e in examList) {
+          final date = DateTime.tryParse(e['examDate'] as String? ?? '');
+          if (date == null) continue;
+          final daysLeft = date
+              .difference(DateTime(now.year, now.month, now.day))
+              .inDays;
+          if (daysLeft >= 0 && daysLeft <= 60) {
+            events.add((
+              lessonName: lessonName,
+              title: 'Exam',
+              date: date,
+              daysLeft: daysLeft,
+              isExam: true,
+            ));
+          }
+        }
         final dlList = (l['deadlines'] as List?) ?? [];
         for (final d in dlList) {
           final date = DateTime.tryParse(d['deadlineDate'] as String? ?? '');
@@ -183,16 +247,17 @@ class _TodayScreenState extends State<TodayScreen>
               .difference(DateTime(now.year, now.month, now.day))
               .inDays;
           if (daysLeft >= 0 && daysLeft <= 14) {
-            deadlines.add((
+            events.add((
               lessonName: lessonName,
               title: (d['title'] as String?) ?? '',
               date: date,
               daysLeft: daysLeft,
+              isExam: false,
             ));
           }
         }
       }
-      deadlines.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
+      events.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
 
       if (!mounted) return;
       setState(() {
@@ -202,14 +267,9 @@ class _TodayScreenState extends State<TodayScreen>
         _studiedMinutes
           ..clear()
           ..addAll(loadedStudiedMinutes);
-        _upcomingDeadlines = deadlines;
+        _upcomingEvents = events;
         _loading = false;
       });
-      if (missingDates.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _resolveMissingChecklists();
-        });
-      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -284,26 +344,6 @@ class _TodayScreenState extends State<TodayScreen>
 
   String _checklistTitleForDate(String date) =>
       '${_formatDateLabel(date)} checklist';
-
-  Future<void> _resolveMissingChecklists() async {
-    if (_resolvingMissingChecklists || _missingChecklistDates.isEmpty) return;
-    setState(() => _resolvingMissingChecklists = true);
-    var savedAny = false;
-    try {
-      for (final date in List<String>.from(_missingChecklistDates)) {
-        if (!mounted) return;
-        final saved = await _showChecklistSubmitDialog(
-          date: date,
-          blocks: _blocksForDate(date),
-        );
-        if (!saved) break;
-        savedAny = true;
-      }
-    } finally {
-      if (mounted) setState(() => _resolvingMissingChecklists = false);
-    }
-    if (savedAny && mounted) await _load();
-  }
 
   Future<void> _saveTodayChecklist() async {
     final saved = await _showChecklistSubmitDialog(
@@ -590,7 +630,7 @@ class _TodayScreenState extends State<TodayScreen>
                             title: '$greet.',
                             subtitle: subtitle,
                             blocks: _primaryTodayBlocks,
-                            deadlines: _upcomingDeadlines,
+                            events: _upcomingEvents,
                             plannedBlocksForLesson: _plannedBlocksForLesson,
                             plannedMinutesForLesson: _plannedMinutesForLesson,
                             timeRangeForLesson: _timeRangeForLesson,
@@ -604,7 +644,6 @@ class _TodayScreenState extends State<TodayScreen>
                             missingDates: _missingChecklistDates,
                             todayDate: _today,
                             submitted: _todayChecklistSubmitted,
-                            resolvingMissing: _resolvingMissingChecklists,
                             completedBlocks: _completedBlocks,
                             totalBlocks: _totalBlocks,
                             studiedMinutes: _totalStudiedMinutes,
@@ -613,10 +652,11 @@ class _TodayScreenState extends State<TodayScreen>
                             studiedMinutesForLesson: (lessonId) =>
                                 _studiedMinutes[lessonId] ?? 0,
                             plannedMinutesForLesson: _plannedMinutesForLesson,
+                            blocksForDate: _blocksForDate,
                             onMinutesChanged: (lessonId, value) => setState(
                               () => _studiedMinutes[lessonId] = value,
                             ),
-                            onCompleteMissing: _resolveMissingChecklists,
+                            onMissingSaved: _load,
                             onSaveChecklist: _saveTodayChecklist,
                           );
 
@@ -665,7 +705,7 @@ class _TodayLeftColumn extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.blocks,
-    required this.deadlines,
+    required this.events,
     required this.plannedBlocksForLesson,
     required this.plannedMinutesForLesson,
     required this.timeRangeForLesson,
@@ -678,8 +718,16 @@ class _TodayLeftColumn extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<ScheduledBlock> blocks;
-  final List<({String lessonName, String title, DateTime date, int daysLeft})>
-  deadlines;
+  final List<
+    ({
+      String lessonName,
+      String title,
+      DateTime date,
+      int daysLeft,
+      bool isExam,
+    })
+  >
+  events;
   final int Function(int lessonId) plannedBlocksForLesson;
   final int Function(int lessonId) plannedMinutesForLesson;
   final String Function(int lessonId) timeRangeForLesson;
@@ -702,7 +750,7 @@ class _TodayLeftColumn extends StatelessWidget {
           hasReviewForLesson: hasReviewForLesson,
         ),
         SizedBox(height: 18),
-        _ComingUpCard(deadlines: deadlines),
+        _ComingUpCard(events: events),
         SizedBox(height: 14),
         _QuickToolsRow(noteText: noteText, onNoteChanged: onNoteChanged),
       ],
@@ -815,11 +863,7 @@ class _TodayToDoCard extends StatelessWidget {
     return Container(
       constraints: BoxConstraints(minHeight: 210),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
-      decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kBorder),
-      ),
+      decoration: _keycapDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -976,11 +1020,7 @@ class _TimerToolCard extends StatelessWidget {
         child: Ink(
           height: 136,
           padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: kBorder),
-          ),
+          decoration: _keycapDecoration(),
           child: Stack(
             children: [
               Align(
@@ -1048,11 +1088,7 @@ class _QuickToolCard extends StatelessWidget {
         child: Ink(
           height: 136,
           padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: kBorder),
-          ),
+          decoration: _keycapDecoration(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1094,7 +1130,6 @@ class _ChecklistPanel extends StatelessWidget {
     required this.missingDates,
     required this.todayDate,
     required this.submitted,
-    required this.resolvingMissing,
     required this.completedBlocks,
     required this.totalBlocks,
     required this.studiedMinutes,
@@ -1102,8 +1137,9 @@ class _ChecklistPanel extends StatelessWidget {
     required this.progress,
     required this.studiedMinutesForLesson,
     required this.plannedMinutesForLesson,
+    required this.blocksForDate,
     required this.onMinutesChanged,
-    required this.onCompleteMissing,
+    required this.onMissingSaved,
     required this.onSaveChecklist,
   });
 
@@ -1111,7 +1147,6 @@ class _ChecklistPanel extends StatelessWidget {
   final List<String> missingDates;
   final String todayDate;
   final bool submitted;
-  final bool resolvingMissing;
   final int completedBlocks;
   final int totalBlocks;
   final int studiedMinutes;
@@ -1119,29 +1154,26 @@ class _ChecklistPanel extends StatelessWidget {
   final double progress;
   final int Function(int lessonId) studiedMinutesForLesson;
   final int Function(int lessonId) plannedMinutesForLesson;
+  final List<ScheduledBlock> Function(String date) blocksForDate;
   final void Function(int lessonId, int value) onMinutesChanged;
-  final VoidCallback onCompleteMissing;
+  final Future<void> Function() onMissingSaved;
   final VoidCallback onSaveChecklist;
 
   @override
   Widget build(BuildContext context) {
     if (missingDates.isNotEmpty) {
-      return _StackedChecklistView(
+      return _MissingChecklistTabsPanel(
         missingDates: missingDates,
         todayDate: todayDate,
-        resolving: resolvingMissing,
-        onFillMissing: onCompleteMissing,
+        blocksForDate: blocksForDate,
+        onSaved: onMissingSaved,
       );
     }
 
     return Container(
       constraints: BoxConstraints(minHeight: 620),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
-      decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kBorder),
-      ),
+      decoration: _keycapDecoration(),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1207,150 +1239,239 @@ class _ChecklistPanel extends StatelessWidget {
   }
 }
 
-class _StackedChecklistView extends StatelessWidget {
-  const _StackedChecklistView({
+class _MissingChecklistTabsPanel extends StatefulWidget {
+  const _MissingChecklistTabsPanel({
     required this.missingDates,
     required this.todayDate,
-    required this.resolving,
-    required this.onFillMissing,
+    required this.blocksForDate,
+    required this.onSaved,
   });
 
-  final List<String> missingDates; // oldest first
+  final List<String> missingDates;
   final String todayDate;
-  final bool resolving;
-  final VoidCallback onFillMissing;
+  final List<ScheduledBlock> Function(String date) blocksForDate;
+  final Future<void> Function() onSaved;
 
-  static const double _kPeekVisible = 44.0;
-  static const double _kFrontOverlap = 8.0;
+  @override
+  State<_MissingChecklistTabsPanel> createState() =>
+      _MissingChecklistTabsPanelState();
+}
+
+class _MissingChecklistTabsPanelState
+    extends State<_MissingChecklistTabsPanel> {
+  late String _activeDate;
+  final Map<int, int> _studiedMinutes = {};
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeDate = widget.missingDates.first;
+  }
+
+  @override
+  void didUpdateWidget(covariant _MissingChecklistTabsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.missingDates.contains(_activeDate)) {
+      _activeDate = widget.missingDates.first;
+      _studiedMinutes.clear();
+      _error = null;
+    }
+  }
+
+  List<String> get _tabs => [...widget.missingDates, widget.todayDate];
+
+  int _plannedMinutesForLesson(List<ScheduledBlock> blocks, int lessonId) =>
+      blocks
+          .where((b) => b.lessonId == lessonId)
+          .fold(0, (s, b) => s + b.blockCount) *
+      30;
+
+  Future<void> _submit() async {
+    final blocks = widget.blocksForDate(_activeDate);
+    final uniqueBlocks = <ScheduledBlock>[];
+    final seen = <int>{};
+    for (final block in blocks) {
+      if (seen.add(block.lessonId)) uniqueBlocks.add(block);
+    }
+    final items = <Map<String, dynamic>>[];
+    for (final block in uniqueBlocks) {
+      final planned = blocks
+          .where((b) => b.lessonId == block.lessonId)
+          .fold(0, (sum, b) => sum + b.blockCount);
+      final completedBlocks = ((_studiedMinutes[block.lessonId] ?? 0) / 30)
+          .round()
+          .clamp(0, planned)
+          .toInt();
+      if (items.any((item) => item['lessonId'] == block.lessonId)) continue;
+      items.add({
+        'lessonId': block.lessonId,
+        'plannedBlocks': planned,
+        'completedBlocks': completedBlocks,
+        'delayed': completedBlocks < planned,
+      });
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ApiClient.submitChecklist(
+        date: _activeDate,
+        stressLevel: 3,
+        fatigueLevel: 3,
+        items: items,
+      );
+      if (!mounted) return;
+      await widget.onSaved();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = e.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // backCards[0] = second-oldest missing (closest to front card)
-    // backCards[last] = today (farthest back)
-    final backCards = [...missingDates.skip(1), todayDate];
+    final blocks = widget.blocksForDate(_activeDate);
+    final uniqueBlocks = <ScheduledBlock>[];
+    final seen = <int>{};
+    for (final block in blocks) {
+      if (seen.add(block.lessonId)) uniqueBlocks.add(block);
+    }
+    final isTodayTab = _activeDate == widget.todayDate;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Back cards rendered from most-back (lowest z) to closest-to-front (highest z).
-            // Each card peeks below the card in front of it by _kPeekVisible pixels.
-            for (int i = backCards.length - 1; i >= 0; i--)
-              _buildPeekCard(
-                date: backCards[i],
-                peekLevel: i + 1,
-                isToday: i == backCards.length - 1,
-              ),
-            // Front card (oldest missing) — rendered last = highest z-order.
-            _buildFrontCard(),
-          ],
-        ),
-        // Reserve layout space so peek cards don't overlap following widgets.
-        SizedBox(height: backCards.length * _kPeekVisible + 4),
-      ],
-    );
-  }
-
-  Widget _buildPeekCard({
-    required String date,
-    required int peekLevel,
-    required bool isToday,
-  }) {
-    // bottom: -(_kPeekVisible * peekLevel) places the card so that exactly
-    // _kPeekVisible pixels are visible below the front card, and _kFrontOverlap
-    // pixels are hidden behind the card in front of it.
-    return Positioned(
-      bottom: -(_kPeekVisible * peekLevel),
-      left: 0,
-      right: 0,
-      height: _kFrontOverlap + _kPeekVisible,
-      child: Container(
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: kBorder),
-        ),
-        child: Align(
-          alignment: Alignment.bottomLeft,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+    return Container(
+      constraints: BoxConstraints(minHeight: 620),
+      padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: _keycapDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(
-              children: [
-                Icon(
-                  isToday ? Icons.today_outlined : Icons.event_note_outlined,
-                  color: kText2,
-                  size: 14,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isToday ? 'Bugün' : _formatDateLabel(date),
-                    style: TextStyle(
-                      color: kText2,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+              children: _tabs.map((date) {
+                final isToday = date == widget.todayDate;
+                final enabled = !isToday;
+                final selected = date == _activeDate;
+                return Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: enabled
+                        ? () => setState(() {
+                            _activeDate = date;
+                            _studiedMinutes.clear();
+                            _error = null;
+                          })
+                        : null,
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 150),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? kAccent.withAlpha(38)
+                            : kBorder.withAlpha(45),
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: selected ? kAccent : kBorder.withAlpha(120),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isToday
+                                ? Icons.lock_outline_rounded
+                                : Icons.event_note_outlined,
+                            color: selected ? kAccent : kText2,
+                            size: 13,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            isToday ? 'Bugün' : _formatDateLabel(date),
+                            style: TextStyle(
+                              color: selected ? kAccent : kText2,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                Icon(Icons.lock_outline_rounded, color: kBorder, size: 13),
-              ],
+                );
+              }).toList(),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFrontCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-      decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(28),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
+          SizedBox(height: 18),
           _PanelTitle(
-            icon: Icons.lock_clock_outlined,
-            title: _formatDateLabel(missingDates.first),
+            icon: Icons.checklist_rounded,
+            title: isTodayTab
+                ? 'Bugün kilitli'
+                : '${_formatDateLabel(_activeDate)} checklist',
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 8),
           Text(
-            'Bugünün checklistine geçmek için önce bu günü doldurman gerekiyor.',
-            style: TextStyle(color: kText2, fontSize: 13),
+            isTodayTab
+                ? 'Önce geçmiş günlerin checklistlerini doldurman gerekiyor.'
+                : 'Bu günü kapatınca sıradaki eksik gün açılır.',
+            style: TextStyle(color: kText2, fontSize: 12),
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: resolving ? null : onFillMissing,
-            icon: resolving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.edit_note_rounded, size: 18),
-            label: Text(resolving ? 'Açılıyor...' : 'Doldur'),
-            style: FilledButton.styleFrom(
-              backgroundColor: kAccent,
-              disabledBackgroundColor: kBorder,
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+          Divider(height: 30, color: kBorder),
+          if (blocks.isEmpty)
+            _EmptyPanelState(
+              icon: Icons.event_available_outlined,
+              title: 'Bu gün boş',
+              subtitle: 'Bu tarih için planlanmış çalışma bloğu yok.',
+            )
+          else
+            ...List.generate(uniqueBlocks.length, (i) {
+              final block = uniqueBlocks[i];
+              final planned = _plannedMinutesForLesson(blocks, block.lessonId);
+              return _ChecklistLessonRow(
+                block: block,
+                studiedMinutes: _studiedMinutes[block.lessonId] ?? 0,
+                plannedMinutes: planned,
+                isLast: i == uniqueBlocks.length - 1,
+                enabled: true,
+                onMinutesChanged: (value) =>
+                    setState(() => _studiedMinutes[block.lessonId] = value),
+              );
+            }),
+          if (_error != null) ...[
+            SizedBox(height: 12),
+            Text(_error!, style: TextStyle(color: kDanger, fontSize: 12)),
+          ],
+          SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _submit,
+              icon: _saving
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(Icons.check_rounded, size: 18),
+              label: Text(_saving ? 'Kaydediliyor...' : 'Bu günü kaydet'),
+              style: FilledButton.styleFrom(
+                backgroundColor: kAccent,
+                padding: EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
@@ -1442,32 +1563,55 @@ class _ChecklistLessonRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final checked = plannedMinutes > 0 && studiedMinutes >= plannedMinutes;
+    final color = lessonColor(block.lessonId);
+    final blockLabel =
+        '${block.blockCount} block${block.blockCount > 1 ? 's' : ''}';
+    final durationLabel = _formatMinutes(block.blockCount * 30);
 
     return Padding(
-      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-      child: Container(
-        constraints: BoxConstraints(minHeight: 48),
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: kBorder.withAlpha(60),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: checked ? kAccent.withAlpha(90) : kBorder),
-        ),
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
+      child: Opacity(
+        opacity: enabled ? 1 : 0.62,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Padding(
+              padding: EdgeInsets.only(top: 5),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+            ),
+            SizedBox(width: 14),
             Expanded(
-              child: Opacity(
-                opacity: enabled ? 1 : 0.62,
-                child: Text(
-                  block.lessonName,
-                  style: TextStyle(
-                    color: kText1,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    block.lessonName,
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  SizedBox(height: 8),
+                  Text(
+                    '${block.startTime} - ${block.endTime} · $blockLabel · $durationLabel',
+                    style: TextStyle(
+                      color: kText2,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
             SizedBox(width: 12),
@@ -2020,21 +2164,25 @@ class _RingPainter extends CustomPainter {
 // ── Coming up card ────────────────────────────────────────────────────────────
 
 class _ComingUpCard extends StatelessWidget {
-  const _ComingUpCard({required this.deadlines});
+  const _ComingUpCard({required this.events});
 
-  final List<({String lessonName, String title, DateTime date, int daysLeft})>
-  deadlines;
+  final List<
+    ({
+      String lessonName,
+      String title,
+      DateTime date,
+      int daysLeft,
+      bool isExam,
+    })
+  >
+  events;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       constraints: BoxConstraints(minHeight: 250),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
-      decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kBorder),
-      ),
+      decoration: _keycapDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2043,7 +2191,7 @@ class _ComingUpCard extends StatelessWidget {
             title: 'Upcoming events',
           ),
           SizedBox(height: 14),
-          if (deadlines.isEmpty)
+          if (events.isEmpty)
             Padding(
               padding: EdgeInsets.only(bottom: 10),
               child: _EmptyPanelState(
@@ -2052,9 +2200,9 @@ class _ComingUpCard extends StatelessWidget {
                 subtitle: 'Yakındaki deadline veya etkinlik görünmüyor.',
               ),
             ),
-          ...deadlines.map((d) {
+          ...events.map((d) {
             final Color urgencyColor;
-            final String daysLabel;
+            String daysLabel;
             if (d.daysLeft == 0) {
               urgencyColor = kDanger;
               daysLabel = 'Today';
@@ -2068,6 +2216,22 @@ class _ComingUpCard extends StatelessWidget {
               urgencyColor = kText2;
               daysLabel = 'in ${d.daysLeft}d';
             }
+            if (d.isExam && d.daysLeft > 1) {
+              daysLabel = '${d.daysLeft}d to exam';
+            } else if (d.isExam && d.daysLeft == 1) {
+              daysLabel = 'Tomorrow exam';
+            } else if (d.isExam) {
+              daysLabel = 'Today exam';
+            }
+            final title = d.isExam
+                ? '${d.lessonName} exam'
+                : d.title.isNotEmpty
+                ? d.title
+                : d.lessonName;
+            final subtitle = [
+              if (!d.isExam && d.title.isNotEmpty) d.lessonName,
+              DateFormat('dd MMM yyyy').format(d.date),
+            ].join(' · ');
 
             return Padding(
               padding: EdgeInsets.only(bottom: 10),
@@ -2087,7 +2251,7 @@ class _ComingUpCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          d.title.isNotEmpty ? d.title : d.lessonName,
+                          title,
                           style: TextStyle(
                             color: kText1,
                             fontSize: 14,
@@ -2095,7 +2259,7 @@ class _ComingUpCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          d.title.isNotEmpty ? d.lessonName : '',
+                          subtitle,
                           style: TextStyle(color: kText2, fontSize: 12),
                         ),
                       ],

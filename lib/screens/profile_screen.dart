@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/app_time.dart';
+import '../models/lesson_model.dart';
 import '../theme.dart';
 import 'new_term_screen.dart';
 
@@ -24,10 +25,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _loading = true;
   bool _isTestMode = false;
   List<Map<String, dynamic>> _checklistHistory = [];
+  List<Lesson> _lessons = [];
 
   String _preferredStudyTime = 'morning';
   String _studyStyle = 'normal';
-  final List<Map<String, dynamic>> _busySlots = [];
   bool _saving = false;
 
   @override
@@ -43,31 +44,48 @@ class _ProfileScreenState extends State<ProfileScreen>
         ApiClient.getMe(),
         ApiClient.getMode(),
         ApiClient.getChecklistHistory(),
+        ApiClient.getLessons(),
       ]);
       if (!mounted) return;
       final user = results[0] as Map<String, dynamic>;
       final modeInfo = results[1] as Map<String, dynamic>;
       final history = results[2] as List<Map<String, dynamic>>;
+      final lessons =
+          (results[3] as List)
+              .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
+              .toList()
+            ..sort((a, b) {
+              final da = _daysToExam(a) ?? 9999;
+              final db = _daysToExam(b) ?? 9999;
+              return da.compareTo(db);
+            });
       setState(() {
         _user = user;
         _preferredStudyTime =
             user['preferredStudyTime']?.toString() ?? 'morning';
         _studyStyle = user['studyStyle']?.toString() ?? 'normal';
-        _busySlots
-          ..clear()
-          ..addAll(
-            ((user['busySlots'] as List?) ?? [])
-                .map((s) => Map<String, dynamic>.from(s as Map))
-                .toList(),
-          );
         _isTestMode = modeInfo['mode']?.toString() == 'test';
         _checklistHistory = history;
+        _lessons = lessons;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
+  }
+
+  int? _daysToExam(Lesson lesson) {
+    int? best;
+    final now = AppTime.now();
+    for (final exam in lesson.exams) {
+      try {
+        final date = DateTime.parse(exam.examDate);
+        final diff = date.difference(now).inDays;
+        if (best == null || diff < best) best = diff;
+      } catch (_) {}
+    }
+    return best;
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -85,20 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       });
       if (!mounted) return;
       _snack('Preferences saved!');
-    } catch (e) {
-      if (!mounted) return;
-      _snack(e.toString().replaceAll('Exception: ', ''), error: true);
-    }
-    if (!mounted) return;
-    setState(() => _saving = false);
-  }
-
-  Future<void> _saveBusySlots() async {
-    setState(() => _saving = true);
-    try {
-      await ApiClient.updateBusySlots(_busySlots);
-      if (!mounted) return;
-      _snack('Busy slots saved!');
     } catch (e) {
       if (!mounted) return;
       _snack(e.toString().replaceAll('Exception: ', ''), error: true);
@@ -145,33 +149,15 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _startNewTerm() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const NewTermScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NewTermScreen()));
   }
 
   Future<void> _logout() async {
     await ApiClient.clearToken();
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
-  }
-
-  void _openBusySlotSheet({Map<String, dynamic>? existing, int? editIndex}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _BusySlotSheet(
-        existing: existing,
-        editIndex: editIndex,
-        busySlots: _busySlots,
-        onChanged: () => setState(() {}),
-
-      ),
-    );
   }
 
   @override
@@ -385,151 +371,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                   ),
                   SizedBox(height: 24),
-                  // Busy slots
-                  Row(
-                    children: [
-                      Text(
-                        'BUSY SLOTS · ${_busySlots.length}',
-                        style: TextStyle(
-                          color: kText2,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      Spacer(),
-                      GestureDetector(
-                        onTap: () => _openBusySlotSheet(),
-                        child: Row(
-                          children: [
-                            Icon(Icons.add, size: 12, color: kAccent),
-                            SizedBox(width: 4),
-                            Text(
-                              'Add',
-                              style: TextStyle(
-                                color: kAccent,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  if (_busySlots.isEmpty)
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        'No busy slots added yet.',
-                        style: TextStyle(color: kText2, fontSize: 13),
-                      ),
-                    )
-                  else
-                    Column(
-                      children: List.generate(_busySlots.length, (i) {
-                        final slot = _busySlots[i];
-                        final dayIdx = (slot['dayOfWeek'] as int? ?? 1) - 1;
-                        const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-                        final dayLetter = dayIdx >= 0 && dayIdx < 7
-                            ? dayLetters[dayIdx]
-                            : '?';
-                        final fatigue =
-                            (slot['fatigueLevel'] as num?)?.toInt() ?? 3;
-                        final label = slot['label']?.toString() ?? '';
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: 6),
-                          child: GestureDetector(
-                            onTap: () => _openBusySlotSheet(
-                              existing: slot,
-                              editIndex: i,
-                            ),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: kSurface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: kBorder),
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 28,
-                                    child: Text(
-                                      dayLetter,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: kText2,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (label.isNotEmpty)
-                                          Text(
-                                            label,
-                                            style: TextStyle(
-                                              color: kText1,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        Text(
-                                          '${slot['startTime']} – ${slot['endTime']}',
-                                          style: TextStyle(
-                                            color: kText2,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  _FatigueDots(level: fatigue),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _saving ? null : _saveBusySlots,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kAccent,
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _saving
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              'Save busy slots',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                    ),
+                  _SectionLabel('Dersler'),
+                  SizedBox(height: 10),
+                  _ProfileLessonsPanel(
+                    lessons: _lessons,
+                    daysToExam: _daysToExam,
                   ),
                   SizedBox(height: 24),
+                  // Checklist geçmişi ısı haritası
+                  if (_isTestMode && _checklistHistory.isNotEmpty) ...[
+                    _SectionLabel('Checklist geçmişi'),
+                    SizedBox(height: 10),
+                    _ChecklistHeatmap(history: _checklistHistory),
+                    SizedBox(height: 24),
+                  ],
                   // Dönem yönetimi
                   _SectionLabel('Dönem'),
                   SizedBox(height: 8),
@@ -579,13 +434,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _SectionLabel('Developer'),
                     SizedBox(height: 8),
                     _TestModeCard(onSave: _snack),
-                    SizedBox(height: 24),
-                  ],
-                  // Checklist geçmişi ısı haritası
-                  if (_isTestMode && _checklistHistory.isNotEmpty) ...[
-                    _SectionLabel('Checklist geçmişi'),
-                    SizedBox(height: 10),
-                    _ChecklistHeatmap(history: _checklistHistory),
                     SizedBox(height: 24),
                   ],
                   // Logout
@@ -802,37 +650,316 @@ class _StyleCard extends StatelessWidget {
   }
 }
 
-// ── Fatigue dots ──────────────────────────────────────────────────────────────
+class _ProfileLessonsPanel extends StatefulWidget {
+  const _ProfileLessonsPanel({required this.lessons, required this.daysToExam});
 
-class _FatigueDots extends StatelessWidget {
-  const _FatigueDots({required this.level});
+  final List<Lesson> lessons;
+  final int? Function(Lesson lesson) daysToExam;
 
-  final int level;
+  @override
+  State<_ProfileLessonsPanel> createState() => _ProfileLessonsPanelState();
+}
+
+class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final Color dotColor;
-    if (level >= 4) {
-      dotColor = _kDanger;
-    } else if (level >= 3) {
-      dotColor = _kWarning;
-    } else {
-      dotColor = kAccent;
+    return Container(
+      height: 612,
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: widget.lessons.isEmpty
+          ? Center(
+              child: Text(
+                'Henüz ders eklenmemiş.',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
+            )
+          : Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: widget.lessons.length > 4,
+              child: ListView.separated(
+                controller: _scrollController,
+                padding: EdgeInsets.zero,
+                itemCount: widget.lessons.length,
+                separatorBuilder: (_, _) => SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final lesson = widget.lessons[index];
+                  return _ProfileLessonRow(
+                    lesson: lesson,
+                    daysToExam: widget.daysToExam(lesson),
+                  );
+                },
+              ),
+            ),
+    );
+  }
+}
+
+class _ProfileLessonRow extends StatelessWidget {
+  const _ProfileLessonRow({required this.lesson, required this.daysToExam});
+
+  final Lesson lesson;
+  final int? daysToExam;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = int.tryParse(lesson.id) ?? 0;
+    final color = lessonColor(id);
+    final initials = lesson.lessonName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase())
+        .take(2)
+        .join('');
+
+    String priority = 'LOW';
+    Color priorityColor = kText2;
+    if (daysToExam != null) {
+      if (daysToExam! <= 3) {
+        priority = 'CRITICAL';
+        priorityColor = _kDanger;
+      } else if (daysToExam! <= 7) {
+        priority = 'HIGH';
+        priorityColor = _kWarning;
+      } else if (daysToExam! <= 14) {
+        priority = 'MEDIUM';
+        priorityColor = kAccent;
+      }
     }
 
+    final examValue = daysToExam == null || lesson.exams.isEmpty
+        ? '—'
+        : lesson.exams.first.dateOnly;
+    final totalDelay = lesson.keyfiDelayCount + lesson.zorunluDelayCount;
+    final needsMore = lesson.needsMoreTime == 1
+        ? '+1'
+        : lesson.needsMoreTime == -1
+        ? '-1'
+        : '0';
+
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(38),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: color.withAlpha(85)),
+                ),
+                child: Center(
+                  child: Text(
+                    initials.isEmpty ? '?' : initials,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lesson.lessonName,
+                      style: TextStyle(
+                        color: kText1,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _ProfileDiffBars(
+                          difficulty: lesson.difficulty,
+                          color: color,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'difficulty ${lesson.difficulty}',
+                          style: TextStyle(color: kText2, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    priority,
+                    style: TextStyle(
+                      color: priorityColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  if (daysToExam != null)
+                    Text(
+                      '${daysToExam!.clamp(0, 9999)}d to exam',
+                      style: TextStyle(
+                        color: kText2,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, thickness: 0.5, color: kBorder),
+          ),
+          Row(
+            children: [
+              _ProfilePico(
+                icon: Icons.calendar_today_outlined,
+                label: 'Exam',
+                value: examValue,
+              ),
+              _ProfilePico(
+                icon: Icons.repeat,
+                label: 'Delays',
+                value: '$totalDelay',
+                sub: lesson.keyfiDelayCount > 0 ? 'slot mode' : null,
+                tone: totalDelay >= 3 ? _kWarning : null,
+              ),
+              _ProfilePico(
+                icon: Icons.auto_awesome_outlined,
+                label: 'Need more',
+                value: needsMore,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileDiffBars extends StatelessWidget {
+  const _ProfileDiffBars({required this.difficulty, required this.color});
+
+  final int difficulty;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    const heights = [6.0, 8.0, 10.0, 12.0, 14.0];
     return Row(
       children: List.generate(5, (i) {
-        final filled = i < level;
+        final filled = i < difficulty;
         return Container(
-          width: 4,
-          height: 14,
+          width: 3,
+          height: heights[i],
           margin: EdgeInsets.only(right: 2),
           decoration: BoxDecoration(
-            color: filled ? dotColor : kBorder,
+            color: filled ? color : kBorder,
             borderRadius: BorderRadius.circular(1),
           ),
         );
       }),
+    );
+  }
+}
+
+class _ProfilePico extends StatelessWidget {
+  const _ProfilePico({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.sub,
+    this.tone,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? sub;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: kText2),
+              SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: kText2,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              color: tone ?? kText1,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (sub != null)
+            Text(
+              sub!,
+              style: TextStyle(
+                color: kAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1347,251 +1474,6 @@ class _LegendDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(3),
-      ),
-    );
-  }
-}
-
-// ── Busy slot sheet ───────────────────────────────────────────────────────────
-
-class _BusySlotSheet extends StatefulWidget {
-  const _BusySlotSheet({
-    this.existing,
-    this.editIndex,
-    required this.busySlots,
-    required this.onChanged,
-  });
-
-  final Map<String, dynamic>? existing;
-  final int? editIndex;
-  final List<Map<String, dynamic>> busySlots;
-  final VoidCallback onChanged;
-
-  @override
-  State<_BusySlotSheet> createState() => _BusySlotSheetState();
-}
-
-class _BusySlotSheetState extends State<_BusySlotSheet> {
-  int _dayOfWeek = 1;
-  late TextEditingController _startCtrl;
-  late TextEditingController _endCtrl;
-  int _fatigue = 3;
-
-  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  @override
-  void initState() {
-    super.initState();
-    _dayOfWeek = widget.existing?['dayOfWeek'] as int? ?? 1;
-    _startCtrl = TextEditingController(
-      text: widget.existing?['startTime']?.toString() ?? '09:00',
-    );
-    _endCtrl = TextEditingController(
-      text: widget.existing?['endTime']?.toString() ?? '11:00',
-    );
-    _fatigue = (widget.existing?['fatigueLevel'] as num?)?.toInt() ?? 3;
-  }
-
-  @override
-  void dispose() {
-    _startCtrl.dispose();
-    _endCtrl.dispose();
-    super.dispose();
-  }
-
-  bool _isValid() {
-    final re = RegExp(r'^\d{2}:\d{2}$');
-    return re.hasMatch(_startCtrl.text.trim()) &&
-        re.hasMatch(_endCtrl.text.trim());
-  }
-
-  Future<void> _confirm() async {
-    if (!_isValid()) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Time format must be HH:MM')));
-      return;
-    }
-    final slot = {
-      'dayOfWeek': _dayOfWeek,
-      'startTime': _startCtrl.text.trim(),
-      'endTime': _endCtrl.text.trim(),
-      'fatigueLevel': _fatigue,
-    };
-    if (widget.editIndex != null) {
-      widget.busySlots[widget.editIndex!] = slot;
-    } else {
-      widget.busySlots.add(slot);
-    }
-    widget.onChanged();
-    Navigator.pop(context);
-  }
-
-  void _delete() {
-    if (widget.editIndex != null) {
-      widget.busySlots.removeAt(widget.editIndex!);
-      widget.onChanged();
-    }
-    Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: kBorder,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            SizedBox(height: 20),
-            Row(
-              children: [
-                Text(
-                  widget.editIndex != null ? 'Edit busy slot' : 'Add busy slot',
-                  style: TextStyle(
-                    color: kText1,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Spacer(),
-                if (widget.editIndex != null)
-                  GestureDetector(
-                    onTap: _delete,
-                    child: Icon(Icons.delete_outline, color: _kDanger),
-                  ),
-              ],
-            ),
-            SizedBox(height: 20),
-            Text(
-              'DAY',
-              style: TextStyle(
-                color: kText2,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-              ),
-            ),
-            SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: List.generate(7, (i) {
-                final selected = i + 1 == _dayOfWeek;
-                return GestureDetector(
-                  onTap: () => setState(() => _dayOfWeek = i + 1),
-                  child: AnimatedContainer(
-                    duration: Duration(milliseconds: 120),
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: selected ? kAccent : kBorder,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _dayNames[i],
-                      style: TextStyle(
-                        color: selected ? Colors.white : kText2,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-            SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _startCtrl,
-                    style: TextStyle(color: kText1),
-                    decoration: InputDecoration(
-                      labelText: 'Start',
-                      hintText: '09:00',
-                      hintStyle: TextStyle(color: kText2),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _endCtrl,
-                    style: TextStyle(color: kText1),
-                    decoration: InputDecoration(
-                      labelText: 'End',
-                      hintText: '11:00',
-                      hintStyle: TextStyle(color: kText2),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            Row(
-              children: [
-                Text('Fatigue', style: TextStyle(color: kText2, fontSize: 13)),
-                SizedBox(width: 12),
-                ...List.generate(5, (i) {
-                  final n = i + 1;
-                  final sel = n == _fatigue;
-                  return GestureDetector(
-                    onTap: () => setState(() => _fatigue = n),
-                    child: AnimatedContainer(
-                      duration: Duration(milliseconds: 120),
-                      width: 36,
-                      height: 36,
-                      margin: EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                        color: sel ? kAccent : kBorder,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$n',
-                          style: TextStyle(
-                            color: sel ? Colors.white : kText2,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-            SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _confirm,
-                style: FilledButton.styleFrom(
-                  backgroundColor: kAccent,
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                        widget.editIndex != null ? 'Update' : 'Add',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
