@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
 import '../core/app_time.dart';
@@ -59,6 +57,13 @@ IconData _busyIconForKey(String key) {
   return Icons.bolt_rounded;
 }
 
+String? _busySlotDateKey(dynamic value) {
+  if (value == null) return null;
+  final text = value.toString();
+  if (text.length >= 10) return text.substring(0, 10);
+  return text;
+}
+
 /// Kullanıcının meşgul slotu (UI katmanı için).
 class _BusySlot {
   final int dayOfWeek; // 1=Pzt … 7=Paz
@@ -68,7 +73,6 @@ class _BusySlot {
   final String iconKey;
   final bool isRoutine;
   final String? date;
-  final bool localOnly;
 
   _BusySlot({
     required this.dayOfWeek,
@@ -78,7 +82,6 @@ class _BusySlot {
     required this.iconKey,
     required this.isRoutine,
     this.date,
-    this.localOnly = false,
   });
 
   factory _BusySlot.fromJson(Map<String, dynamic> j) => _BusySlot(
@@ -88,8 +91,7 @@ class _BusySlot {
     fatigueLevel: (j['fatigueLevel'] as num? ?? 1).toInt(),
     iconKey: j['iconKey']?.toString() ?? 'energy',
     isRoutine: j['isRoutine'] as bool? ?? j['date'] == null,
-    date: j['date']?.toString(),
-    localOnly: j['localOnly'] as bool? ?? false,
+    date: _busySlotDateKey(j['date']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -100,7 +102,6 @@ class _BusySlot {
     'iconKey': iconKey,
     'isRoutine': isRoutine,
     if (date != null) 'date': date,
-    if (localOnly) 'localOnly': true,
   };
 
   bool appliesToDate(String dateKey) {
@@ -125,7 +126,6 @@ class _WeekScreenState extends State<WeekScreen>
 
   WeeklyPlan? _plan;
   List<_BusySlot> _busySlots = [];
-  List<_BusySlot>? _calendarBusySlots;
   List<Lesson> _lessons = [];
   bool _loading = true;
   int _selectedDayIndex = 0;
@@ -135,10 +135,6 @@ class _WeekScreenState extends State<WeekScreen>
   Timer? _clockTimer;
 
   final _vScroll = ScrollController();
-
-  static const _calendarBusyPrefsKey = 'calendar_busy_slots_v1';
-
-  List<_BusySlot> get _safeCalendarBusySlots => _calendarBusySlots ?? const [];
 
   static const _dowLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _monthShorts = [
@@ -225,7 +221,6 @@ class _WeekScreenState extends State<WeekScreen>
         ApiClient.getWeekPlan(),
         ApiClient.getMe(),
         ApiClient.getLessons(),
-        SharedPreferences.getInstance(),
       ]);
       if (!mounted) return;
       final planData = Map<String, dynamic>.from(results[0] as Map);
@@ -233,10 +228,6 @@ class _WeekScreenState extends State<WeekScreen>
       final lessonList = (results[2] as List)
           .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
           .toList();
-      final prefs = results[3] as SharedPreferences;
-      final localBusy = _decodeCalendarBusySlots(
-        prefs.getString(_calendarBusyPrefsKey),
-      );
       final busyList = ((userData['busySlots'] as List?) ?? [])
           .map((b) => _BusySlot.fromJson(b as Map<String, dynamic>))
           .toList();
@@ -244,7 +235,6 @@ class _WeekScreenState extends State<WeekScreen>
       setState(() {
         _plan = WeeklyPlan.fromJson(planData);
         _busySlots = busyList;
-        _calendarBusySlots = localBusy;
         _lessons = lessonList;
         _lastToday = today;
         _loading = false;
@@ -253,29 +243,6 @@ class _WeekScreenState extends State<WeekScreen>
       if (!mounted) return;
       setState(() => _loading = false);
     }
-  }
-
-  List<_BusySlot> _decodeCalendarBusySlots(String? raw) {
-    if (raw == null || raw.isEmpty) return [];
-    try {
-      final list = json.decode(raw) as List;
-      return list
-          .map((item) => _BusySlot.fromJson(Map<String, dynamic>.from(item)))
-          .toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<void> _saveCalendarBusySlot(_BusySlot slot) async {
-    final prefs = await SharedPreferences.getInstance();
-    final updated = [..._safeCalendarBusySlots, slot];
-    await prefs.setString(
-      _calendarBusyPrefsKey,
-      json.encode(updated.map((slot) => slot.toJson()).toList()),
-    );
-    if (!mounted) return;
-    setState(() => _calendarBusySlots = updated);
   }
 
   List<_BusySlot> _busySlotsForDate(String dateKey) {
@@ -289,9 +256,6 @@ class _WeekScreenState extends State<WeekScreen>
       if (seen.add(key)) slots.add(slot);
     }
 
-    for (final slot in _safeCalendarBusySlots) {
-      addSlot(slot);
-    }
     for (final slot in _busySlots) {
       addSlot(slot);
     }
@@ -773,10 +737,7 @@ class _WeekScreenState extends State<WeekScreen>
       barrierColor: Colors.black.withAlpha(170),
       builder: (_) => _CalendarEntryDialog(date: date),
     );
-    if (result is _BusySlot) {
-      await _saveCalendarBusySlot(result);
-      await _load();
-    } else if (result == true) {
+    if (result == true) {
       await _load();
     }
   }
@@ -1372,19 +1333,15 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
           iconKey: _busyIconKey,
           isRoutine: _isRoutineBusy,
           date: _isRoutineBusy ? null : _dateKey,
-          localOnly: true,
         );
-        if (_isRoutineBusy) {
-          final user = await ApiClient.getMe();
-          final slots = ((user['busySlots'] as List?) ?? [])
-              .map((slot) => Map<String, dynamic>.from(slot as Map))
-              .toList();
-          slots.add(slot.toJson()..remove('localOnly'));
-          await ApiClient.updateBusySlots(slots);
-          await ApiClient.recalculate();
-        }
+        final user = await ApiClient.getMe();
+        final slots = ((user['busySlots'] as List?) ?? [])
+            .map((slot) => Map<String, dynamic>.from(slot as Map))
+            .toList();
+        slots.add(slot.toJson());
+        await ApiClient.updateBusySlots(slots);
         if (!mounted) return;
-        Navigator.pop(context, slot);
+        Navigator.pop(context, true);
         return;
       } else if (_type == _CalendarEntryType.exam) {
         await ApiClient.addExam(int.parse(_selectedLesson!.id), _dateKey);
