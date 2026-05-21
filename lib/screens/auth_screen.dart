@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import 'main_scaffold.dart';
+import 'onboarding_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -71,7 +72,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  /// Yeni kullanıcı kaydı oluşturur; başarılı olursa ana sayfaya geçer.
+  /// Yeni kullanıcı kaydı oluşturur; başarılı olursa onboarding akışına geçer.
   Future<void> _register() async {
     if (!_registerKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -84,7 +85,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => MainScaffold()),
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       );
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));

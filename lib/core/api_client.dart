@@ -270,13 +270,13 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// BusySlot değişikliği sonrası planı yeniden hesaplar (POST /planner/recalculate).
-  static Future<Map<String, dynamic>> recalculate() async {
+  /// Planı verilen tarihten (yoksa bugünden) sonrası için yeniden hesaplar.
+  static Future<Map<String, dynamic>> recalculate({String? fromDate}) async {
     final h = await _authHeaders();
     final res = await http.post(
       Uri.parse('$_base/planner/recalculate'),
       headers: h,
-      body: '{}',
+      body: json.encode({'fromDate': ?fromDate}),
     );
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
@@ -365,6 +365,17 @@ class ApiClient {
       }),
     );
     return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  /// Bu hafta için weekly feedback gönderilip gönderilmediğini kontrol eder.
+  static Future<bool> getWeeklyFeedbackStatus() async {
+    final h = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$_base/feedback/weekly/status'),
+      headers: h,
+    );
+    final data = await _handle(res) as Map;
+    return data['submitted'] == true;
   }
 
   /// Aktif uyarı ve öneri mesajlarını getirir (GET /feedback/messages).

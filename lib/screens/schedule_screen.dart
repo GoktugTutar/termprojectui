@@ -11,35 +11,20 @@ class ScheduleScreen extends StatefulWidget {
   State<ScheduleScreen> createState() => _ScheduleScreenState();
 }
 
-class _ScheduleScreenState extends State<ScheduleScreen>
-    with SingleTickerProviderStateMixin {
+class _ScheduleScreenState extends State<ScheduleScreen> {
   WeeklyPlan? _plan;
   DailyChecklist? _todayChecklist;
   bool _loading = false;
-  bool _fabOpen = false;
-  late final AnimationController _fabAnim;
   late ColorScheme _cs;
 
   Color get _appBarBgColor => _cs.primary;
   Color get _errorSnackBarBgColor => Colors.red;
   Color get _primaryFabBgColor => _cs.primary;
-  Color get _errorFabBgColor => _cs.error;
-  Color get _secondaryFabBgColor => _cs.secondaryContainer;
 
   @override
   void initState() {
     super.initState();
-    _fabAnim = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 250),
-    );
     _loadData();
-  }
-
-  @override
-  void dispose() {
-    _fabAnim.dispose();
-    super.dispose();
   }
 
   // ── Veri yükleme ────────────────────────────────────────────────────────────
@@ -109,26 +94,8 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
   // ── Eylemler ────────────────────────────────────────────────────────────────
 
-  /// Haftalık planı POST /planner/create ile oluşturur.
-  Future<void> _generateWeekly() async {
-    _closeFab();
-    setState(() => _loading = true);
-    try {
-      final data = await ApiClient.createWeeklyPlan();
-      if (!mounted) return;
-      setState(() => _plan = WeeklyPlan.fromJson(data));
-      _showMsg('Haftalik plan olusturuldu!');
-    } catch (e) {
-      if (!mounted) return;
-      _showErr(e.toString().replaceAll('Exception: ', ''));
-    }
-    if (!mounted) return;
-    setState(() => _loading = false);
-  }
-
   /// Checklist gönderme dialogunu açar.
   Future<void> _openSubmitChecklist() async {
-    _closeFab();
     if (_plan == null) {
       _showErr('Once haftalik plan olusturun.');
       return;
@@ -142,21 +109,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     }
 
     await _showChecklistSubmitDialog(todayBlocks);
-  }
-
-  /// FAB açma/kapama.
-  void _toggleFab() {
-    setState(() => _fabOpen = !_fabOpen);
-    if (_fabOpen) {
-      _fabAnim.forward();
-    } else {
-      _fabAnim.reverse();
-    }
-  }
-
-  void _closeFab() {
-    setState(() => _fabOpen = false);
-    _fabAnim.reverse();
   }
 
   void _showMsg(String m) =>
@@ -417,9 +369,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       ],
     );
 
-    return GestureDetector(
-      onTap: _fabOpen ? _closeFab : null,
-      child: Scaffold(
+    return Scaffold(
         body: _loading
             ? Center(child: CircularProgressIndicator())
             : RefreshIndicator(
@@ -434,7 +384,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     : scrollView,
               ),
         floatingActionButton: wideLayout ? null : _buildSpeedDial(cs),
-      ),
     );
   }
 
@@ -468,16 +417,11 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                     ),
                     SizedBox(height: 6),
                     Text(
-                      'Haftalik plan olustur veya gunluk kontrol listesi kaydet.',
+                      'Gunluk kontrol listesi kaydet.',
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
-              ),
-              FilledButton.icon(
-                onPressed: _generateWeekly,
-                icon: Icon(Icons.calendar_month_rounded),
-                label: Text('Haftalik Plan Olustur'),
               ),
               OutlinedButton.icon(
                 onPressed: _openSubmitChecklist,
@@ -491,49 +435,12 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     );
   }
 
-  /// Mobil speed dial FAB.
+  /// Mobil FAB — kontrol listesi kaydet.
   Widget _buildSpeedDial(ColorScheme cs) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        AnimatedSize(
-          duration: Duration(milliseconds: 200),
-          child: _fabOpen
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _miniFab(
-                      icon: Icons.checklist_rounded,
-                      label: 'Kontrol Listesi Kaydet',
-                      onTap: _openSubmitChecklist,
-                      cs: cs,
-                    ),
-                    SizedBox(height: 8),
-                    _miniFab(
-                      icon: Icons.calendar_month_rounded,
-                      label: 'Haftalik Plan Olustur',
-                      onTap: _generateWeekly,
-                      cs: cs,
-                    ),
-                    SizedBox(height: 12),
-                  ],
-                )
-              : SizedBox.shrink(),
-        ),
-        FloatingActionButton(
-          onPressed: _toggleFab,
-          backgroundColor: _fabOpen ? _errorFabBgColor : _primaryFabBgColor,
-          child: AnimatedRotation(
-            turns: _fabOpen ? 0.125 : 0,
-            duration: Duration(milliseconds: 250),
-            child: Icon(
-              _fabOpen ? Icons.close : Icons.add,
-              color: _fabOpen ? cs.onError : cs.onPrimary,
-            ),
-          ),
-        ),
-      ],
+    return FloatingActionButton(
+      onPressed: _openSubmitChecklist,
+      backgroundColor: _primaryFabBgColor,
+      child: Icon(Icons.checklist_rounded, color: cs.onPrimary),
     );
   }
 

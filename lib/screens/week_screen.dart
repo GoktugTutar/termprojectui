@@ -110,6 +110,61 @@ class _BusySlot {
   }
 }
 
+class _TopRightWeekNotice extends StatelessWidget {
+  const _TopRightWeekNotice({required this.message, required this.onClose});
+
+  final String message;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: 360),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(14, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: kSurface.withAlpha(245),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: kAccent.withAlpha(120), width: 1.4),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(appTheme.isLight ? 42 : 110),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.info_outline_rounded, color: kAccent, size: 18),
+            SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                ),
+              ),
+            ),
+            SizedBox(width: 6),
+            IconButton(
+              onPressed: onClose,
+              icon: Icon(Icons.close_rounded, color: kText2, size: 16),
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints.tightFor(width: 28, height: 28),
+              tooltip: 'Kapat',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class WeekScreen extends StatefulWidget {
   const WeekScreen({super.key, this.reloadSignal = 0});
 
@@ -128,6 +183,9 @@ class _WeekScreenState extends State<WeekScreen>
   List<_BusySlot> _busySlots = [];
   List<Lesson> _lessons = [];
   bool _loading = true;
+  bool _checklistDisabled = false;
+  String? _onboardingNotice;
+  bool _noticeDismissed = false;
   int _selectedDayIndex = 0;
   int _viewIndex = 0;
   String _lastToday = '';
@@ -214,6 +272,7 @@ class _WeekScreenState extends State<WeekScreen>
   }
 
   /// Haftalık plan ve kullanıcı profilini (busySlots için) paralel yükler.
+  /// Yeni hafta başladıysa ve ders varsa planı otomatik oluşturur.
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
@@ -221,6 +280,7 @@ class _WeekScreenState extends State<WeekScreen>
         ApiClient.getWeekPlan(),
         ApiClient.getMe(),
         ApiClient.getLessons(),
+        ApiClient.getChecklistStatus(AppTime.todayStr()),
       ]);
       if (!mounted) return;
       final planData = Map<String, dynamic>.from(results[0] as Map);
@@ -228,17 +288,52 @@ class _WeekScreenState extends State<WeekScreen>
       final lessonList = (results[2] as List)
           .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
           .toList();
+      final status = Map<String, dynamic>.from(results[3] as Map);
       final busyList = ((userData['busySlots'] as List?) ?? [])
           .map((b) => _BusySlot.fromJson(b as Map<String, dynamic>))
           .toList();
-      final today = AppTime.todayStr();
+
+      WeeklyPlan plan = WeeklyPlan.fromJson(planData);
+      final hasLessons = lessonList.isNotEmpty;
+      final hasBusySlots = busyList.isNotEmpty;
+      final canCreatePlan = hasLessons && hasBusySlots;
+      final checklistDisabled = status['checklistDisabled'] == true;
+      final onboardingNotice = checklistDisabled
+          ? (!canCreatePlan
+                ? 'Lütfen derslerini ve busy time’larını gir. Bunları ekleyince bu hafta için programın hazırlanacak.'
+                : (status['message']?.toString() ??
+                      'İlk hafta adaptasyon haftası. Programın hazır; bu hafta checklist sunulmayacak.'))
+          : null;
+      Map<String, dynamic>? newPlanData;
+
+      if (canCreatePlan && plan.weekStart.isNotEmpty) {
+        final now = AppTime.now();
+        final todayDate = DateTime(now.year, now.month, now.day);
+        final currentWeekStart = todayDate.subtract(
+          Duration(days: now.weekday == DateTime.sunday ? 6 : now.weekday - 1),
+        );
+        final ws = DateTime.parse(plan.weekStart);
+        final planIsCurrentWeek = !ws.isBefore(currentWeekStart);
+        if (!planIsCurrentWeek || plan.blocks.isEmpty) {
+          newPlanData = await ApiClient.createWeeklyPlan();
+          if (!mounted) return;
+          plan = WeeklyPlan.fromJson(newPlanData);
+        }
+      }
+
       setState(() {
-        _plan = WeeklyPlan.fromJson(planData);
+        _plan = plan;
         _busySlots = busyList;
         _lessons = lessonList;
-        _lastToday = today;
+        _checklistDisabled = checklistDisabled;
+        if (onboardingNotice != _onboardingNotice) _noticeDismissed = false;
+        _onboardingNotice = onboardingNotice;
+        if (onboardingNotice == null) _noticeDismissed = false;
+        _lastToday = AppTime.todayStr();
         _loading = false;
       });
+
+      if (newPlanData != null) _showNotFittedWarning(newPlanData, lessonList);
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -262,8 +357,7 @@ class _WeekScreenState extends State<WeekScreen>
     return slots;
   }
 
-  /// Algoritmayı yeniden çalıştırır ve planı günceller.
-  Future<void> _recalculate() async {
+  Future<void> _createPlan() async {
     setState(() => _loading = true);
     try {
       final data = await ApiClient.createWeeklyPlan();
@@ -272,11 +366,30 @@ class _WeekScreenState extends State<WeekScreen>
         _plan = WeeklyPlan.fromJson(data);
         _loading = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Plan yeniden oluşturuldu!')));
-      }
+      _showNotFittedWarning(data, _lessons);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: _kDanger,
+        ),
+      );
+    }
+  }
+
+  /// Planı verilen tarihten (yoksa bugünden) sonrası için yeniden hesaplar.
+  Future<void> _recalculate({String? fromDate}) async {
+    setState(() => _loading = true);
+    try {
+      final data = await ApiClient.recalculate(fromDate: fromDate);
+      if (!mounted) return;
+      setState(() {
+        _plan = WeeklyPlan.fromJson(data);
+        _loading = false;
+      });
+      _showNotFittedWarning(data, _lessons);
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -289,6 +402,37 @@ class _WeekScreenState extends State<WeekScreen>
         );
       }
     }
+  }
+
+  /// notFitted varsa hangi derslerin sığmadığını snackbar ile bildirir.
+  void _showNotFittedWarning(
+    Map<String, dynamic> data,
+    List<Lesson> lessonList,
+  ) {
+    final notFitted = data['notFitted'] as Map<String, dynamic>? ?? {};
+    if (notFitted.isEmpty || !mounted) return;
+    final names = notFitted.keys
+        .map((idStr) {
+          final lesson = lessonList.cast<Lesson?>().firstWhere(
+            (l) => l?.id == idStr,
+            orElse: () => null,
+          );
+          return lesson?.lessonName ?? 'Ders #$idStr';
+        })
+        .join(', ');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Bu haftaya sığmayan dersler: $names'),
+        backgroundColor: const Color(0xFFF2B14A),
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+
+  /// "HH:MM" formatını dakikaya çevirir (çakışma kontrolü için).
+  int _parseTimeToMin(String t) {
+    final parts = t.split(':').map(int.parse).toList();
+    return parts[0] * 60 + parts[1];
   }
 
   List<String> get _weekDates {
@@ -336,27 +480,40 @@ class _WeekScreenState extends State<WeekScreen>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            _buildViewSwitchBar(),
-            _buildHeader(),
-            if (_viewIndex == 0 && !wide && _plan != null) _buildDayStrip(),
-            Expanded(
-              child: _loading
-                  ? Center(child: CircularProgressIndicator(color: kAccent))
-                  : _plan == null
-                  ? _buildEmpty()
-                  : _viewIndex == 1
-                  ? _buildMonthCalendar()
-                  : wide
-                  ? _buildWideGrid()
-                  : _buildNarrowGrid(),
+      body: Stack(
+        children: [
+          SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              children: [
+                _buildViewSwitchBar(),
+                _buildHeader(),
+                if (_viewIndex == 0 && !wide && _plan != null) _buildDayStrip(),
+                Expanded(
+                  child: _loading
+                      ? Center(child: CircularProgressIndicator(color: kAccent))
+                      : _plan == null || _plan!.blocks.isEmpty
+                      ? _buildEmpty()
+                      : _viewIndex == 1
+                      ? _buildMonthCalendar()
+                      : wide
+                      ? _buildWideGrid()
+                      : _buildNarrowGrid(),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (_onboardingNotice != null && !_noticeDismissed)
+            Positioned(
+              top: 12,
+              right: 18,
+              child: _TopRightWeekNotice(
+                message: _onboardingNotice!,
+                onClose: () => setState(() => _noticeDismissed = true),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -713,7 +870,11 @@ class _WeekScreenState extends State<WeekScreen>
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _BlockDetailSheet(block: block, color: color),
+      builder: (_) => _BlockDetailSheet(
+        block: block,
+        color: color,
+        checklistDisabled: _checklistDisabled,
+      ),
     );
   }
 
@@ -735,52 +896,99 @@ class _WeekScreenState extends State<WeekScreen>
     final result = await showDialog<Object?>(
       context: context,
       barrierColor: Colors.black.withAlpha(170),
-      builder: (_) => _CalendarEntryDialog(date: date),
+      builder: (_) => _CalendarEntryDialog(date: date, existingSlots: _busySlots),
     );
-    if (result == true) {
+
+    if (result is Map<String, dynamic> && result['type'] == 'nonRoutineBusy') {
+      // Haftalık busy slot eklendi — mevcut planla çakışıyor mu?
+      final slotDate = result['date'] as String;
+      final slotStart = _parseTimeToMin(result['startTime'] as String);
+      final slotEnd = _parseTimeToMin(result['endTime'] as String);
+
+      final hasConflict =
+          _plan?.blocks.any((b) {
+            if (b.date != slotDate) return false;
+            final bStart = _parseTimeToMin(b.startTime);
+            final bEnd = _parseTimeToMin(b.endTime);
+            return slotStart < bEnd && slotEnd > bStart;
+          }) ??
+          false;
+
+      if (hasConflict && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Ders bloğuyla çakışma tespit edildi — program yeniden hesaplanıyor...',
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        await _recalculate(fromDate: slotDate);
+      } else {
+        await _load();
+      }
+    } else if (result == true) {
       await _load();
     }
   }
 
   Widget _buildEmpty() {
+    final hasLessons = _lessons.isNotEmpty;
+    final hasBusySlots = _busySlots.isNotEmpty;
+    final title = !hasLessons || !hasBusySlots
+        ? 'Ders ve busy time gerekli'
+        : 'No weekly plan yet';
+    final subtitle = !hasLessons || !hasBusySlots
+        ? 'Lütfen derslerini ve busy time’larını gir. Bunları ekleyince bu hafta için programın hazırlanacak.'
+        : 'Plan otomatik oluşmadıysa tekrar deneyebilirsin.';
+
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.calendar_month_outlined, color: kText2, size: 48),
-          SizedBox(height: 12),
-          Text(
-            'No weekly plan',
-            style: TextStyle(
-              color: kText1,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: 6),
-          Text(
-            'Run the algorithm to generate a plan.',
-            style: TextStyle(color: kText2),
-          ),
-          SizedBox(height: 24),
-          GestureDetector(
-            onTap: _recalculate,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: kAccent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'Create Plan',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.calendar_month_outlined, color: kText2, size: 48),
+            SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: kText1,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ),
-        ],
+            SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: TextStyle(color: kText2),
+              textAlign: TextAlign.center,
+            ),
+            if (hasLessons && hasBusySlots) ...[
+              SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _createPlan,
+                icon: Icon(Icons.auto_awesome_rounded, size: 18),
+                label: Text('Create Plan'),
+                style: FilledButton.styleFrom(backgroundColor: kAccent),
+              ),
+            ] else if (!hasBusySlots) ...[
+              SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () {
+                  final dates = _weekDates;
+                  final dt = dates.isNotEmpty
+                      ? DateTime.parse(dates[_selectedDayIndex])
+                      : AppTime.now();
+                  _showAddCalendarEntry(dt);
+                },
+                icon: Icon(Icons.event_busy_rounded, size: 18),
+                label: Text('Busy time ekle'),
+                style: FilledButton.styleFrom(backgroundColor: kAccent),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -1190,9 +1398,13 @@ class _DayEventsSheet extends StatelessWidget {
 }
 
 class _CalendarEntryDialog extends StatefulWidget {
-  const _CalendarEntryDialog({required this.date});
+  const _CalendarEntryDialog({
+    required this.date,
+    required this.existingSlots,
+  });
 
   final DateTime date;
+  final List<_BusySlot> existingSlots;
 
   @override
   State<_CalendarEntryDialog> createState() => _CalendarEntryDialogState();
@@ -1206,7 +1418,6 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
   String _endTime = '10:00';
   int _fatigueLevel = 2;
   String _busyIconKey = 'energy';
-  bool _isRoutineBusy = false;
   bool _loadingLessons = true;
   bool _saving = false;
   String? _error;
@@ -1331,17 +1542,19 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
           endTime: _endTime,
           fatigueLevel: _fatigueLevel,
           iconKey: _busyIconKey,
-          isRoutine: _isRoutineBusy,
-          date: _isRoutineBusy ? null : _dateKey,
+          isRoutine: false,
+          date: _dateKey,
         );
-        final user = await ApiClient.getMe();
-        final slots = ((user['busySlots'] as List?) ?? [])
-            .map((slot) => Map<String, dynamic>.from(slot as Map))
-            .toList();
+        final slots = widget.existingSlots.map((s) => s.toJson()).toList();
         slots.add(slot.toJson());
         await ApiClient.updateBusySlots(slots);
         if (!mounted) return;
-        Navigator.pop(context, true);
+        Navigator.pop(context, {
+          'type': 'nonRoutineBusy',
+          'date': _dateKey,
+          'startTime': _startTime,
+          'endTime': _endTime,
+        });
         return;
       } else if (_type == _CalendarEntryType.exam) {
         await ApiClient.addExam(int.parse(_selectedLesson!.id), _dateKey);
@@ -1556,29 +1769,10 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                   ),
                   SizedBox(height: 8),
                   _buildBusyIconPicker(),
-                  SizedBox(height: 8),
-                  CheckboxListTile(
-                    value: _isRoutineBusy,
-                    onChanged: _saving
-                        ? null
-                        : (value) =>
-                              setState(() => _isRoutineBusy = value ?? false),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    activeColor: kAccent,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(
-                      'Bu benim rutinim',
-                      style: TextStyle(
-                        color: kText1,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    subtitle: Text(
-                      'Rutin busy time takvimde daha silik görünür.',
-                      style: TextStyle(color: kText2, fontSize: 11),
-                    ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Sadece bu haftaya eklenir. Her hafta tekrar eden rutinler için profil ekranını kullan.',
+                    style: TextStyle(color: kText2, fontSize: 11),
                   ),
                 ],
               ],
@@ -2071,10 +2265,15 @@ class _StripedPainter extends CustomPainter {
 
 /// Bloğun detaylarını gösteren modal bottom sheet.
 class _BlockDetailSheet extends StatefulWidget {
-  const _BlockDetailSheet({required this.block, required this.color});
+  const _BlockDetailSheet({
+    required this.block,
+    required this.color,
+    required this.checklistDisabled,
+  });
 
   final ScheduledBlock block;
   final Color color;
+  final bool checklistDisabled;
 
   @override
   State<_BlockDetailSheet> createState() => _BlockDetailSheetState();
@@ -2091,7 +2290,7 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
     final plannedMins = widget.block.blockCount * 30;
     _studiedMinutes = widget.block.completed ? plannedMins : 0;
     // Load existing checklist entry for this date
-    _loadExisting();
+    if (!widget.checklistDisabled) _loadExisting();
   }
 
   Future<void> _loadExisting() async {
@@ -2114,6 +2313,7 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
   bool get _isFull => _completedBlocks >= widget.block.blockCount;
 
   Future<void> _submit() async {
+    if (widget.checklistDisabled) return;
     setState(() => _submitting = true);
     try {
       // Get all blocks for this date to build a full checklist submission
@@ -2268,122 +2468,168 @@ class _BlockDetailSheetState extends State<_BlockDetailSheet> {
             label: 'Duration',
             value: '${widget.block.blockCount} blocks · $durationStr',
           ),
-          // Studied time input
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            margin: EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: kBorder.withAlpha(80),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _isFull ? kAccent.withAlpha(100) : Colors.transparent,
+          if (widget.checklistDisabled)
+            _FirstWeekBlockDetailNotice()
+          else ...[
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              margin: EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: kBorder.withAlpha(80),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _isFull ? kAccent.withAlpha(100) : Colors.transparent,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: kBorder,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.timer_outlined,
+                          size: 16,
+                          color: _isFull ? kAccent : kText2,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Time studied',
+                          style: TextStyle(fontSize: 13, color: kText2),
+                        ),
+                      ),
+                      Text(
+                        _studiedMinutes == 0
+                            ? '—'
+                            : '${_studiedMinutes}m / ${_plannedMinutes}m',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _isFull ? kAccent : kText1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: fillRatio,
+                      minHeight: 4,
+                      backgroundColor: kBorder,
+                      valueColor: AlwaysStoppedAnimation(
+                        _isFull ? kAccent : widget.color,
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Icon(Icons.timer_outlined, size: 13, color: kText2),
+                      Expanded(
+                        child: Slider(
+                          value: _studiedMinutes.toDouble(),
+                          min: 0,
+                          max: (_plannedMinutes * 1.5).ceilToDouble(),
+                          divisions: ((_plannedMinutes * 1.5) / 10)
+                              .ceil()
+                              .clamp(1, 999),
+                          activeColor: _isFull ? kAccent : widget.color,
+                          inactiveColor: kBorder,
+                          onChanged: (v) =>
+                              setState(() => _studiedMinutes = v.round()),
+                        ),
+                      ),
+                      Text(
+                        '${_studiedMinutes}m',
+                        style: TextStyle(
+                          color: kText2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
+            SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: kAccent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _submitting
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        _studiedMinutes == 0 ? 'Mark as skipped' : 'Save',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FirstWeekBlockDetailNotice extends StatelessWidget {
+  const _FirstWeekBlockDetailNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: kAccent.withAlpha(24),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kAccent.withAlpha(90)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.event_available_rounded, color: kAccent, size: 20),
+          SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: kBorder,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.timer_outlined,
-                        size: 16,
-                        color: _isFull ? kAccent : kText2,
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Time studied',
-                        style: TextStyle(fontSize: 13, color: kText2),
-                      ),
-                    ),
-                    Text(
-                      _studiedMinutes == 0
-                          ? '—'
-                          : '${_studiedMinutes}m / ${_plannedMinutes}m',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: _isFull ? kAccent : kText1,
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: fillRatio,
-                    minHeight: 4,
-                    backgroundColor: kBorder,
-                    valueColor: AlwaysStoppedAnimation(
-                      _isFull ? kAccent : widget.color,
-                    ),
+                Text(
+                  'Bu hafta checklist yok',
+                  style: TextStyle(
+                    color: kText1,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
                   ),
                 ),
-                Row(
-                  children: [
-                    Icon(Icons.timer_outlined, size: 13, color: kText2),
-                    Expanded(
-                      child: Slider(
-                        value: _studiedMinutes.toDouble(),
-                        min: 0,
-                        max: (_plannedMinutes * 1.5).ceilToDouble(),
-                        divisions: ((_plannedMinutes * 1.5) / 10).ceil().clamp(
-                          1,
-                          999,
-                        ),
-                        activeColor: _isFull ? kAccent : widget.color,
-                        inactiveColor: kBorder,
-                        onChanged: (v) =>
-                            setState(() => _studiedMinutes = v.round()),
-                      ),
-                    ),
-                    Text(
-                      '${_studiedMinutes}m',
-                      style: TextStyle(
-                        color: kText2,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                SizedBox(height: 4),
+                Text(
+                  'Bu ilk hafta programı tanıman için. Checklist gelecek haftadan itibaren açılacak.',
+                  style: TextStyle(color: kText2, fontSize: 12, height: 1.3),
                 ),
               ],
-            ),
-          ),
-          SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: FilledButton(
-              onPressed: _submitting ? null : _submit,
-              style: FilledButton.styleFrom(
-                backgroundColor: kAccent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: _submitting
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Text(
-                      _studiedMinutes == 0 ? 'Mark as skipped' : 'Save',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
             ),
           ),
         ],

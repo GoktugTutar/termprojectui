@@ -9,6 +9,68 @@ import 'new_term_screen.dart';
 const _kDanger = Color(0xFFFF5C7A);
 const _kWarning = Color(0xFFF2B14A);
 
+const _dayFullLabels = [
+  'Pazartesi',
+  'Salı',
+  'Çarşamba',
+  'Perşembe',
+  'Cuma',
+  'Cumartesi',
+  'Pazar',
+];
+
+String? _busyDateKey(dynamic value) {
+  if (value == null) return null;
+  final text = value.toString();
+  if (text.length >= 10) return text.substring(0, 10);
+  return text;
+}
+
+String _dateKey(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+
+class _ProfileBusySlot {
+  final int dayOfWeek;
+  final String startTime;
+  final String endTime;
+  final int fatigueLevel;
+  final String iconKey;
+  final bool isRoutine;
+  final String? date;
+
+  const _ProfileBusySlot({
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+    required this.fatigueLevel,
+    required this.iconKey,
+    required this.isRoutine,
+    this.date,
+  });
+
+  factory _ProfileBusySlot.fromJson(Map<String, dynamic> json) =>
+      _ProfileBusySlot(
+        dayOfWeek: (json['dayOfWeek'] as num).toInt(),
+        startTime: json['startTime'] as String,
+        endTime: json['endTime'] as String,
+        fatigueLevel: (json['fatigueLevel'] as num? ?? 1).toInt(),
+        iconKey: json['iconKey']?.toString() ?? 'energy',
+        isRoutine: json['isRoutine'] as bool? ?? json['date'] == null,
+        date: _busyDateKey(json['date']),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'dayOfWeek': dayOfWeek,
+    'startTime': startTime,
+    'endTime': endTime,
+    'fatigueLevel': fatigueLevel,
+    'iconKey': iconKey,
+    'isRoutine': isRoutine,
+    if (date != null) 'date': date,
+  };
+}
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -26,6 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isTestMode = false;
   List<Map<String, dynamic>> _checklistHistory = [];
   List<Lesson> _lessons = [];
+  List<_ProfileBusySlot> _busySlots = [];
 
   String _preferredStudyTime = 'morning';
   String _studyStyle = 'normal';
@@ -50,6 +113,20 @@ class _ProfileScreenState extends State<ProfileScreen>
       final user = results[0] as Map<String, dynamic>;
       final modeInfo = results[1] as Map<String, dynamic>;
       final history = results[2] as List<Map<String, dynamic>>;
+      final busySlots =
+          ((user['busySlots'] as List?) ?? [])
+              .map(
+                (slot) =>
+                    _ProfileBusySlot.fromJson(slot as Map<String, dynamic>),
+              )
+              .toList()
+            ..sort((a, b) {
+              final dateCompare = (a.date ?? '').compareTo(b.date ?? '');
+              if (dateCompare != 0) return dateCompare;
+              final dayCompare = a.dayOfWeek.compareTo(b.dayOfWeek);
+              if (dayCompare != 0) return dayCompare;
+              return a.startTime.compareTo(b.startTime);
+            });
       final lessons =
           (results[3] as List)
               .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
@@ -67,6 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         _isTestMode = modeInfo['mode']?.toString() == 'test';
         _checklistHistory = history;
         _lessons = lessons;
+        _busySlots = busySlots;
         _loading = false;
       });
     } catch (_) {
@@ -109,6 +187,36 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
     if (!mounted) return;
     setState(() => _saving = false);
+  }
+
+  Future<void> _showAddLessonSheet() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: kSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => _ProfileAddLessonSheet(),
+    );
+    if (saved != true || !mounted) return;
+    _snack('Ders eklendi.');
+    await _load();
+  }
+
+  Future<void> _showAddBusySlotSheet() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: kSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => _ProfileAddBusySlotSheet(existingSlots: _busySlots),
+    );
+    if (saved != true || !mounted) return;
+    _snack('Busy time eklendi.');
+    await _load();
   }
 
   Future<void> _endTerm() async {
@@ -371,7 +479,21 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                   ),
                   SizedBox(height: 24),
-                  _SectionLabel('Dersler'),
+                  _SectionActionHeader(
+                    text: 'Busy times',
+                    icon: Icons.add_rounded,
+                    label: 'Busy time ekle',
+                    onPressed: _saving ? null : _showAddBusySlotSheet,
+                  ),
+                  SizedBox(height: 10),
+                  _ProfileBusySlotsPanel(slots: _busySlots),
+                  SizedBox(height: 24),
+                  _SectionActionHeader(
+                    text: 'Dersler',
+                    icon: Icons.add_rounded,
+                    label: 'Ders ekle',
+                    onPressed: _saving ? null : _showAddLessonSheet,
+                  ),
                   SizedBox(height: 10),
                   _ProfileLessonsPanel(
                     lessons: _lessons,
@@ -486,6 +608,42 @@ class _SectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
       ),
+    );
+  }
+}
+
+class _SectionActionHeader extends StatelessWidget {
+  const _SectionActionHeader({
+    required this.text,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String text;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _SectionLabel(text)),
+        TextButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 16),
+          label: Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          style: TextButton.styleFrom(
+            foregroundColor: kAccent,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -645,6 +803,130 @@ class _StyleCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileBusySlotsPanel extends StatelessWidget {
+  const _ProfileBusySlotsPanel({required this.slots});
+
+  final List<_ProfileBusySlot> slots;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(minHeight: 112, maxHeight: 320),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: slots.isEmpty
+          ? Center(
+              child: Text(
+                'Henüz busy time eklenmemiş.',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
+            )
+          : ListView.separated(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: slots.length,
+              separatorBuilder: (_, _) => SizedBox(height: 8),
+              itemBuilder: (context, index) =>
+                  _ProfileBusySlotRow(slot: slots[index]),
+            ),
+    );
+  }
+}
+
+class _ProfileBusySlotRow extends StatelessWidget {
+  const _ProfileBusySlotRow({required this.slot});
+
+  final _ProfileBusySlot slot;
+
+  IconData get _icon {
+    switch (slot.iconKey) {
+      case 'work':
+        return Icons.work_outline_rounded;
+      case 'commute':
+        return Icons.directions_bus_outlined;
+      case 'health':
+        return Icons.local_hospital_outlined;
+      case 'family':
+        return Icons.home_outlined;
+      default:
+        return Icons.bolt_outlined;
+    }
+  }
+
+  Color get _tone {
+    if (slot.fatigueLevel >= 4) return _kDanger;
+    if (slot.fatigueLevel == 3) return _kWarning;
+    return kAccent;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final day = _dayFullLabels[(slot.dayOfWeek - 1).clamp(0, 6)];
+    final scope = slot.isRoutine ? 'Her hafta' : 'Bu hafta';
+    final when = slot.isRoutine ? day : '${slot.date ?? day} · $day';
+
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kBorder.withAlpha(appTheme.isLight ? 50 : 42),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder.withAlpha(120)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: _tone.withAlpha(appTheme.isLight ? 34 : 48),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_icon, color: _tone, size: 19),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$scope · ${slot.startTime}-${slot.endTime}',
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 3),
+                Text(
+                  when,
+                  style: TextStyle(color: kText2, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 10),
+          Text(
+            '${slot.fatigueLevel}/5',
+            style: TextStyle(
+              color: _tone,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -960,6 +1242,520 @@ class _ProfilePico extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _BusyIconChoice {
+  const _BusyIconChoice(this.key, this.icon, this.tooltip);
+
+  final String key;
+  final IconData icon;
+  final String tooltip;
+}
+
+const _busyIconChoices = [
+  _BusyIconChoice('energy', Icons.bolt_outlined, 'Enerji'),
+  _BusyIconChoice('work', Icons.work_outline_rounded, 'İş'),
+  _BusyIconChoice('commute', Icons.directions_bus_outlined, 'Yol'),
+  _BusyIconChoice('health', Icons.local_hospital_outlined, 'Sağlık'),
+  _BusyIconChoice('family', Icons.home_outlined, 'Ev'),
+];
+
+class _ProfileAddLessonSheet extends StatefulWidget {
+  const _ProfileAddLessonSheet();
+
+  @override
+  State<_ProfileAddLessonSheet> createState() => _ProfileAddLessonSheetState();
+}
+
+class _ProfileAddLessonSheetState extends State<_ProfileAddLessonSheet> {
+  final _nameCtrl = TextEditingController();
+  int _difficulty = 3;
+  bool _hasExam = false;
+  DateTime _examDate = AppTime.now().add(Duration(days: 30));
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+
+    setState(() => _saving = true);
+    try {
+      final created = await ApiClient.createLesson(name, _difficulty);
+      if (_hasExam) {
+        final lessonId = (created['id'] as num).toInt();
+        await ApiClient.addExam(lessonId, _dateKey(_examDate));
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: _kDanger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickExamDate() async {
+    final now = AppTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _examDate,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _examDate = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SheetHandle(),
+            SizedBox(height: 18),
+            _SheetTitle(
+              icon: Icons.school_outlined,
+              title: 'Ders ekle',
+              onClose: _saving ? null : () => Navigator.pop(context, false),
+            ),
+            SizedBox(height: 18),
+            TextField(
+              controller: _nameCtrl,
+              autofocus: true,
+              enabled: !_saving,
+              decoration: InputDecoration(
+                labelText: 'Ders adı',
+                hintText: 'Lineer Cebir',
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Zorluk',
+              style: TextStyle(
+                color: kText1,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: List.generate(5, (i) {
+                final value = i + 1;
+                final selected = value == _difficulty;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: _saving
+                        ? null
+                        : () => setState(() => _difficulty = value),
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 150),
+                      height: 44,
+                      margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
+                      decoration: BoxDecoration(
+                        color: selected ? kAccent.withAlpha(46) : kBorder,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected ? kAccent : Colors.transparent,
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '$value',
+                          style: TextStyle(
+                            color: selected ? kAccent : kText2,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            SizedBox(height: 16),
+            SwitchListTile(
+              value: _hasExam,
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _hasExam = value),
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: kAccent,
+              title: Text(
+                'Sınav tarihi ekle',
+                style: TextStyle(color: kText1, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (_hasExam) ...[
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _pickExamDate,
+                icon: Icon(Icons.calendar_today_outlined, size: 16),
+                label: Text(_dateKey(_examDate)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kAccent,
+                  side: BorderSide(color: kBorder),
+                  padding: EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              SizedBox(height: 8),
+            ],
+            SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(Icons.check_rounded, size: 18),
+              label: Text(_saving ? 'Kaydediliyor...' : 'Kaydet'),
+              style: FilledButton.styleFrom(
+                backgroundColor: kAccent,
+                padding: EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAddBusySlotSheet extends StatefulWidget {
+  const _ProfileAddBusySlotSheet({required this.existingSlots});
+
+  final List<_ProfileBusySlot> existingSlots;
+
+  @override
+  State<_ProfileAddBusySlotSheet> createState() =>
+      _ProfileAddBusySlotSheetState();
+}
+
+class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
+  int _dayOfWeek = AppTime.now().weekday;
+  String _startTime = '09:00';
+  String _endTime = '10:00';
+  int _fatigueLevel = 2;
+  String _iconKey = 'energy';
+  bool _saving = false;
+  String? _error;
+
+  static final _timeOptions = List.generate(37, (i) {
+    final minutes = 6 * 60 + i * 30;
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  });
+
+  int _toMinutes(String value) {
+    final parts = value.split(':').map(int.parse).toList();
+    return parts[0] * 60 + parts[1];
+  }
+
+  Future<void> _save() async {
+    if (_toMinutes(_endTime) <= _toMinutes(_startTime)) {
+      setState(() => _error = 'Bitiş saati başlangıçtan sonra olmalı.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final slots = widget.existingSlots.map((slot) => slot.toJson()).toList();
+      slots.add({
+        'dayOfWeek': _dayOfWeek,
+        'startTime': _startTime,
+        'endTime': _endTime,
+        'fatigueLevel': _fatigueLevel,
+        'iconKey': _iconKey,
+        'isRoutine': true,
+      });
+      await ApiClient.updateBusySlots(slots);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = e.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SheetHandle(),
+            SizedBox(height: 18),
+            _SheetTitle(
+              icon: Icons.repeat_rounded,
+              title: 'Rutin busy time ekle',
+              onClose: _saving ? null : () => Navigator.pop(context, false),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Her hafta tekrar eder — planlamada tüm haftaları etkiler.',
+              style: TextStyle(color: kText2, fontSize: 12),
+            ),
+            SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              initialValue: _dayOfWeek,
+              items: List.generate(7, (index) {
+                final day = index + 1;
+                return DropdownMenuItem(
+                  value: day,
+                  child: Text(_dayFullLabels[index]),
+                );
+              }),
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _dayOfWeek = value ?? 1),
+              decoration: InputDecoration(labelText: 'Gün'),
+            ),
+            SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _startTime,
+                    items: _timeOptions
+                        .map(
+                          (time) =>
+                              DropdownMenuItem(value: time, child: Text(time)),
+                        )
+                        .toList(),
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() => _startTime = value!),
+                    decoration: InputDecoration(labelText: 'Başlangıç'),
+                  ),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _endTime,
+                    items: _timeOptions
+                        .map(
+                          (time) =>
+                              DropdownMenuItem(value: time, child: Text(time)),
+                        )
+                        .toList(),
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() => _endTime = value!),
+                    decoration: InputDecoration(labelText: 'Bitiş'),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 14),
+            Row(
+              children: [
+                Text(
+                  'Yorgunluk',
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Expanded(
+                  child: Slider(
+                    value: _fatigueLevel.toDouble(),
+                    min: 1,
+                    max: 5,
+                    divisions: 4,
+                    label: _fatigueLevel.toString(),
+                    activeColor: kAccent,
+                    inactiveColor: kBorder,
+                    onChanged: _saving
+                        ? null
+                        : (value) =>
+                              setState(() => _fatigueLevel = value.round()),
+                  ),
+                ),
+                Text(
+                  '$_fatigueLevel/5',
+                  style: TextStyle(color: kText2, fontSize: 12),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Text(
+              'İkon',
+              style: TextStyle(
+                color: kText1,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _busyIconChoices.map((choice) {
+                final selected = choice.key == _iconKey;
+                return Tooltip(
+                  message: choice.tooltip,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _saving
+                        ? null
+                        : () => setState(() => _iconKey = choice.key),
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 150),
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? kAccent.withAlpha(appTheme.isLight ? 34 : 48)
+                            : kBorder.withAlpha(appTheme.isLight ? 42 : 56),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected ? kAccent : kBorder,
+                          width: selected ? 1.4 : 0.8,
+                        ),
+                      ),
+                      child: Icon(
+                        choice.icon,
+                        color: selected ? kAccent : kText2,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            if (_error != null) ...[
+              SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: _kDanger, fontSize: 12)),
+            ],
+            SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(Icons.check_rounded, size: 18),
+              label: Text(_saving ? 'Kaydediliyor...' : 'Kaydet'),
+              style: FilledButton.styleFrom(
+                backgroundColor: kAccent,
+                padding: EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 36,
+        height: 4,
+        decoration: BoxDecoration(
+          color: kBorder,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetTitle extends StatelessWidget {
+  const _SheetTitle({
+    required this.icon,
+    required this.title,
+    required this.onClose,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: kAccent.withAlpha(34),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: kAccent, size: 20),
+        ),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: kText1,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: onClose,
+          tooltip: 'Kapat',
+          icon: Icon(Icons.close_rounded, color: kText2, size: 20),
+        ),
+      ],
     );
   }
 }
