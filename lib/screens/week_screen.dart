@@ -383,10 +383,19 @@ class _WeekScreenState extends State<WeekScreen>
   Future<void> _recalculate({String? fromDate}) async {
     setState(() => _loading = true);
     try {
-      final data = await ApiClient.recalculate(fromDate: fromDate);
+      final results = await Future.wait<dynamic>([
+        ApiClient.recalculate(fromDate: fromDate),
+        ApiClient.getMe(),
+      ]);
       if (!mounted) return;
+      final data = Map<String, dynamic>.from(results[0] as Map);
+      final userData = Map<String, dynamic>.from(results[1] as Map);
+      final busyList = ((userData['busySlots'] as List?) ?? [])
+          .map((b) => _BusySlot.fromJson(b as Map<String, dynamic>))
+          .toList();
       setState(() {
         _plan = WeeklyPlan.fromJson(data);
+        _busySlots = busyList;
         _loading = false;
       });
       _showNotFittedWarning(data, _lessons);
