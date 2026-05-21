@@ -402,7 +402,7 @@ class _TodayScreenState extends State<TodayScreen>
       blocks: _todayBlocks,
       initialStudiedMinutes: _studiedMinutes,
     );
-    if (saved && mounted) await _load();
+    if (saved && mounted) setState(() => _todayChecklistSubmitted = true);
   }
 
   Future<bool> _showChecklistSubmitDialog({
