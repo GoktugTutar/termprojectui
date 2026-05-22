@@ -370,20 +370,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
 
     return Scaffold(
-        body: _loading
-            ? Center(child: CircularProgressIndicator())
-            : RefreshIndicator(
-                onRefresh: _loadData,
-                child: wideLayout
-                    ? Center(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: 1180),
-                          child: scrollView,
-                        ),
-                      )
-                    : scrollView,
-              ),
-        floatingActionButton: wideLayout ? null : _buildSpeedDial(cs),
+      body: _loading
+          ? Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: wideLayout
+                  ? Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 1180),
+                        child: scrollView,
+                      ),
+                    )
+                  : scrollView,
+            ),
+      floatingActionButton: wideLayout ? null : _buildSpeedDial(cs),
     );
   }
 
@@ -441,44 +441,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       onPressed: _openSubmitChecklist,
       backgroundColor: _primaryFabBgColor,
       child: Icon(Icons.checklist_rounded, color: cs.onPrimary),
-    );
-  }
-
-  Widget _miniFab({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required ColorScheme cs,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(30),
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(label, style: TextStyle(fontSize: 12)),
-          ),
-          SizedBox(width: 8),
-          FloatingActionButton.small(
-            heroTag: label,
-            onPressed: onTap,
-            backgroundColor: _secondaryFabBgColor,
-            child: Icon(icon, color: cs.onSecondaryContainer, size: 20),
-          ),
-        ],
-      ),
     );
   }
 
