@@ -198,19 +198,10 @@ class _TodayScreenState extends State<TodayScreen>
       if (plan.weekStart.isNotEmpty) {
         final ws = DateTime.parse(plan.weekStart);
         final planIsCurrentWeek = !ws.isBefore(currentWeekStart);
-<<<<<<< HEAD
         needsNewPlan =
             canCreatePlan && (!planIsCurrentWeek || plan.blocks.isEmpty);
         debugPrint(
           '[TODAY] plan.weekStart=${plan.weekStart} currentWeekStart=$currentWeekStart blocks=${plan.blocks.length} hasLessons=$hasLessons hasBusySlots=$hasBusySlots needsNewPlan=$needsNewPlan',
-=======
-        needsNewPlan = !planIsCurrentWeek || plan.blocks.isEmpty;
-        debugPrint(
-          '[TODAY] plan.weekStart=${plan.weekStart} '
-          'currentWeekStart=$currentWeekStart '
-          'blocks=${plan.blocks.length} '
-          'needsNewPlan=$needsNewPlan',
->>>>>>> f9a0c29 (Initial commit)
         );
       } else {
         needsNewPlan = canCreatePlan;
@@ -303,38 +294,29 @@ class _TodayScreenState extends State<TodayScreen>
       }
       events.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
 
-<<<<<<< HEAD
       final isLastDayOfWeek = AppTime.now().weekday == DateTime.sunday;
       bool weeklyFeedbackSubmitted = false;
       if (isLastDayOfWeek && !checklistDisabled) {
-        weeklyFeedbackSubmitted =
-            await ApiClient.getWeeklyFeedbackStatus().catchError((_) => false);
+        weeklyFeedbackSubmitted = await ApiClient.getWeeklyFeedbackStatus()
+            .catchError((_) => false);
       }
-
-=======
       final prefs = await SharedPreferences.getInstance();
->>>>>>> f9a0c29 (Initial commit)
+
       if (!mounted) return;
       setState(() {
         _plan = plan;
         _missingChecklistDates = missingDates;
         _todayChecklistSubmitted = submitted;
-<<<<<<< HEAD
         _checklistDisabled = checklistDisabled;
         if (onboardingNotice != _onboardingNotice) _noticeDismissed = false;
         _onboardingNotice = onboardingNotice;
-        if (onboardingNotice == null) _noticeDismissed = false;
-=======
+
         _sleepScore = _readDoublePref(prefs, 'today_sleep_score', 7);
         _fatigueScore = _readDoublePref(prefs, 'today_fatigue_score', 3);
         _stressScore = _readDoublePref(prefs, 'today_stress_score', 3);
->>>>>>> f9a0c29 (Initial commit)
-        _studiedMinutes
-          ..clear()
-          ..addAll(loadedStudiedMinutes);
-        _upcomingEvents = events;
         _isLastDayOfWeek = isLastDayOfWeek;
         _weeklyFeedbackSubmitted = weeklyFeedbackSubmitted;
+        _upcomingEvents = events;
         _feedbackLessons = raw
             .map(
               (l) => (
@@ -675,7 +657,6 @@ class _TodayScreenState extends State<TodayScreen>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-<<<<<<< HEAD
       body: Stack(
         children: [
           SafeArea(
@@ -691,21 +672,38 @@ class _TodayScreenState extends State<TodayScreen>
                     slivers: [
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: EdgeInsets.fromLTRB(20, 16, 20, 110),
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, 110),
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final wide = constraints.maxWidth >= 860;
+                              final topControls = _TodayTopControls(
+                                sleepScore: _sleepScore,
+                                fatigueScore: _fatigueScore,
+                                stressScore: _stressScore,
+                                onSleepChanged: (value) {
+                                  setState(() => _sleepScore = value);
+                                  _saveWellbeingValue(
+                                    'today_sleep_score',
+                                    value,
+                                  );
+                                },
+                                onFatigueChanged: (value) {
+                                  setState(() => _fatigueScore = value);
+                                  _saveWellbeingValue(
+                                    'today_fatigue_score',
+                                    value,
+                                  );
+                                },
+                                onStressChanged: (value) {
+                                  setState(() => _stressScore = value);
+                                  _saveWellbeingValue(
+                                    'today_stress_score',
+                                    value,
+                                  );
+                                },
+                              );
                               final left = _TodayLeftColumn(
-                                kicker: kicker,
-                                title: '$greet.',
-                                subtitle: subtitle,
-                                blocks: _primaryTodayBlocks,
                                 events: _upcomingEvents,
-                                plannedBlocksForLesson: _plannedBlocksForLesson,
-                                plannedMinutesForLesson:
-                                    _plannedMinutesForLesson,
-                                timeRangeForLesson: _timeRangeForLesson,
-                                hasReviewForLesson: _hasReviewForLesson,
                                 noteText: _quickNote,
                                 onNoteChanged: (value) =>
                                     setState(() => _quickNote = value),
@@ -715,6 +713,7 @@ class _TodayScreenState extends State<TodayScreen>
                                   : _ChecklistPanel(
                                       blocks: _primaryTodayBlocks,
                                       missingDates: _missingChecklistDates,
+                                      dateLabel: kicker,
                                       todayDate: _today,
                                       submitted: _todayChecklistSubmitted,
                                       completedBlocks: _completedBlocks,
@@ -735,7 +734,8 @@ class _TodayScreenState extends State<TodayScreen>
                                       onMissingSaved: _load,
                                       onSaveChecklist: _saveTodayChecklist,
                                     );
-                              final right = _isLastDayOfWeek && !_checklistDisabled
+                              final right =
+                                  _isLastDayOfWeek && !_checklistDisabled
                                   ? Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
@@ -746,9 +746,10 @@ class _TodayScreenState extends State<TodayScreen>
                                           submitted: _weeklyFeedbackSubmitted,
                                           lessons: _feedbackLessons,
                                           onSubmitted: () {
-                                            setState(() =>
-                                                _weeklyFeedbackSubmitted =
-                                                    true);
+                                            setState(
+                                              () => _weeklyFeedbackSubmitted =
+                                                  true,
+                                            );
                                           },
                                         ),
                                       ],
@@ -759,143 +760,56 @@ class _TodayScreenState extends State<TodayScreen>
                                 return Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
-                                  children: [left, SizedBox(height: 18), right],
+                                  children: [
+                                    _TodayGreetingTitle(title: '$greet.'),
+                                    SizedBox(height: 18),
+                                    topControls,
+                                    SizedBox(height: 18),
+                                    left,
+                                    SizedBox(height: 18),
+                                    right,
+                                  ],
                                 );
                               }
 
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Expanded(flex: 11, child: left),
-                                  SizedBox(width: 24),
-                                  Expanded(
-                                    flex: 9,
-                                    child: Padding(
-                                      padding: EdgeInsets.only(
-                                        top: _kHeaderToCardOffset,
+                                  _TodayGreetingTitle(title: '$greet.'),
+                                  SizedBox(height: 18),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        flex: 11,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            topControls,
+                                            SizedBox(height: 18),
+                                            left,
+                                          ],
+                                        ),
                                       ),
-                                      child: right,
-                                    ),
+                                      SizedBox(width: 24),
+                                      Expanded(
+                                        flex: 9,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                            top: _kChecklistTopOffset,
+                                          ),
+                                          child: right,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               );
                             },
                           ),
                         ),
-=======
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: _load,
-          color: kAccent,
-          backgroundColor: kSurface,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: 1180),
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(20, 0, 20, 110),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final wide = constraints.maxWidth >= 860;
-                          final topControls = _TodayTopControls(
-                            sleepScore: _sleepScore,
-                            fatigueScore: _fatigueScore,
-                            stressScore: _stressScore,
-                            onSleepChanged: (value) {
-                              setState(() => _sleepScore = value);
-                              _saveWellbeingValue('today_sleep_score', value);
-                            },
-                            onFatigueChanged: (value) {
-                              setState(() => _fatigueScore = value);
-                              _saveWellbeingValue('today_fatigue_score', value);
-                            },
-                            onStressChanged: (value) {
-                              setState(() => _stressScore = value);
-                              _saveWellbeingValue('today_stress_score', value);
-                            },
-                          );
-                          final left = _TodayLeftColumn(
-                            events: _upcomingEvents,
-                            noteText: _quickNote,
-                            onNoteChanged: (value) =>
-                                setState(() => _quickNote = value),
-                          );
-                          final right = _ChecklistPanel(
-                            blocks: _primaryTodayBlocks,
-                            missingDates: _missingChecklistDates,
-                            dateLabel: kicker,
-                            todayDate: _today,
-                            submitted: _todayChecklistSubmitted,
-                            completedBlocks: _completedBlocks,
-                            totalBlocks: _totalBlocks,
-                            studiedMinutes: _totalStudiedMinutes,
-                            plannedMinutes: _totalPlannedMinutes,
-                            progress: _progress,
-                            studiedMinutesForLesson: (lessonId) =>
-                                _studiedMinutes[lessonId] ?? 0,
-                            plannedMinutesForLesson: _plannedMinutesForLesson,
-                            blocksForDate: _blocksForDate,
-                            onMinutesChanged: (lessonId, value) => setState(
-                              () => _studiedMinutes[lessonId] = value,
-                            ),
-                            onMissingSaved: _load,
-                            onSaveChecklist: _saveTodayChecklist,
-                          );
-
-                          if (!wide) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _TodayGreetingTitle(title: '$greet.'),
-                                SizedBox(height: 18),
-                                topControls,
-                                SizedBox(height: 18),
-                                left,
-                                SizedBox(height: 18),
-                                right,
-                              ],
-                            );
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _TodayGreetingTitle(title: '$greet.'),
-                              SizedBox(height: 18),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    flex: 11,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        topControls,
-                                        SizedBox(height: 18),
-                                        left,
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(width: 24),
-                                  Expanded(
-                                    flex: 9,
-                                    child: Padding(
-                                      padding: EdgeInsets.only(
-                                        top: _kChecklistTopOffset,
-                                      ),
-                                      child: right,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          );
-                        },
->>>>>>> f9a0c29 (Initial commit)
                       ),
                     ],
                   ),
@@ -2674,7 +2588,11 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
   static const _opts = [
     ('cok_yogundu', 'Çok yoğundu', Icons.sentiment_very_dissatisfied_outlined),
     ('tam_uygundu', 'Tam uygundu', Icons.sentiment_satisfied_outlined),
-    ('yetersizdi', 'Daha fazlasını yapabilirdim', Icons.sentiment_dissatisfied_outlined),
+    (
+      'yetersizdi',
+      'Daha fazlasını yapabilirdim',
+      Icons.sentiment_dissatisfied_outlined,
+    ),
   ];
 
   @override
@@ -2689,7 +2607,12 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
       await ApiClient.submitWeeklyFeedback(
         weekloadFeedback: _weekload ?? 'tam_uygundu',
         lessonFeedbacks: widget.lessons
-            .map((l) => {'lessonId': int.parse(l.id), 'needsMoreTime': _perLesson[l.id] ?? 0})
+            .map(
+              (l) => {
+                'lessonId': int.parse(l.id),
+                'needsMoreTime': _perLesson[l.id] ?? 0,
+              },
+            )
             .toList(),
       );
       if (!mounted) return;
@@ -2697,10 +2620,12 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: kDanger,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: kDanger,
+        ),
+      );
     }
   }
 
@@ -2716,7 +2641,11 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
         ),
         child: Row(
           children: [
-            Icon(Icons.check_circle_outline_rounded, color: Color(0xFF34C759), size: 20),
+            Icon(
+              Icons.check_circle_outline_rounded,
+              color: Color(0xFF34C759),
+              size: 20,
+            ),
             SizedBox(width: 10),
             Text(
               'Haftalık geri bildirim gönderildi.',
@@ -2753,7 +2682,11 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                       color: kAccent.withAlpha(38),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.rate_review_outlined, color: kAccent, size: 18),
+                    child: Icon(
+                      Icons.rate_review_outlined,
+                      color: kAccent,
+                      size: 18,
+                    ),
                   ),
                   SizedBox(width: 12),
                   Expanded(
@@ -2762,7 +2695,11 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                       children: [
                         Text(
                           'Haftalık değerlendirme',
-                          style: TextStyle(color: kText1, fontSize: 14, fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            color: kText1,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         Text(
                           'Bu haftanı nasıl geçti?',
@@ -2772,7 +2709,9 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                     ),
                   ),
                   Icon(
-                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    _expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
                     color: kText2,
                     size: 20,
                   ),
@@ -2789,20 +2728,32 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                 children: [
                   Text(
                     'HAFTALIK YÜK',
-                    style: TextStyle(color: kText2, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                    style: TextStyle(
+                      color: kText2,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                    ),
                   ),
                   SizedBox(height: 8),
                   ..._opts.map((opt) {
                     final (value, label, icon) = opt;
                     final selected = _weekload == value;
                     return GestureDetector(
-                      onTap: _saving ? null : () => setState(() => _weekload = value),
+                      onTap: _saving
+                          ? null
+                          : () => setState(() => _weekload = value),
                       child: AnimatedContainer(
                         duration: Duration(milliseconds: 130),
                         margin: EdgeInsets.only(bottom: 6),
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: selected ? kAccent.withAlpha(38) : kBorder.withAlpha(60),
+                          color: selected
+                              ? kAccent.withAlpha(38)
+                              : kBorder.withAlpha(60),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: selected ? kAccent : Colors.transparent,
@@ -2811,14 +2762,20 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                         ),
                         child: Row(
                           children: [
-                            Icon(icon, size: 18, color: selected ? kAccent : kText2),
+                            Icon(
+                              icon,
+                              size: 18,
+                              color: selected ? kAccent : kText2,
+                            ),
                             SizedBox(width: 10),
                             Text(
                               label,
                               style: TextStyle(
                                 color: selected ? kText1 : kText2,
                                 fontSize: 13,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                             ),
                           ],
@@ -2830,7 +2787,12 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                     SizedBox(height: 12),
                     Text(
                       'DERS BAZLI',
-                      style: TextStyle(color: kText2, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                      style: TextStyle(
+                        color: kText2,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
                     ),
                     SizedBox(height: 8),
                     ...widget.lessons.map((l) {
@@ -2850,7 +2812,8 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                             _NeedMoreTimeToggle(
                               value: v,
                               disabled: _saving,
-                              onChanged: (nv) => setState(() => _perLesson[l.id] = nv),
+                              onChanged: (nv) =>
+                                  setState(() => _perLesson[l.id] = nv),
                             ),
                           ],
                         ),
@@ -2863,11 +2826,23 @@ class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
                     style: FilledButton.styleFrom(
                       backgroundColor: kAccent,
                       padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     child: _saving
-                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text('Gönder', style: TextStyle(fontWeight: FontWeight.w700)),
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Gönder',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                   ),
                 ],
               ),
@@ -2955,7 +2930,10 @@ class _ToggleBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? activeColor.withAlpha(46) : kBorder.withAlpha(60),
           borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: active ? activeColor : Colors.transparent, width: 1.2),
+          border: Border.all(
+            color: active ? activeColor : Colors.transparent,
+            width: 1.2,
+          ),
         ),
         child: Icon(icon, size: 15, color: active ? activeColor : kText2),
       ),
