@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppThemeController extends ChangeNotifier {
-  bool _isLight = false;
+  bool _isLight = true;
 
   bool get isLight => _isLight;
   ThemeMode get themeMode => _isLight ? ThemeMode.light : ThemeMode.dark;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    _isLight = prefs.getBool('light_mode_enabled') ?? false;
+    _isLight = prefs.getBool('light_mode_enabled') ?? true;
     notifyListeners();
   }
 
@@ -26,21 +26,21 @@ class AppThemeController extends ChangeNotifier {
 
 final appTheme = AppThemeController();
 
-Color get kBg => appTheme.isLight ? Color(0xFFF5F1FF) : Color(0xFF070719);
-Color get kSurface => appTheme.isLight ? Color(0xEFFFFFFF) : Color(0xD00D0A24);
-Color get kBorder => appTheme.isLight ? Color(0xFFB9A8FF) : Color(0xFF3D2D84);
-Color get kAccent => appTheme.isLight ? Color(0xFF684CFF) : Color(0xFF8A6CFF);
-Color get kText1 => appTheme.isLight ? Color(0xFF201A3A) : Color(0xFFF4F0FF);
-Color get kText2 => appTheme.isLight ? Color(0xFF766CA0) : Color(0xFF9B8DCC);
-Color get kCyan => appTheme.isLight ? Color(0xFF00A6C8) : Color(0xFF49E9FF);
+Color get kBg => appTheme.isLight ? Color(0xFFC5FFB8) : Color(0xFF070719);
+Color get kSurface => appTheme.isLight ? Color(0xF8FFFDF8) : Color(0xD00D0A24);
+Color get kBorder => appTheme.isLight ? Color(0xFF8F9D93) : Color(0xFF3D2D84);
+Color get kAccent => appTheme.isLight ? Color(0xFFA78BFA) : Color(0xFF8A6CFF);
+Color get kText1 => appTheme.isLight ? Color(0xFF073C35) : Color(0xFFF4F0FF);
+Color get kText2 => appTheme.isLight ? Color(0xFF48685F) : Color(0xFF9B8DCC);
+Color get kCyan => appTheme.isLight ? Color(0xFF0B5A4D) : Color(0xFF49E9FF);
 
 final _lessonColors = [
-  Color(0xFF8B7CFF), // violet
-  Color(0xFF2F8FE8), // blue
-  Color(0xFF23A69B), // teal
+  Color(0xFFA78BFA), // lavender
+  Color(0xFF0B5A4D), // deep teal
+  Color(0xFF42A47A), // green
   Color(0xFFF2B14A), // amber
-  Color(0xFFFF6F9E), // rose
-  Color(0xFF2FAE70), // green
+  Color(0xFF7FB8A6), // sage
+  Color(0xFF2FAE70), // mint green
 ];
 
 Color lessonColor(int id) => _lessonColors[id % _lessonColors.length];
@@ -50,11 +50,11 @@ ThemeData buildLightTheme() => _buildTheme(Brightness.light);
 
 ThemeData _buildTheme(Brightness brightness) {
   final light = brightness == Brightness.light;
-  final surface = light ? Color(0xEFFFFFFF) : Color(0xD00D0A24);
-  final border = light ? Color(0xFFB9A8FF) : Color(0xFF3D2D84);
-  final accent = light ? Color(0xFF684CFF) : Color(0xFF8A6CFF);
-  final text1 = light ? Color(0xFF201A3A) : Color(0xFFF4F0FF);
-  final text2 = light ? Color(0xFF766CA0) : Color(0xFF9B8DCC);
+  final surface = light ? Color(0xF8FFFDF8) : Color(0xD00D0A24);
+  final border = light ? Color(0xFF8F9D93) : Color(0xFF3D2D84);
+  final accent = light ? Color(0xFFA78BFA) : Color(0xFF8A6CFF);
+  final text1 = light ? Color(0xFF073C35) : Color(0xFFF4F0FF);
+  final text2 = light ? Color(0xFF48685F) : Color(0xFF9B8DCC);
 
   return ThemeData(
     brightness: brightness,
@@ -110,7 +110,7 @@ ThemeData _buildTheme(Brightness brightness) {
     ),
     dialogTheme: DialogThemeData(backgroundColor: surface),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: light ? Color(0xFF201A3A) : Color(0xFF141032),
+      backgroundColor: light ? Color(0xFF073C35) : Color(0xFF141032),
       contentTextStyle: TextStyle(color: Colors.white),
     ),
     chipTheme: ChipThemeData(

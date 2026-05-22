@@ -129,9 +129,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
                 ),
                 Expanded(
                   child: _loading
-                      ? Center(
-                          child: CircularProgressIndicator(color: kAccent),
-                        )
+                      ? Center(child: CircularProgressIndicator(color: kAccent))
                       : _lessons.isEmpty
                       ? _buildEmpty()
                       : ListView.builder(
@@ -226,6 +224,10 @@ class _LessonRow extends StatelessWidget {
     final color = _colors[id % _colors.length];
     final name = lesson['name']?.toString() ?? '';
     final difficulty = (lesson['difficulty'] as num?)?.toInt() ?? 1;
+    final exams = (lesson['exams'] as List?) ?? const [];
+    final deadlines = (lesson['deadlines'] as List?) ?? const [];
+    final importantCount = exams.length + deadlines.length;
+    final firstImportantDate = _firstImportantDate(exams, deadlines);
 
     final initials = name
         .trim()
@@ -266,15 +268,30 @@ class _LessonRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                color: kText1,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (importantCount > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    firstImportantDate == null
+                        ? '$importantCount önemli tarih'
+                        : '$importantCount önemli tarih · $firstImportantDate',
+                    style: TextStyle(color: kText2, fontSize: 12),
+                  ),
+                ],
+              ],
             ),
           ),
+          const SizedBox(width: 12),
           Row(
             children: List.generate(5, (i) {
               return Container(
@@ -292,9 +309,40 @@ class _LessonRow extends StatelessWidget {
       ),
     );
   }
+
+  String? _firstImportantDate(List<dynamic> exams, List<dynamic> deadlines) {
+    final dates = <String>[];
+    for (final item in exams) {
+      if (item is Map && item['examDate'] != null) {
+        dates.add(item['examDate'].toString());
+      }
+    }
+    for (final item in deadlines) {
+      if (item is Map && item['deadlineDate'] != null) {
+        dates.add(item['deadlineDate'].toString());
+      }
+    }
+    dates.sort();
+    if (dates.isEmpty) return null;
+    final value = dates.first;
+    return value.length >= 10 ? value.substring(0, 10) : value;
+  }
 }
 
 // ── Ders ekleme sayfası ────────────────────────────────────────────────────────
+
+enum _ImportantDateType { exam, deadline }
+
+class _ImportantDateDraft {
+  _ImportantDateDraft({required this.type, required this.date, String? title})
+    : titleCtrl = TextEditingController(text: title ?? '');
+
+  _ImportantDateType type;
+  DateTime date;
+  final TextEditingController titleCtrl;
+
+  void dispose() => titleCtrl.dispose();
+}
 
 class _AddLessonSheet extends StatefulWidget {
   const _AddLessonSheet({required this.onSaved});
@@ -308,28 +356,44 @@ class _AddLessonSheet extends StatefulWidget {
 class _AddLessonSheetState extends State<_AddLessonSheet> {
   final _nameCtrl = TextEditingController();
   int _difficulty = 3;
-  bool _hasExam = false;
-  DateTime _examDate = DateTime.now().add(const Duration(days: 30));
+  final List<_ImportantDateDraft> _importantDates = [
+    _ImportantDateDraft(
+      type: _ImportantDateType.exam,
+      date: DateTime.now().add(const Duration(days: 30)),
+    ),
+  ];
   bool _saving = false;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    for (final item in _importantDates) {
+      item.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      _showError('Ders adi bos olamaz.');
+      return;
+    }
     setState(() => _saving = true);
     try {
       final created = await ApiClient.createLesson(name, _difficulty);
-      if (_hasExam) {
-        final lessonId = (created['id'] as num).toInt();
-        await ApiClient.addExam(
-          lessonId,
-          _examDate.toIso8601String().substring(0, 10),
-        );
+      final lessonId = (created['id'] as num).toInt();
+      for (final item in _importantDates) {
+        final date = item.date.toIso8601String().substring(0, 10);
+        if (item.type == _ImportantDateType.exam) {
+          await ApiClient.addExam(lessonId, date);
+        } else {
+          await ApiClient.addDeadline(
+            lessonId,
+            date,
+            title: item.titleCtrl.text.trim(),
+          );
+        }
       }
       if (!mounted) return;
       Navigator.pop(context);
@@ -337,21 +401,39 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          backgroundColor: Colors.red,
+      _showError(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  void _addImportantDate(_ImportantDateType type) {
+    setState(() {
+      _importantDates.add(
+        _ImportantDateDraft(
+          type: type,
+          date: DateTime.now().add(
+            Duration(days: type == _ImportantDateType.exam ? 30 : 7),
+          ),
         ),
       );
-    }
+    });
+  }
+
+  void _removeImportantDate(int index) {
+    final removed = _importantDates.removeAt(index);
+    removed.dispose();
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
@@ -433,8 +515,7 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
                         color: selected ? kAccent.withAlpha(46) : kBorder,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color:
-                              selected ? kAccent : Colors.transparent,
+                          color: selected ? kAccent : Colors.transparent,
                           width: 0.5,
                         ),
                       ),
@@ -455,40 +536,53 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
             ),
             const SizedBox(height: 20),
             Text(
-              'Sınav var mı?',
+              'Önemli tarihler',
               style: TextStyle(color: kText2, fontSize: 13),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                GestureDetector(
-                  onTap: () => setState(() => _hasExam = !_hasExam),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    height: 30,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: _hasExam ? kAccent : kBorder,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _hasExam ? 'EVET' : 'HAYIR',
-                        style: TextStyle(
-                          color: _hasExam ? kBg : kText2,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
+                _DateAddButton(
+                  icon: Icons.school_outlined,
+                  label: 'Sınav',
+                  onTap: () => _addImportantDate(_ImportantDateType.exam),
                 ),
-                if (_hasExam) ...[
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildExamDatePicker()),
-                ],
+                const SizedBox(width: 8),
+                _DateAddButton(
+                  icon: Icons.assignment_outlined,
+                  label: 'Deadline',
+                  onTap: () => _addImportantDate(_ImportantDateType.deadline),
+                ),
               ],
             ),
+            const SizedBox(height: 10),
+            if (_importantDates.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kBorder.withAlpha(80),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Sınav, ödev teslimi veya proje tarihi ekleyebilirsin.',
+                  style: TextStyle(color: kText2, fontSize: 13),
+                ),
+              )
+            else
+              ...List.generate(_importantDates.length, (index) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == _importantDates.length - 1 ? 0 : 8,
+                  ),
+                  child: _ImportantDateRow(
+                    item: _importantDates[index],
+                    onChanged: () => setState(() {}),
+                    onPickDate: () => _pickDate(index),
+                    onRemove: () => _removeImportantDate(index),
+                  ),
+                );
+              }),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -522,45 +616,194 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
     );
   }
 
-  Widget _buildExamDatePicker() {
-    return GestureDetector(
-      onTap: () async {
-        final d = await showDatePicker(
-          context: context,
-          initialDate: _examDate,
-          firstDate: DateTime.now(),
-          lastDate: DateTime(2100),
-          builder: (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: ColorScheme.dark(primary: kAccent),
-            ),
-            child: child!,
+  Future<void> _pickDate(int index) async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _importantDates[index].date,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(
+          ctx,
+        ).copyWith(colorScheme: ColorScheme.dark(primary: kAccent)),
+        child: child!,
+      ),
+    );
+    if (d != null) {
+      setState(() => _importantDates[index].date = d);
+    }
+  }
+}
+
+class _DateAddButton extends StatelessWidget {
+  const _DateAddButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: kAccent,
+          side: BorderSide(color: kBorder),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        );
-        if (d != null) setState(() => _examDate = d);
-      },
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: kBorder,
-          borderRadius: BorderRadius.circular(999),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.calendar_today_outlined, size: 13, color: kAccent),
-            const SizedBox(width: 6),
-            Text(
-              _examDate.toIso8601String().substring(0, 10),
-              style: TextStyle(
-                color: kText1,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+class _ImportantDateRow extends StatelessWidget {
+  const _ImportantDateRow({
+    required this.item,
+    required this.onChanged,
+    required this.onPickDate,
+    required this.onRemove,
+  });
+
+  final _ImportantDateDraft item;
+  final VoidCallback onChanged;
+  final VoidCallback onPickDate;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final isExam = item.type == _ImportantDateType.exam;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kBorder.withAlpha(80),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<_ImportantDateType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _ImportantDateType.exam,
+                      icon: Icon(Icons.school_outlined, size: 16),
+                      label: Text('Sınav'),
+                    ),
+                    ButtonSegment(
+                      value: _ImportantDateType.deadline,
+                      icon: Icon(Icons.assignment_outlined, size: 16),
+                      label: Text('Deadline'),
+                    ),
+                  ],
+                  selected: {item.type},
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    foregroundColor: WidgetStateProperty.resolveWith(
+                      (states) =>
+                          states.contains(WidgetState.selected) ? kBg : kText2,
+                    ),
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.selected)
+                          ? kAccent
+                          : kSurface,
+                    ),
+                    side: WidgetStateProperty.all(BorderSide(color: kBorder)),
+                  ),
+                  onSelectionChanged: (value) {
+                    item.type = value.first;
+                    onChanged();
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: onRemove,
+                icon: Icon(Icons.close_rounded, color: kText2, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: onPickDate,
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: kSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_outlined,
+                          size: 16,
+                          color: kAccent,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          item.date.toIso8601String().substring(0, 10),
+                          style: TextStyle(
+                            color: kText1,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (!isExam) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: item.titleCtrl,
+                    style: TextStyle(color: kText1, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'örn. Proje teslimi',
+                      hintStyle: TextStyle(color: kText2, fontSize: 12),
+                      filled: true,
+                      fillColor: kSurface,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: kBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: kBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: kAccent),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

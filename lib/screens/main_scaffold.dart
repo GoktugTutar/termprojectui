@@ -233,47 +233,110 @@ class _FullScreenFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Container(
-        margin: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: kBorder.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            children: [
-              // Pattern background
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _DottedPatternPainter(
-                    color: kBorder.withValues(alpha: 0.25),
-                    dotSpacing: 20,
-                    dotSize: 1.5,
-                  ),
-                ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _FrameButtonShadowPainter(
+                margin: EdgeInsets.fromLTRB(54, 28, 32, 54),
+                color: Colors.black,
+                radius: 16,
               ),
-              // Content with navbar
-              Column(
+            ),
+          ),
+          Container(
+            margin: EdgeInsets.fromLTRB(54, 28, 32, 54),
+            decoration: BoxDecoration(
+              color: kSurface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kBorder.withValues(alpha: 0.3)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
                 children: [
-                  // Navbar at top
-                  Padding(padding: EdgeInsets.all(12), child: navbar),
-                  // Content below
-                  Expanded(child: child),
+                  // Pattern background
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _DottedPatternPainter(
+                        color: kBorder.withValues(alpha: 0.25),
+                        dotSpacing: 20,
+                        dotSize: 1.5,
+                      ),
+                    ),
+                  ),
+                  // Content with navbar
+                  Column(
+                    children: [
+                      // Navbar at top
+                      Padding(padding: EdgeInsets.all(12), child: navbar),
+                      // Content below
+                      Expanded(child: child),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
+  }
+}
+
+class _FrameButtonShadowPainter extends CustomPainter {
+  const _FrameButtonShadowPainter({
+    required this.margin,
+    required this.color,
+    required this.radius,
+  });
+
+  final EdgeInsets margin;
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(
+      margin.left,
+      margin.top,
+      size.width - margin.horizontal,
+      size.height - margin.vertical,
+    );
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final outer = RRect.fromRectAndRadius(
+      Rect.fromLTRB(
+        rect.left - 12,
+        rect.top - 12,
+        rect.right + 12,
+        rect.bottom + 12,
+      ),
+      Radius.circular(radius + 12),
+    );
+    final inner = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+
+    final shadow = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRRect(outer)
+      ..addRRect(inner);
+
+    canvas.drawPath(shadow, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FrameButtonShadowPainter oldDelegate) {
+    return oldDelegate.margin != margin ||
+        oldDelegate.color != color ||
+        oldDelegate.radius != radius;
   }
 }

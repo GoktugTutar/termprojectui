@@ -189,36 +189,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     setState(() => _saving = false);
   }
 
-  Future<void> _showAddLessonSheet() async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) => _ProfileAddLessonSheet(),
-    );
-    if (saved != true || !mounted) return;
-    _snack('Ders eklendi.');
-    await _load();
-  }
-
-  Future<void> _showAddBusySlotSheet() async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) => _ProfileAddBusySlotSheet(existingSlots: _busySlots),
-    );
-    if (saved != true || !mounted) return;
-    _snack('Busy time eklendi.');
-    await _load();
-  }
-
   Future<void> _endTerm() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -429,8 +399,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _StyleCard(
                         v: 'deep_focus',
                         label: 'Deep focus',
-                        sub: '1 long block · max 2h',
-                        rule: 'maxSessions=1, max=4 blocks',
                         value: _studyStyle,
                         onChange: (s) => setState(() => _studyStyle = s),
                       ),
@@ -438,8 +406,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _StyleCard(
                         v: 'distributed',
                         label: 'Distributed',
-                        sub: '3 short blocks · spread across day',
-                        rule: 'maxSessions=3, max=2 blocks',
                         value: _studyStyle,
                         onChange: (s) => setState(() => _studyStyle = s),
                       ),
@@ -447,8 +413,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _StyleCard(
                         v: 'normal',
                         label: 'Balanced',
-                        sub: '2 medium blocks · default',
-                        rule: 'maxSessions=2, max=3 blocks',
                         value: _studyStyle,
                         onChange: (s) => setState(() => _studyStyle = s),
                       ),
@@ -479,21 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                   ),
                   SizedBox(height: 24),
-                  _SectionActionHeader(
-                    text: 'Busy times',
-                    icon: Icons.add_rounded,
-                    label: 'Busy time ekle',
-                    onPressed: _saving ? null : _showAddBusySlotSheet,
-                  ),
-                  SizedBox(height: 10),
-                  _ProfileBusySlotsPanel(slots: _busySlots),
-                  SizedBox(height: 24),
-                  _SectionActionHeader(
-                    text: 'Dersler',
-                    icon: Icons.add_rounded,
-                    label: 'Ders ekle',
-                    onPressed: _saving ? null : _showAddLessonSheet,
-                  ),
+                  _SectionLabel('Dersler'),
                   SizedBox(height: 10),
                   _ProfileLessonsPanel(
                     lessons: _lessons,
@@ -720,16 +670,12 @@ class _StyleCard extends StatelessWidget {
   const _StyleCard({
     required this.v,
     required this.label,
-    required this.sub,
-    required this.rule,
     required this.value,
     required this.onChange,
   });
 
   final String v;
   final String label;
-  final String sub;
-  final String rule;
   final String value;
   final ValueChanged<String> onChange;
 
@@ -773,31 +719,12 @@ class _StyleCard extends StatelessWidget {
             ),
             SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: on ? kText1 : kText2,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(sub, style: TextStyle(color: kText2, fontSize: 12)),
-                ],
-              ),
-            ),
-            // Monospace rule
-            SizedBox(
-              width: 110,
               child: Text(
-                rule,
-                textAlign: TextAlign.right,
+                label,
                 style: TextStyle(
-                  color: kText2.withAlpha(180),
-                  fontSize: 10,
-                  fontFamily: 'monospace',
+                  color: on ? kText1 : kText2,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -954,7 +881,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 612,
+      height: 430,
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: kSurface,
@@ -1091,6 +1018,12 @@ class _ProfileLessonRow extends StatelessWidget {
                           'difficulty ${lesson.difficulty}',
                           style: TextStyle(color: kText2, fontSize: 12),
                         ),
+                        SizedBox(width: 8),
+                        _DelayBadge(
+                          totalDelay: totalDelay,
+                          keyfiDelay: lesson.keyfiDelayCount,
+                          zorunluDelay: lesson.zorunluDelayCount,
+                        ),
                       ],
                     ),
                   ],
@@ -1147,6 +1080,49 @@ class _ProfileLessonRow extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DelayBadge extends StatelessWidget {
+  const _DelayBadge({
+    required this.totalDelay,
+    required this.keyfiDelay,
+    required this.zorunluDelay,
+  });
+
+  final int totalDelay;
+  final int keyfiDelay;
+  final int zorunluDelay;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = totalDelay >= 3 ? _kWarning : kText2;
+    return Tooltip(
+      message: 'Kullanıcı delay: $keyfiDelay · Zorunlu delay: $zorunluDelay',
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: tone.withAlpha(28),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: tone.withAlpha(80)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.more_time_rounded, size: 13, color: tone),
+            SizedBox(width: 4),
+            Text(
+              '$totalDelay',
+              style: TextStyle(
+                color: tone,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

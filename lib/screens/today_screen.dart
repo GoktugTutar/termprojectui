@@ -9,10 +9,12 @@ import '../core/api_client.dart';
 import '../core/app_time.dart';
 import '../models/planner_model.dart';
 import '../theme.dart';
+import '../avatar_page.dart';
 
 const kWarning = Color(0xFFF2B14A);
 const kDanger = Color(0xFFFF5C7A);
-const _kHeaderToCardOffset = 114.0;
+const _kChecklistTopOffset = 54.0;
+const _kTodayPanelStackHeight = 522.0;
 
 BoxDecoration _keycapDecoration({
   Color? color,
@@ -104,6 +106,9 @@ class _TodayScreenState extends State<TodayScreen>
   String? _onboardingNotice;
   bool _noticeDismissed = false;
   String _quickNote = '';
+  double _sleepScore = 7;
+  double _fatigueScore = 3;
+  double _stressScore = 3;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
   bool _weeklyFeedbackSubmitted = false;
@@ -193,10 +198,19 @@ class _TodayScreenState extends State<TodayScreen>
       if (plan.weekStart.isNotEmpty) {
         final ws = DateTime.parse(plan.weekStart);
         final planIsCurrentWeek = !ws.isBefore(currentWeekStart);
+<<<<<<< HEAD
         needsNewPlan =
             canCreatePlan && (!planIsCurrentWeek || plan.blocks.isEmpty);
         debugPrint(
           '[TODAY] plan.weekStart=${plan.weekStart} currentWeekStart=$currentWeekStart blocks=${plan.blocks.length} hasLessons=$hasLessons hasBusySlots=$hasBusySlots needsNewPlan=$needsNewPlan',
+=======
+        needsNewPlan = !planIsCurrentWeek || plan.blocks.isEmpty;
+        debugPrint(
+          '[TODAY] plan.weekStart=${plan.weekStart} '
+          'currentWeekStart=$currentWeekStart '
+          'blocks=${plan.blocks.length} '
+          'needsNewPlan=$needsNewPlan',
+>>>>>>> f9a0c29 (Initial commit)
         );
       } else {
         needsNewPlan = canCreatePlan;
@@ -289,6 +303,7 @@ class _TodayScreenState extends State<TodayScreen>
       }
       events.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
 
+<<<<<<< HEAD
       final isLastDayOfWeek = AppTime.now().weekday == DateTime.sunday;
       bool weeklyFeedbackSubmitted = false;
       if (isLastDayOfWeek && !checklistDisabled) {
@@ -296,15 +311,24 @@ class _TodayScreenState extends State<TodayScreen>
             await ApiClient.getWeeklyFeedbackStatus().catchError((_) => false);
       }
 
+=======
+      final prefs = await SharedPreferences.getInstance();
+>>>>>>> f9a0c29 (Initial commit)
       if (!mounted) return;
       setState(() {
         _plan = plan;
         _missingChecklistDates = missingDates;
         _todayChecklistSubmitted = submitted;
+<<<<<<< HEAD
         _checklistDisabled = checklistDisabled;
         if (onboardingNotice != _onboardingNotice) _noticeDismissed = false;
         _onboardingNotice = onboardingNotice;
         if (onboardingNotice == null) _noticeDismissed = false;
+=======
+        _sleepScore = _readDoublePref(prefs, 'today_sleep_score', 7);
+        _fatigueScore = _readDoublePref(prefs, 'today_fatigue_score', 3);
+        _stressScore = _readDoublePref(prefs, 'today_stress_score', 3);
+>>>>>>> f9a0c29 (Initial commit)
         _studiedMinutes
           ..clear()
           ..addAll(loadedStudiedMinutes);
@@ -327,11 +351,22 @@ class _TodayScreenState extends State<TodayScreen>
     }
   }
 
+  double _readDoublePref(SharedPreferences prefs, String key, double fallback) {
+    final value = prefs.get(key);
+    if (value is num) return value.toDouble();
+    return fallback;
+  }
+
   List<ScheduledBlock> get _todayBlocks => _plan?.blocksForDate(_today) ?? [];
 
   List<ScheduledBlock> get _primaryTodayBlocks {
     final seen = <int>{};
     return _todayBlocks.where((b) => seen.add(b.lessonId)).toList();
+  }
+
+  Future<void> _saveWellbeingValue(String key, double value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(key, value);
   }
 
   List<ScheduledBlock> _primaryBlocksForDate(String date) {
@@ -378,20 +413,6 @@ class _TodayScreenState extends State<TodayScreen>
           .where((b) => b.lessonId == lessonId)
           .fold(0, (s, b) => s + b.blockCount) *
       30;
-
-  int _plannedBlocksForLesson(int lessonId) => _todayBlocks
-      .where((b) => b.lessonId == lessonId)
-      .fold(0, (s, b) => s + b.blockCount);
-
-  bool _hasReviewForLesson(int lessonId) =>
-      _todayBlocks.any((b) => b.lessonId == lessonId && b.isReview);
-
-  String _timeRangeForLesson(int lessonId) {
-    final blocks = _todayBlocks.where((b) => b.lessonId == lessonId).toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
-    if (blocks.isEmpty) return '';
-    return '${blocks.first.startTime} - ${blocks.last.endTime}';
-  }
 
   String _checklistTitleForDate(String date) =>
       '${_formatDateLabel(date)} checklist';
@@ -651,14 +672,10 @@ class _TodayScreenState extends State<TodayScreen>
     const dowLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
     final dow = (now.weekday - 1) % 7;
     final kicker = '${dowLabels[dow]} · ${DateFormat('dd MMM').format(now)}';
-    final total = _todayBlocks.length;
-    final totalMins = _todayBlocks.fold(0, (s, b) => s + b.blockCount) * 30;
-    final subtitle = total == 0
-        ? 'No blocks today — a rest day.'
-        : '$total block${total > 1 ? 's' : ''} · ${(totalMins / 60).toStringAsFixed(1)}h of focus';
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+<<<<<<< HEAD
       body: Stack(
         children: [
           SafeArea(
@@ -765,6 +782,120 @@ class _TodayScreenState extends State<TodayScreen>
                             },
                           ),
                         ),
+=======
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          color: kAccent,
+          backgroundColor: kSurface,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 1180),
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 110),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final wide = constraints.maxWidth >= 860;
+                          final topControls = _TodayTopControls(
+                            sleepScore: _sleepScore,
+                            fatigueScore: _fatigueScore,
+                            stressScore: _stressScore,
+                            onSleepChanged: (value) {
+                              setState(() => _sleepScore = value);
+                              _saveWellbeingValue('today_sleep_score', value);
+                            },
+                            onFatigueChanged: (value) {
+                              setState(() => _fatigueScore = value);
+                              _saveWellbeingValue('today_fatigue_score', value);
+                            },
+                            onStressChanged: (value) {
+                              setState(() => _stressScore = value);
+                              _saveWellbeingValue('today_stress_score', value);
+                            },
+                          );
+                          final left = _TodayLeftColumn(
+                            events: _upcomingEvents,
+                            noteText: _quickNote,
+                            onNoteChanged: (value) =>
+                                setState(() => _quickNote = value),
+                          );
+                          final right = _ChecklistPanel(
+                            blocks: _primaryTodayBlocks,
+                            missingDates: _missingChecklistDates,
+                            dateLabel: kicker,
+                            todayDate: _today,
+                            submitted: _todayChecklistSubmitted,
+                            completedBlocks: _completedBlocks,
+                            totalBlocks: _totalBlocks,
+                            studiedMinutes: _totalStudiedMinutes,
+                            plannedMinutes: _totalPlannedMinutes,
+                            progress: _progress,
+                            studiedMinutesForLesson: (lessonId) =>
+                                _studiedMinutes[lessonId] ?? 0,
+                            plannedMinutesForLesson: _plannedMinutesForLesson,
+                            blocksForDate: _blocksForDate,
+                            onMinutesChanged: (lessonId, value) => setState(
+                              () => _studiedMinutes[lessonId] = value,
+                            ),
+                            onMissingSaved: _load,
+                            onSaveChecklist: _saveTodayChecklist,
+                          );
+
+                          if (!wide) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _TodayGreetingTitle(title: '$greet.'),
+                                SizedBox(height: 18),
+                                topControls,
+                                SizedBox(height: 18),
+                                left,
+                                SizedBox(height: 18),
+                                right,
+                              ],
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _TodayGreetingTitle(title: '$greet.'),
+                              SizedBox(height: 18),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 11,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        topControls,
+                                        SizedBox(height: 18),
+                                        left,
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(width: 24),
+                                  Expanded(
+                                    flex: 9,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        top: _kChecklistTopOffset,
+                                      ),
+                                      child: right,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+>>>>>>> f9a0c29 (Initial commit)
                       ),
                     ],
                   ),
@@ -866,25 +997,75 @@ class _FirstWeekChecklistPanel extends StatelessWidget {
 
 // ── Today dashboard layout ────────────────────────────────────────────────────
 
+class _TodayTopControls extends StatelessWidget {
+  const _TodayTopControls({
+    required this.sleepScore,
+    required this.fatigueScore,
+    required this.stressScore,
+    required this.onSleepChanged,
+    required this.onFatigueChanged,
+    required this.onStressChanged,
+  });
+
+  final double sleepScore;
+  final double fatigueScore;
+  final double stressScore;
+  final ValueChanged<double> onSleepChanged;
+  final ValueChanged<double> onFatigueChanged;
+  final ValueChanged<double> onStressChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: 80, top: 18),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 520;
+          final wellbeing = _TodayWellbeingPanel(
+            sleepScore: sleepScore,
+            fatigueScore: fatigueScore,
+            stressScore: stressScore,
+            onSleepChanged: onSleepChanged,
+            onFatigueChanged: onFatigueChanged,
+            onStressChanged: onStressChanged,
+          );
+
+          if (compact) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AvatarHeader(),
+                  SizedBox(width: 24),
+                  SizedBox(width: 180, child: wellbeing),
+                ],
+              ),
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AvatarHeader(),
+              SizedBox(width: 34),
+              SizedBox(width: 320, child: wellbeing),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _TodayLeftColumn extends StatelessWidget {
   const _TodayLeftColumn({
-    required this.kicker,
-    required this.title,
-    required this.subtitle,
-    required this.blocks,
     required this.events,
-    required this.plannedBlocksForLesson,
-    required this.plannedMinutesForLesson,
-    required this.timeRangeForLesson,
-    required this.hasReviewForLesson,
     required this.noteText,
     required this.onNoteChanged,
   });
 
-  final String kicker;
-  final String title;
-  final String subtitle;
-  final List<ScheduledBlock> blocks;
   final List<
     ({
       String lessonName,
@@ -895,10 +1076,6 @@ class _TodayLeftColumn extends StatelessWidget {
     })
   >
   events;
-  final int Function(int lessonId) plannedBlocksForLesson;
-  final int Function(int lessonId) plannedMinutesForLesson;
-  final String Function(int lessonId) timeRangeForLesson;
-  final bool Function(int lessonId) hasReviewForLesson;
   final String noteText;
   final ValueChanged<String> onNoteChanged;
 
@@ -907,16 +1084,6 @@ class _TodayLeftColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _TodayIdentityHeader(kicker: kicker, title: title, subtitle: subtitle),
-        SizedBox(height: 22),
-        _TodayToDoCard(
-          blocks: blocks,
-          plannedBlocksForLesson: plannedBlocksForLesson,
-          plannedMinutesForLesson: plannedMinutesForLesson,
-          timeRangeForLesson: timeRangeForLesson,
-          hasReviewForLesson: hasReviewForLesson,
-        ),
-        SizedBox(height: 18),
         _ComingUpCard(events: events),
         SizedBox(height: 14),
         _QuickToolsRow(noteText: noteText, onNoteChanged: onNoteChanged),
@@ -925,207 +1092,248 @@ class _TodayLeftColumn extends StatelessWidget {
   }
 }
 
-class _TodayIdentityHeader extends StatelessWidget {
-  const _TodayIdentityHeader({
-    required this.kicker,
-    required this.title,
-    required this.subtitle,
-  });
+class _TodayGreetingTitle extends StatelessWidget {
+  const _TodayGreetingTitle({required this.title});
 
-  final String kicker;
   final String title;
-  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Transform.translate(
+      offset: const Offset(0, -72),
+      child: Text(
+        title,
+        textAlign: TextAlign.left,
+        style: TextStyle(
+          color: kText1,
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayWellbeingPanel extends StatelessWidget {
+  const _TodayWellbeingPanel({
+    required this.sleepScore,
+    required this.fatigueScore,
+    required this.stressScore,
+    required this.onSleepChanged,
+    required this.onFatigueChanged,
+    required this.onStressChanged,
+  });
+
+  final double sleepScore;
+  final double fatigueScore;
+  final double stressScore;
+  final ValueChanged<double> onSleepChanged;
+  final ValueChanged<double> onFatigueChanged;
+  final ValueChanged<double> onStressChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeSleepScore = sleepScore.isFinite ? sleepScore : 7.0;
+    final safeFatigueScore = fatigueScore.isFinite ? fatigueScore : 3.0;
+    final safeStressScore = stressScore.isFinite ? stressScore : 3.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _BitmojiSlot(),
-        SizedBox(width: 18),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                kicker,
-                style: TextStyle(
-                  color: kText2,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  color: kText1,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(subtitle, style: TextStyle(color: kText2, fontSize: 14)),
-            ],
-          ),
+        _WellbeingBar(
+          label: 'Uyku',
+          valueText: '${safeSleepScore.toStringAsFixed(1)}h',
+          value: safeSleepScore,
+          min: 0,
+          max: 10,
+          divisions: 20,
+          onChanged: onSleepChanged,
+        ),
+        SizedBox(height: 4),
+        _WellbeingBar(
+          label: 'Yorgunluk',
+          valueText: '${safeFatigueScore.round()}/5',
+          value: safeFatigueScore,
+          min: 1,
+          max: 5,
+          divisions: 4,
+          onChanged: onFatigueChanged,
+        ),
+        SizedBox(height: 4),
+        _WellbeingBar(
+          label: 'Stres',
+          valueText: '${safeStressScore.round()}/5',
+          value: safeStressScore,
+          min: 1,
+          max: 5,
+          divisions: 4,
+          onChanged: onStressChanged,
         ),
       ],
     );
   }
 }
 
-class _BitmojiSlot extends StatelessWidget {
-  const _BitmojiSlot();
+class _WellbeingBar extends StatelessWidget {
+  const _WellbeingBar({
+    required this.label,
+    required this.valueText,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String valueText;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 92,
-      height: 92,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: kSurface,
-        border: Border.all(color: kBorder, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(35),
-            blurRadius: 18,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Container(
-          width: 62,
-          height: 62,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: kAccent.withAlpha(28),
-          ),
-          child: Icon(Icons.person_outline_rounded, color: kAccent, size: 34),
+    final railColor = appTheme.isLight
+        ? kAccent.withAlpha(135)
+        : Color(0xFF5B3FD6);
+    final railGlow = appTheme.isLight
+        ? kAccent.withAlpha(45)
+        : Color(0xFF8A6CFF).withAlpha(90);
+    final bladeColor = appTheme.isLight ? Color(0xFF00A6C8) : Color(0xFF49E9FF);
+    final safeMax = max > min ? max : min + 1;
+    final safeValue = value.isFinite
+        ? value.clamp(min, safeMax).toDouble()
+        : min;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: kText1,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Spacer(),
+            Text(
+              valueText,
+              style: TextStyle(
+                color: kText2,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _TodayToDoCard extends StatelessWidget {
-  const _TodayToDoCard({
-    required this.blocks,
-    required this.plannedBlocksForLesson,
-    required this.plannedMinutesForLesson,
-    required this.timeRangeForLesson,
-    required this.hasReviewForLesson,
-  });
-
-  final List<ScheduledBlock> blocks;
-  final int Function(int lessonId) plannedBlocksForLesson;
-  final int Function(int lessonId) plannedMinutesForLesson;
-  final String Function(int lessonId) timeRangeForLesson;
-  final bool Function(int lessonId) hasReviewForLesson;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minHeight: 210),
-      padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
-      decoration: _keycapDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PanelTitle(
-            icon: Icons.task_alt_rounded,
-            title: 'Bugün yapılacaklar',
-          ),
-          SizedBox(height: 14),
-          if (blocks.isEmpty)
-            _EmptyPanelState(
-              icon: Icons.coffee_outlined,
-              title: 'Rest day',
-              subtitle: 'Bugün planlanmış çalışma bloğu yok.',
-            )
-          else
-            ...List.generate(blocks.length, (i) {
-              final block = blocks[i];
-              return _TodayPlanItem(
-                block: block,
-                timeRange: timeRangeForLesson(block.lessonId),
-                plannedBlocks: plannedBlocksForLesson(block.lessonId),
-                plannedMinutes: plannedMinutesForLesson(block.lessonId),
-                hasReview: hasReviewForLesson(block.lessonId),
-                isLast: i == blocks.length - 1,
+        SizedBox(height: 3),
+        SizedBox(
+          height: 24,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const sideInset = 8.0;
+              final usableWidth = math.max(1.0, constraints.maxWidth - 16);
+              final normalized = ((safeValue - min) / (safeMax - min)).clamp(
+                0.0,
+                1.0,
               );
-            }),
-        ],
-      ),
-    );
-  }
-}
 
-class _TodayPlanItem extends StatelessWidget {
-  const _TodayPlanItem({
-    required this.block,
-    required this.timeRange,
-    required this.plannedBlocks,
-    required this.plannedMinutes,
-    required this.hasReview,
-    required this.isLast,
-  });
+              void updateFromLocalPosition(Offset localPosition) {
+                final raw = ((localPosition.dx - sideInset) / usableWidth)
+                    .clamp(0.0, 1.0);
+                var next = min + raw * (safeMax - min);
+                if (divisions > 0) {
+                  final step = (safeMax - min) / divisions;
+                  next = min + ((next - min) / step).round() * step;
+                }
+                onChanged(next.clamp(min, safeMax).toDouble());
+              }
 
-  final ScheduledBlock block;
-  final String timeRange;
-  final int plannedBlocks;
-  final int plannedMinutes;
-  final bool hasReview;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = lessonColor(block.lessonId);
-    return Padding(
-      padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            margin: EdgeInsets.only(top: 6),
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanDown: (details) =>
+                    updateFromLocalPosition(details.localPosition),
+                onPanUpdate: (details) =>
+                    updateFromLocalPosition(details.localPosition),
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        block.lessonName,
-                        style: TextStyle(
-                          color: kText1,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                    Positioned(
+                      left: sideInset,
+                      right: sideInset,
+                      child: Container(
+                        height: 12,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: railGlow,
+                              blurRadius: 12,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Center(
+                          child: Container(
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: railColor.withAlpha(90),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: railColor.withAlpha(170),
+                                width: 0.8,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    if (hasReview) _MiniBadge(label: 'Review', color: kAccent),
+                    Positioned(
+                      left: sideInset,
+                      child: Container(
+                        width: 2,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: railColor.withAlpha(150),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: sideInset + normalized * usableWidth - 2,
+                      child: Container(
+                        width: 4,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: bladeColor,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: bladeColor.withAlpha(180),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            ),
+                            BoxShadow(
+                              color: bladeColor.withAlpha(80),
+                              blurRadius: 18,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                SizedBox(height: 4),
-                Text(
-                  '$timeRange · $plannedBlocks block${plannedBlocks > 1 ? 's' : ''} · ${_formatMinutes(plannedMinutes)}',
-                  style: TextStyle(color: kText2, fontSize: 12),
-                ),
-              ],
-            ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1295,6 +1503,7 @@ class _ChecklistPanel extends StatelessWidget {
   const _ChecklistPanel({
     required this.blocks,
     required this.missingDates,
+    required this.dateLabel,
     required this.todayDate,
     required this.submitted,
     required this.completedBlocks,
@@ -1312,6 +1521,7 @@ class _ChecklistPanel extends StatelessWidget {
 
   final List<ScheduledBlock> blocks;
   final List<String> missingDates;
+  final String dateLabel;
   final String todayDate;
   final bool submitted;
   final int completedBlocks;
@@ -1338,14 +1548,28 @@ class _ChecklistPanel extends StatelessWidget {
     }
 
     return Container(
-      constraints: BoxConstraints(minHeight: 620),
+      constraints: BoxConstraints(minHeight: _kTodayPanelStackHeight),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
       decoration: _keycapDecoration(),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PanelTitle(icon: Icons.checklist_rounded, title: 'Checklist'),
+          Row(
+            children: [
+              _PanelTitle(icon: Icons.checklist_rounded, title: 'Checklist'),
+              Spacer(),
+              Text(
+                dateLabel,
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
           SizedBox(height: 16),
           _ChecklistProgress(
             completedBlocks: completedBlocks,
@@ -1513,7 +1737,7 @@ class _MissingChecklistTabsPanelState
     final isTodayTab = _activeDate == widget.todayDate;
 
     return Container(
-      constraints: BoxConstraints(minHeight: 620),
+      constraints: BoxConstraints(minHeight: _kTodayPanelStackHeight),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
       decoration: _keycapDecoration(),
       child: Column(
@@ -1822,32 +2046,6 @@ class _PanelTitle extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MiniBadge extends StatelessWidget {
-  const _MiniBadge({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withAlpha(34),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 }
