@@ -23,6 +23,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _regPass = TextEditingController();
   final _regPassConfirm = TextEditingController();
   final _registerPageController = PageController();
+  final _registerLessonsScroll = ScrollController();
   final List<_RegisterLessonDraft> _lessonDrafts = [_RegisterLessonDraft()];
   final List<_RegisterBusySlotDraft> _busyDrafts = [_RegisterBusySlotDraft()];
   String _regPreferredStudyTime = 'morning';
@@ -43,6 +44,7 @@ class _AuthScreenState extends State<AuthScreen> {
     _regPass.dispose();
     _regPassConfirm.dispose();
     _registerPageController.dispose();
+    _registerLessonsScroll.dispose();
     for (final draft in _lessonDrafts) {
       draft.dispose();
     }
@@ -158,6 +160,18 @@ class _AuthScreenState extends State<AuthScreen> {
       duration: Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  void _addRegisterLesson() {
+    setState(() => _lessonDrafts.add(_RegisterLessonDraft()));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_registerLessonsScroll.hasClients) return;
+      _registerLessonsScroll.animateTo(
+        _registerLessonsScroll.position.maxScrollExtent,
+        duration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   void _showError(String msg) {
@@ -699,16 +713,12 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
               ),
             ),
-            IconButton(
-              onPressed: () =>
-                  setState(() => _lessonDrafts.add(_RegisterLessonDraft())),
-              icon: Icon(Icons.add_rounded, color: palette.accent),
-              tooltip: 'Ders ekle',
-            ),
+            _RegisterAddButton(palette: palette, onTap: _addRegisterLesson),
           ],
         ),
         Expanded(
           child: ListView.separated(
+            controller: _registerLessonsScroll,
             itemCount: _lessonDrafts.length,
             separatorBuilder: (_, _) => SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -857,6 +867,41 @@ class _RegisterBusySlotDraft {
   int fatigueLevel = 2;
 
   void dispose() {}
+}
+
+class _RegisterAddButton extends StatelessWidget {
+  const _RegisterAddButton({required this.palette, required this.onTap});
+
+  final _AuthPalette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Ders ekle',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: palette.accent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: palette.accent.withAlpha(70),
+                blurRadius: 14,
+                offset: Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Icon(Icons.add_rounded, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
 }
 
 class _RegisterPreferenceTile extends StatelessWidget {
