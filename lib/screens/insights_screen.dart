@@ -29,6 +29,7 @@ class _InsightsScreenState extends State<InsightsScreen>
   String _completionStr = '—';
   Map<String, dynamic>? _profile;
   String _stressStr = '—';
+  String _aiMessage = ''; 
 
   @override
   void initState() {
@@ -40,7 +41,7 @@ class _InsightsScreenState extends State<InsightsScreen>
     print('_load called');
     setState(() => _loading = true);
     try {
-      final msgs = await ApiClient.getFeedbackMessages();
+      final feedbackData = await ApiClient.getFeedbackMessages();
       final rawLessons = await ApiClient.getLessons();
 
 
@@ -56,7 +57,7 @@ class _InsightsScreenState extends State<InsightsScreen>
         final stress = (profile['avgStress7d'] as num? ?? 0).toDouble();
         stressStr = stress.toStringAsFixed(1);
         // Multiplier from overload alert
-        final hasOverload = msgs.any(
+        final hasOverload = (feedbackData['messages'] as List? ?? []).any(
           (m) => m['type']?.toString() == 'asiri_yuk',
         );
         if (hasOverload) multiplierStr = '0.85';
@@ -75,11 +76,12 @@ class _InsightsScreenState extends State<InsightsScreen>
 
       if (!mounted) return;
       setState(() {
-        _messages = msgs;
+        _messages = feedbackData['messages'] as List? ?? [];
         _lessons = lessons;
         _profile = profile;
         _multiplierStr = multiplierStr;
         _completionStr = completionStr;
+        _aiMessage = feedbackData['aiMessage'] as String? ?? '';
         _stressStr = stressStr;
         _loading = false;
       });
@@ -126,6 +128,7 @@ class _InsightsScreenState extends State<InsightsScreen>
                         _buildTrends(),
                         if (_profile != null) _buildProfileCard(),
                         _buildMessages(),
+                        if (_aiMessage.isNotEmpty) _buildAiMessage(), 
                         SliverToBoxAdapter(child: SizedBox(height: 100)),
                       ],
                     ),
@@ -413,6 +416,51 @@ class _InsightsScreenState extends State<InsightsScreen>
       ),
     );
   }
+
+  Widget _buildAiMessage() {
+  return SliverToBoxAdapter(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [kAccent.withAlpha(30), kAccent.withAlpha(10)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kAccent.withAlpha(80)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: kAccent.withAlpha(40),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.auto_awesome_rounded, color: kAccent, size: 16),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _aiMessage,
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
   Widget _buildMessages() {
     if (_messages.isEmpty) {

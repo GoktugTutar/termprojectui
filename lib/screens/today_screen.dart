@@ -127,12 +127,15 @@ class _TodayScreenState extends State<TodayScreen>
   bool _checklistDisabled = false;
   String? _onboardingNotice;
   bool _noticeDismissed = false;
+  String _aiMessage = '';        // ← ekle
+  bool _aiMessageDismissed = false;  // ← ekle
   String _quickNote = '';
   double _sleepScore = 7;
   double _stressScore = 3;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
   bool _weeklyFeedbackSubmitted = false;
+  bool _sleepAsked = false;
   List<({String id, String lessonName})> _feedbackLessons = [];
   List<
     ({
@@ -193,14 +196,20 @@ class _TodayScreenState extends State<TodayScreen>
         ApiClient.getWeekPlan(),
         ApiClient.getMe(),
         ApiClient.getLessons().catchError((_) => <dynamic>[]),
+        ApiClient.getFeedbackMessages().catchError((_) => <String, dynamic>{}),
+        ApiClient.getSleepStatus().catchError((_) => <String, dynamic>{'asked': true}),
       ]);
       Map<String, dynamic> data = parallelInit[0] as Map<String, dynamic>;
       final userData = Map<String, dynamic>.from(parallelInit[1] as Map);
       final raw = parallelInit[2] as List<dynamic>;
+      final feedbackData = parallelInit[3] as Map<String, dynamic>;
+      final aiMsg = feedbackData['aiMessage'] as String? ?? '';
       WeeklyPlan plan = WeeklyPlan.fromJson(data);
       final hasLessons = raw.isNotEmpty;
       final hasBusySlots = ((userData['busySlots'] as List?) ?? []).isNotEmpty;
       final canCreatePlan = hasLessons && hasBusySlots;
+      final sleepStatus = parallelInit[4] as Map<String, dynamic>;
+      _sleepAsked = sleepStatus['asked'] as bool? ?? false;
 
       final today = AppTime.now();
       final todayDate = DateTime(today.year, today.month, today.day);
@@ -337,6 +346,11 @@ class _TodayScreenState extends State<TodayScreen>
         _isLastDayOfWeek = isLastDayOfWeek;
         _weeklyFeedbackSubmitted = weeklyFeedbackSubmitted;
         _upcomingEvents = events;
+        _sleepAsked = sleepStatus['asked'] as bool? ?? false;
+        if (aiMsg.isNotEmpty) {   // ← ekle
+          _aiMessage = aiMsg;
+          _aiMessageDismissed = false;
+        }
         _feedbackLessons = raw
             .map(
               (l) => (
@@ -838,6 +852,76 @@ class _TodayScreenState extends State<TodayScreen>
                 onClose: () => setState(() => _noticeDismissed = true),
               ),
             ),
+            if (!_sleepAsked)
+              Positioned(
+                top: 80, left: 18, right: 18,
+                child: _SleepCard(
+                  onAnswer: (sleptWell) async {
+                    await ApiClient.submitSleep(sleptWell);
+                    setState(() => _sleepAsked = true);
+                  },
+                ),
+              ),
+          if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
+            Positioned(
+              bottom: 24, left: 18, right: 18,
+              child: _AiMessageBanner(
+                message: _aiMessage,
+                onClose: () => setState(() => _aiMessageDismissed = true),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _AiMessageBanner extends StatelessWidget {
+  const _AiMessageBanner({required this.message, required this.onClose});
+
+  final String message;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: kSurface.withAlpha(245),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kAccent.withAlpha(100)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(60),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: kAccent.withAlpha(34),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.auto_awesome_rounded, color: kAccent, size: 15),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: kText1, fontSize: 13, height: 1.4),
+            ),
+          ),
+          IconButton(
+            onPressed: onClose,
+            icon: Icon(Icons.close_rounded, color: kText2, size: 16),
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
         ],
       ),
     );
@@ -2946,6 +3030,83 @@ class _ToggleBtn extends StatelessWidget {
           ),
         ),
         child: Icon(icon, size: 15, color: active ? activeColor : kText2),
+      ),
+    );
+  }
+
+  
+}
+
+class _SleepCard extends StatelessWidget {
+  const _SleepCard({required this.onAnswer});
+  final Future<void> Function(bool sleptWell) onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(50), blurRadius: 12, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Text('😴', style: TextStyle(fontSize: 20)),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Dün iyi uyudun mu?',
+              style: TextStyle(color: kText1, fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+          ),
+          SizedBox(width: 8),
+          _SleepButton(label: 'Evet', positive: true, onTap: () => onAnswer(true)),
+          SizedBox(width: 8),
+          _SleepButton(label: 'Hayır', positive: false, onTap: () => onAnswer(false)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SleepButton extends StatefulWidget {
+  const _SleepButton({required this.label, required this.positive, required this.onTap});
+  final String label;
+  final bool positive;
+  final VoidCallback onTap;
+
+  @override
+  State<_SleepButton> createState() => _SleepButtonState();
+}
+
+class _SleepButtonState extends State<_SleepButton> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.positive ? kAccent : kDanger;
+    return GestureDetector(
+      onTap: _loading ? null : () async {
+        setState(() => _loading = true);
+        widget.onTap();
+      },
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withAlpha(_loading ? 60 : 22),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withAlpha(120)),
+        ),
+        child: _loading
+            ? SizedBox(width: 14, height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color))
+            : Text(widget.label,
+                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
       ),
     );
   }
