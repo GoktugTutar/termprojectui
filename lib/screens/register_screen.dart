@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import 'onboarding_screen.dart';
 
-/// Kullanıcı kayıt ekranı — yalnızca e-posta + şifre alır,
+/// Kullanıcı kayıt ekranı — temel akademik bilgileri ve şifreyi alır,
 /// kayıt başarılı olunca OnboardingScreen'e yönlendirir.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -15,6 +15,9 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
+  final _gradeLevelCtrl = TextEditingController();
+  final _gpaCtrl = TextEditingController();
+  final _academicTermCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
@@ -28,6 +31,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _emailCtrl.dispose();
+    _gradeLevelCtrl.dispose();
+    _gpaCtrl.dispose();
+    _academicTermCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
@@ -40,6 +46,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final token = await ApiClient.register(
         _emailCtrl.text.trim(),
         _passCtrl.text.trim(),
+        gradeLevel: int.parse(_gradeLevelCtrl.text.trim()),
+        gpa: double.parse(_gpaCtrl.text.trim().replaceAll(',', '.')),
+        academicTerm: _academicTermCtrl.text.trim(),
       );
       await ApiClient.saveToken(token);
       if (!mounted) return;
@@ -106,7 +115,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
                     children: [
-                      _BackButton(palette: p, onTap: () => Navigator.pop(context)),
+                      _BackButton(
+                        palette: p,
+                        onTap: () => Navigator.pop(context),
+                      ),
                       const Spacer(),
                       _ModeSwitch(
                         darkMode: _darkMode,
@@ -142,8 +154,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       width: 1.5,
                                     ),
                                   ),
-                                  child: Icon(Icons.person_add_rounded,
-                                      color: p.accent, size: 36),
+                                  child: Icon(
+                                    Icons.person_add_rounded,
+                                    color: p.accent,
+                                    size: 36,
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
@@ -159,7 +174,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 const SizedBox(height: 8),
                                 Text(
                                   'E-posta ve şifrenle devam et.',
-                                  style: TextStyle(fontSize: 14, color: p.muted),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: p.muted,
+                                  ),
                                   textAlign: TextAlign.center,
                                 ),
                               ],
@@ -174,8 +192,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               children: [
                                 Text(
                                   'Zaten hesabın var mı?',
-                                  style:
-                                      TextStyle(color: p.muted, fontSize: 14),
+                                  style: TextStyle(
+                                    color: p.muted,
+                                    fontSize: 14,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 GestureDetector(
@@ -237,8 +257,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   icon: Icons.email_outlined,
                   type: TextInputType.emailAddress,
                   palette: p,
+                  validator: (v) => v == null || !v.contains('@')
+                      ? 'Geçerli e-posta girin'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _field(
+                        ctrl: _gradeLevelCtrl,
+                        label: 'Sınıf',
+                        icon: Icons.school_outlined,
+                        type: TextInputType.number,
+                        palette: p,
+                        validator: (v) {
+                          final value = int.tryParse(v?.trim() ?? '');
+                          if (value == null) return 'Sınıf girin';
+                          if (value < 1 || value > 8) return '1-8 arası';
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _field(
+                        ctrl: _gpaCtrl,
+                        label: 'GPA',
+                        icon: Icons.workspace_premium_outlined,
+                        type: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        palette: p,
+                        validator: (v) {
+                          final value = double.tryParse(
+                            (v ?? '').trim().replaceAll(',', '.'),
+                          );
+                          if (value == null) return 'GPA girin';
+                          if (value < 0 || value > 4) return '0-4 arası';
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _field(
+                  ctrl: _academicTermCtrl,
+                  label: 'Dönem',
+                  icon: Icons.event_note_outlined,
+                  palette: p,
                   validator: (v) =>
-                      v == null || !v.contains('@') ? 'Geçerli e-posta girin' : null,
+                      v == null || v.trim().isEmpty ? 'Dönem girin' : null,
                 ),
                 const SizedBox(height: 14),
                 _field(
@@ -281,8 +351,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   onPressed: _loading ? null : _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: p.accent,
-                    foregroundColor:
-                        _darkMode ? Colors.white : p.backgroundStart,
+                    foregroundColor: _darkMode
+                        ? Colors.white
+                        : p.backgroundStart,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
@@ -340,8 +411,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         suffixIcon: suffix,
         filled: true,
         fillColor: palette.inputFill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.border),
@@ -385,8 +458,11 @@ class _BackButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.arrow_back_ios_new_rounded,
-                color: palette.text, size: 16),
+            Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: palette.text,
+              size: 16,
+            ),
             const SizedBox(width: 6),
             Text(
               'Geri',
@@ -500,32 +576,32 @@ class _Palette {
   });
 
   factory _Palette.dark() => const _Palette(
-        backgroundStart: Color(0xFF070719),
-        backgroundMid: Color(0xFF0B0921),
-        backgroundEnd: Color(0xFF050507),
-        panel: Color(0xD00D0A24),
-        text: Color(0xFFF4F0FF),
-        muted: Color(0xFF9B8DCC),
-        accent: Color(0xFF8A6CFF),
-        border: Color(0xFF3D2D84),
-        inputFill: Color(0x8013122D),
-        shadow: Color(0xFF000000),
-        glow: Color(0xFF49E9FF),
-      );
+    backgroundStart: Color(0xFF070719),
+    backgroundMid: Color(0xFF0B0921),
+    backgroundEnd: Color(0xFF050507),
+    panel: Color(0xD00D0A24),
+    text: Color(0xFFF4F0FF),
+    muted: Color(0xFF9B8DCC),
+    accent: Color(0xFF8A6CFF),
+    border: Color(0xFF3D2D84),
+    inputFill: Color(0x8013122D),
+    shadow: Color(0xFF000000),
+    glow: Color(0xFF49E9FF),
+  );
 
   factory _Palette.light() => const _Palette(
-        backgroundStart: Color(0xFFC5FFB8),
-        backgroundMid: Color(0xFFE9FFE4),
-        backgroundEnd: Color(0xFFFFFDF8),
-        panel: Color(0xF8FFFDF8),
-        text: Color(0xFF073C35),
-        muted: Color(0xFF48685F),
-        accent: Color(0xFFA78BFA),
-        border: Color(0xFF8F9D93),
-        inputFill: Color(0xEEFFFDF8),
-        shadow: Color(0x66073C35),
-        glow: Color(0xBFC5FFB8),
-      );
+    backgroundStart: Color(0xFFC5FFB8),
+    backgroundMid: Color(0xFFE9FFE4),
+    backgroundEnd: Color(0xFFFFFDF8),
+    panel: Color(0xF8FFFDF8),
+    text: Color(0xFF073C35),
+    muted: Color(0xFF48685F),
+    accent: Color(0xFFA78BFA),
+    border: Color(0xFF8F9D93),
+    inputFill: Color(0xEEFFFDF8),
+    shadow: Color(0x66073C35),
+    glow: Color(0xBFC5FFB8),
+  );
 
   final Color backgroundStart;
   final Color backgroundMid;

@@ -132,8 +132,10 @@ class _TodayScreenState extends State<TodayScreen>
   String _aiMessage = ''; // ← ekle
   bool _aiMessageDismissed = false; // ← ekle
   String _quickNote = '';
-  double _sleepScore = 7;
-  double _stressScore = 3;
+  String _displayName = 'Öğrenci';
+  String _gpaLabel = 'GPA -';
+  String _termLabel = 'Dönem -';
+  AvatarExpression _avatarExpression = AvatarExpression.normal;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
   bool _sleepAsked = false;
@@ -206,6 +208,9 @@ class _TodayScreenState extends State<TodayScreen>
       final raw = parallelInit[2] as List<dynamic>;
       final feedbackData = parallelInit[3] as Map<String, dynamic>;
       final aiMsg = feedbackData['aiMessage'] as String? ?? '';
+      final displayName = _displayNameFromUser(userData);
+      final gpaLabel = _gpaLabelFromUser(userData);
+      final termLabel = _termLabelFromUser(userData);
       WeeklyPlan plan = WeeklyPlan.fromJson(data);
       final hasLessons = raw.isNotEmpty;
       final hasBusySlots = ((userData['busySlots'] as List?) ?? []).isNotEmpty;
@@ -267,6 +272,7 @@ class _TodayScreenState extends State<TodayScreen>
       final loadedStudiedMinutes = <int, int>{};
       final cl = status['checklist'];
       final submitted = !checklistDisabled && cl != null;
+      final avatarExpression = _avatarExpressionFromChecklist(cl);
       if (!checklistDisabled && cl != null) {
         for (final item in ((cl as Map)['items'] as List? ?? [])) {
           final lid = (item['lessonId'] as num).toInt();
@@ -327,8 +333,6 @@ class _TodayScreenState extends State<TodayScreen>
       events.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
 
       final isLastDayOfWeek = AppTime.now().weekday == DateTime.sunday;
-      final prefs = await SharedPreferences.getInstance();
-
       if (!mounted) return;
       setState(() {
         _plan = plan;
@@ -338,8 +342,10 @@ class _TodayScreenState extends State<TodayScreen>
         if (onboardingNotice != _onboardingNotice) _noticeDismissed = false;
         _onboardingNotice = onboardingNotice;
 
-        _sleepScore = _readDoublePref(prefs, 'today_sleep_score', 7);
-        _stressScore = _readDoublePref(prefs, 'today_stress_score', 3);
+        _displayName = displayName;
+        _gpaLabel = gpaLabel;
+        _termLabel = termLabel;
+        _avatarExpression = avatarExpression;
         _isLastDayOfWeek = isLastDayOfWeek;
         _upcomingEvents = events;
         _sleepAsked = sleepStatus['asked'] as bool? ?? false;
@@ -356,10 +362,49 @@ class _TodayScreenState extends State<TodayScreen>
     }
   }
 
-  double _readDoublePref(SharedPreferences prefs, String key, double fallback) {
-    final value = prefs.get(key);
-    if (value is num) return value.toDouble();
-    return fallback;
+  String _displayNameFromUser(Map<String, dynamic> userData) {
+    final rawName = (userData['name'] ?? userData['fullName'])
+        ?.toString()
+        .trim();
+    if (rawName != null && rawName.isNotEmpty) return rawName;
+
+    final email = (userData['email'] as String? ?? '').trim();
+    final prefix = email.split('@').first.trim();
+    if (prefix.isNotEmpty) return prefix;
+    return 'Öğrenci';
+  }
+
+  String _gpaLabelFromUser(Map<String, dynamic> userData) {
+    final raw = userData['gpa'];
+    final value = raw is num
+        ? raw.toDouble()
+        : double.tryParse(raw?.toString().replaceAll(',', '.') ?? '');
+    if (value == null) return 'GPA -';
+
+    var text = value.toStringAsFixed(2);
+    if (text.endsWith('00')) {
+      text = value.toStringAsFixed(0);
+    } else if (text.endsWith('0')) {
+      text = text.substring(0, text.length - 1);
+    }
+    return text;
+  }
+
+  String _termLabelFromUser(Map<String, dynamic> userData) {
+    final term = userData['academicTerm']?.toString().trim();
+    if (term == null || term.isEmpty) return 'Dönem -';
+    return term;
+  }
+
+  AvatarExpression _avatarExpressionFromChecklist(dynamic checklist) {
+    if (checklist is! Map) return AvatarExpression.normal;
+
+    final stressLevel = (checklist['stressLevel'] as num?)?.toInt() ?? 3;
+    final sleptWell = checklist['sleptWell'] as bool?;
+
+    if (stressLevel >= 4) return AvatarExpression.stressed;
+    if (sleptWell == false) return AvatarExpression.sleepy;
+    return AvatarExpression.normal;
   }
 
   List<ScheduledBlock> get _todayBlocks => _plan?.blocksForDate(_today) ?? [];
@@ -367,11 +412,6 @@ class _TodayScreenState extends State<TodayScreen>
   List<ScheduledBlock> get _primaryTodayBlocks {
     final seen = <int>{};
     return _todayBlocks.where((b) => seen.add(b.lessonId)).toList();
-  }
-
-  Future<void> _saveWellbeingValue(String key, double value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(key, value);
   }
 
   List<ScheduledBlock> _primaryBlocksForDate(String date) {
@@ -441,17 +481,15 @@ class _TodayScreenState extends State<TodayScreen>
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         backgroundColor: kSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        icon: Icon(Icons.rate_review_outlined, color: kAccent, size: 34),
+        insetPadding: EdgeInsets.symmetric(horizontal: 28),
+        contentPadding: EdgeInsets.fromLTRB(28, 26, 28, 10),
+        actionsPadding: EdgeInsets.fromLTRB(20, 0, 20, 22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        icon: Icon(Icons.rate_review_outlined, color: kAccent, size: 30),
         title: Text(
           'Haftanı değerlendir',
           textAlign: TextAlign.center,
           style: TextStyle(color: kText1, fontWeight: FontWeight.w900),
-        ),
-        content: Text(
-          'Haftanı değerlendirmek için tıkla.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: kText2, height: 1.35),
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
@@ -734,22 +772,10 @@ class _TodayScreenState extends State<TodayScreen>
                             builder: (context, constraints) {
                               final wide = constraints.maxWidth >= 860;
                               final topControls = _TodayTopControls(
-                                sleepScore: _sleepScore,
-                                stressScore: _stressScore,
-                                onSleepChanged: (value) {
-                                  setState(() => _sleepScore = value);
-                                  _saveWellbeingValue(
-                                    'today_sleep_score',
-                                    value,
-                                  );
-                                },
-                                onStressChanged: (value) {
-                                  setState(() => _stressScore = value);
-                                  _saveWellbeingValue(
-                                    'today_stress_score',
-                                    value,
-                                  );
-                                },
+                                displayName: _displayName,
+                                gpaLabel: _gpaLabel,
+                                termLabel: _termLabel,
+                                avatarExpression: _avatarExpression,
                               );
                               final left = _TodayLeftColumn(
                                 events: _upcomingEvents,
@@ -858,14 +884,27 @@ class _TodayScreenState extends State<TodayScreen>
             ),
           if (!_sleepAsked)
             Positioned(
-              top: 80,
-              left: 18,
+              top: 14,
               right: 18,
-              child: _SleepCard(
-                onAnswer: (sleptWell) async {
-                  await ApiClient.submitSleep(sleptWell);
-                  setState(() => _sleepAsked = true);
-                },
+              child: SizedBox(
+                width: math.min(
+                  520,
+                  math.max(280, MediaQuery.sizeOf(context).width - 36),
+                ),
+                child: _SleepCard(
+                  onAnswer: (sleptWell) async {
+                    await ApiClient.submitSleep(sleptWell);
+                    setState(() {
+                      _sleepAsked = true;
+                      if (!sleptWell &&
+                          _avatarExpression != AvatarExpression.stressed) {
+                        _avatarExpression = AvatarExpression.sleepy;
+                      } else if (sleptWell) {
+                        _avatarExpression = AvatarExpression.normal;
+                      }
+                    });
+                  },
+                ),
               ),
             ),
           if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
@@ -1017,16 +1056,16 @@ class _FirstWeekChecklistPanel extends StatelessWidget {
 
 class _TodayTopControls extends StatelessWidget {
   const _TodayTopControls({
-    required this.sleepScore,
-    required this.stressScore,
-    required this.onSleepChanged,
-    required this.onStressChanged,
+    required this.displayName,
+    required this.gpaLabel,
+    required this.termLabel,
+    required this.avatarExpression,
   });
 
-  final double sleepScore;
-  final double stressScore;
-  final ValueChanged<double> onSleepChanged;
-  final ValueChanged<double> onStressChanged;
+  final String displayName;
+  final String gpaLabel;
+  final String termLabel;
+  final AvatarExpression avatarExpression;
 
   @override
   Widget build(BuildContext context) {
@@ -1035,11 +1074,10 @@ class _TodayTopControls extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 520;
-          final wellbeing = _TodayWellbeingPanel(
-            sleepScore: sleepScore,
-            stressScore: stressScore,
-            onSleepChanged: onSleepChanged,
-            onStressChanged: onStressChanged,
+          final identity = _TodayIdentityPanel(
+            displayName: displayName,
+            gpaLabel: gpaLabel,
+            termLabel: termLabel,
           );
 
           if (compact) {
@@ -1049,11 +1087,11 @@ class _TodayTopControls extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AvatarHeader(),
-                  SizedBox(width: 72),
+                  AvatarHeader(expression: avatarExpression),
+                  SizedBox(width: 42),
                   Padding(
-                    padding: EdgeInsets.only(top: 34),
-                    child: SizedBox(width: 166, child: wellbeing),
+                    padding: EdgeInsets.only(top: 44),
+                    child: SizedBox(width: 220, child: identity),
                   ),
                 ],
               ),
@@ -1063,16 +1101,86 @@ class _TodayTopControls extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AvatarHeader(),
-              SizedBox(width: 116),
+              AvatarHeader(expression: avatarExpression),
+              SizedBox(width: 58),
               Padding(
-                padding: EdgeInsets.only(top: 42),
-                child: SizedBox(width: 184, child: wellbeing),
+                padding: EdgeInsets.only(top: 48),
+                child: SizedBox(width: 280, child: identity),
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _TodayIdentityPanel extends StatelessWidget {
+  const _TodayIdentityPanel({
+    required this.displayName,
+    required this.gpaLabel,
+    required this.termLabel,
+  });
+
+  final String displayName;
+  final String gpaLabel;
+  final String termLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final metaColor = appTheme.isLight ? Color(0xFF48685F) : kText2;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: kText1,
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+        SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _IdentityMetaChip(label: gpaLabel, color: metaColor),
+            Text(
+              '|',
+              style: TextStyle(
+                color: metaColor.withAlpha(150),
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            _IdentityMetaChip(label: termLabel, color: metaColor),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _IdentityMetaChip extends StatelessWidget {
+  const _IdentityMetaChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w800),
     );
   }
 }
@@ -1126,191 +1234,6 @@ class _TodayGreetingTitle extends StatelessWidget {
           color: kText1,
           fontSize: 32,
           fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-}
-
-class _TodayWellbeingPanel extends StatelessWidget {
-  const _TodayWellbeingPanel({
-    required this.sleepScore,
-    required this.stressScore,
-    required this.onSleepChanged,
-    required this.onStressChanged,
-  });
-
-  final double sleepScore;
-  final double stressScore;
-  final ValueChanged<double> onSleepChanged;
-  final ValueChanged<double> onStressChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final safeSleepScore = sleepScore.isFinite ? sleepScore : 7.0;
-    final safeStressScore = stressScore.isFinite ? stressScore : 3.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _WellbeingChoiceControl(
-          icon: Icons.nightlight_round,
-          tooltip: 'Uyku',
-          value: safeSleepScore,
-          lowValue: 4,
-          neutralValue: 7,
-          highValue: 9,
-          onChanged: onSleepChanged,
-        ),
-        SizedBox(height: 6),
-        _WellbeingChoiceControl(
-          icon: Icons.bolt_rounded,
-          tooltip: 'Stres',
-          value: safeStressScore,
-          lowValue: 1,
-          neutralValue: 3,
-          highValue: 5,
-          onChanged: onStressChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class _WellbeingChoiceControl extends StatelessWidget {
-  const _WellbeingChoiceControl({
-    required this.icon,
-    required this.tooltip,
-    required this.value,
-    required this.lowValue,
-    required this.neutralValue,
-    required this.highValue,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final double value;
-  final double lowValue;
-  final double neutralValue;
-  final double highValue;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final selectedIndex = _selectedIndex;
-    final innerColor = appTheme.isLight ? Color(0xFFFFFCF6) : Color(0xFFF4F0FF);
-    final selectedColor = kAccent;
-    final inactiveText = appTheme.isLight ? Color(0xFF48685F) : kText1;
-
-    return SizedBox(
-      height: 32,
-      child: Row(
-        children: [
-          Tooltip(
-            message: tooltip,
-            child: Icon(icon, color: kText1, size: 18),
-          ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              height: 30,
-              padding: EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: innerColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  _ChoiceSegment(
-                    label: 'Az',
-                    selected: selectedIndex == 0,
-                    selectedIcon: Icons.close_rounded,
-                    selectedColor: selectedColor,
-                    inactiveText: inactiveText,
-                    onTap: () => onChanged(lowValue),
-                  ),
-                  _ChoiceSegment(
-                    label: 'Nötr',
-                    selected: selectedIndex == 1,
-                    selectedIcon: Icons.check_rounded,
-                    selectedColor: selectedColor,
-                    inactiveText: inactiveText,
-                    onTap: () => onChanged(neutralValue),
-                  ),
-                  _ChoiceSegment(
-                    label: 'Çok',
-                    selected: selectedIndex == 2,
-                    selectedIcon: Icons.check_rounded,
-                    selectedColor: selectedColor,
-                    inactiveText: inactiveText,
-                    onTap: () => onChanged(highValue),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  int get _selectedIndex {
-    if (!value.isFinite) return 1;
-    final lowDistance = (value - lowValue).abs();
-    final neutralDistance = (value - neutralValue).abs();
-    final highDistance = (value - highValue).abs();
-    if (lowDistance <= neutralDistance && lowDistance <= highDistance) {
-      return 0;
-    }
-    if (highDistance <= neutralDistance && highDistance <= lowDistance) {
-      return 2;
-    }
-    return 1;
-  }
-}
-
-class _ChoiceSegment extends StatelessWidget {
-  const _ChoiceSegment({
-    required this.label,
-    required this.selected,
-    required this.selectedIcon,
-    required this.selectedColor,
-    required this.inactiveText,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final IconData selectedIcon;
-  final Color selectedColor;
-  final Color inactiveText;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: Duration(milliseconds: 160),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? selectedColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: selected
-              ? Icon(selectedIcon, color: Colors.white, size: 16)
-              : Text(
-                  label,
-                  style: TextStyle(
-                    color: inactiveText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
         ),
       ),
     );

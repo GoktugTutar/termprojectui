@@ -73,11 +73,27 @@ class ApiClient {
     return data['access_token'] as String;
   }
 
-  static Future<String> register(String email, String password) async {
+  static Future<String> register(
+    String email,
+    String password, {
+    int? gradeLevel,
+    double? gpa,
+    String? academicTerm,
+  }) async {
+    final body = <String, dynamic>{'email': email, 'password': password};
+    if (gradeLevel != null) {
+      body['gradeLevel'] = gradeLevel;
+    }
+    if (gpa != null) {
+      body['gpa'] = gpa;
+    }
+    if (academicTerm != null && academicTerm.trim().isNotEmpty) {
+      body['academicTerm'] = academicTerm.trim();
+    }
     final res = await http.post(
       Uri.parse('$_base/auth/register'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'email': email, 'password': password}),
+      body: json.encode(body),
     );
     final data = await _handle(res);
     return data['access_token'] as String;
@@ -299,7 +315,7 @@ class ApiClient {
       Uri.parse('$_base/checklist/submit'),
       headers: h,
       body: json.encode({
-        if (date != null) 'date': date,
+        'date': ?date,
         'stressLevel': stressLevel,
         'fatigueLevel': fatigueLevel,
         'items': items,
@@ -384,7 +400,9 @@ class ApiClient {
     final body = <String, dynamic>{'scenario': scenario};
     if (focusLessonId != null) body['focusLessonId'] = focusLessonId;
     if (emptyDayName != null) body['emptyDayName'] = emptyDayName;
-    if (emptyDayBlockCount != null) body['emptyDayBlockCount'] = emptyDayBlockCount;
+    if (emptyDayBlockCount != null) {
+      body['emptyDayBlockCount'] = emptyDayBlockCount;
+    }
     final res = await http.post(
       Uri.parse('$_base/ai-coach/what-if'),
       headers: h,
@@ -406,17 +424,20 @@ class ApiClient {
   }
 
   static Future<Map<String, dynamic>> getSleepStatus() async {
-  final h = await _authHeaders();
-  final res = await http.get(Uri.parse('$_base/checklist/sleep/status'), headers: h);
-  return Map<String, dynamic>.from(await _handle(res) as Map);
-}
+    final h = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$_base/checklist/sleep/status'),
+      headers: h,
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
 
-static Future<void> submitSleep(bool sleptWell) async {
-  final h = await _authHeaders();
-  await http.post(
-    Uri.parse('$_base/checklist/sleep'),
-    headers: h,
-    body: json.encode({'sleptWell': sleptWell}),
-  );
-}
+  static Future<void> submitSleep(bool sleptWell) async {
+    final h = await _authHeaders();
+    await http.post(
+      Uri.parse('$_base/checklist/sleep'),
+      headers: h,
+      body: json.encode({'sleptWell': sleptWell}),
+    );
+  }
 }
