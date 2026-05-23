@@ -99,6 +99,9 @@ class _AuthScreenState extends State<AuthScreen> {
         'studyStyle': _regStudyStyle,
       });
 
+      // Term başlat — derslerin planner tarafından görülmesi için zorunlu
+      await ApiClient.startTerm();
+
       for (final draft in _lessonDrafts) {
         final name = draft.name.text.trim();
         if (name.isEmpty) continue;
