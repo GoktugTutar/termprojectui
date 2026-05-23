@@ -1,90 +1,70 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
-import 'main_scaffold.dart';
-import 'register_screen.dart';
+import 'onboarding_screen.dart';
 
-class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+/// Kullanıcı kayıt ekranı — yalnızca e-posta + şifre alır,
+/// kayıt başarılı olunca OnboardingScreen'e yönlendirir.
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<AuthScreen> createState() => _AuthScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> {
-  final _loginKey = GlobalKey<FormState>();
-
-  final _loginEmail = TextEditingController();
-  final _loginPass = TextEditingController();
+class _RegisterScreenState extends State<RegisterScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
 
   bool _loading = false;
-  bool _loginObscure = true;
+  bool _passObscure = true;
+  bool _confirmObscure = true;
   bool _darkMode = false;
+
+  _Palette get _p => _darkMode ? _Palette.dark() : _Palette.light();
 
   @override
   void dispose() {
-    _loginEmail.dispose();
-    _loginPass.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _confirmCtrl.dispose();
     super.dispose();
   }
 
-  _AuthPalette get _palette =>
-      _darkMode ? _AuthPalette.dark() : _AuthPalette.light();
-
-  Future<void> _login() async {
-    if (!_loginKey.currentState!.validate()) return;
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final token = await ApiClient.login(
-        _loginEmail.text.trim(),
-        _loginPass.text.trim(),
+      final token = await ApiClient.register(
+        _emailCtrl.text.trim(),
+        _passCtrl.text.trim(),
       );
       await ApiClient.saveToken(token);
       if (!mounted) return;
+      // Kayıt tamam → onboarding akışına geç (sorular orada sorulacak)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => MainScaffold()),
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       );
     } catch (e) {
-      _showError(e.toString().replaceAll('Exception: ', ''));
+      if (!mounted) return;
+      final msg = e.toString().replaceAll('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: _p.panel,
+          content: Text(msg, style: TextStyle(color: _p.text)),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _showError(String msg) {
-    final p = _palette;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: p.panel,
-        content: Text(msg, style: TextStyle(color: p.text)),
-      ),
-    );
-  }
-
-  void _goToRegister() {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const RegisterScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final tween = Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
-              .chain(CurveTween(curve: Curves.easeOutCubic));
-          return SlideTransition(
-            position: animation.drive(tween),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 320),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final p = _palette;
-
+    final p = _p;
     return Scaffold(
       backgroundColor: p.backgroundStart,
       body: Stack(
@@ -121,11 +101,13 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 18),
+                // Üst bar: Geri + Dark/Light switch
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
+                      _BackButton(palette: p, onTap: () => Navigator.pop(context)),
+                      const Spacer(),
                       _ModeSwitch(
                         darkMode: _darkMode,
                         palette: p,
@@ -146,7 +128,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Logo / başlık alanı
+                            // Başlık
                             Column(
                               children: [
                                 Container(
@@ -156,17 +138,18 @@ class _AuthScreenState extends State<AuthScreen> {
                                     color: p.accent.withAlpha(30),
                                     borderRadius: BorderRadius.circular(22),
                                     border: Border.all(
-                                        color: p.accent.withAlpha(80),
-                                        width: 1.5),
+                                      color: p.accent.withAlpha(80),
+                                      width: 1.5,
+                                    ),
                                   ),
-                                  child: Icon(Icons.school_rounded,
-                                      color: p.accent, size: 38),
+                                  child: Icon(Icons.person_add_rounded,
+                                      color: p.accent, size: 36),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Hoş Geldin',
+                                  'Hesap Oluştur',
                                   style: TextStyle(
-                                    fontSize: 36,
+                                    fontSize: 34,
                                     fontWeight: FontWeight.w900,
                                     color: p.text,
                                     height: 1.0,
@@ -175,35 +158,32 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Hesabına giriş yap',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: p.muted,
-                                  ),
+                                  'E-posta ve şifrenle devam et.',
+                                  style: TextStyle(fontSize: 14, color: p.muted),
                                   textAlign: TextAlign.center,
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 36),
-                            // Login formu kartı
-                            _buildLoginCard(p),
-                            const SizedBox(height: 24),
-                            // Sign Up linki
+                            const SizedBox(height: 32),
+                            // Form kartı
+                            _buildCard(p),
+                            const SizedBox(height: 20),
+                            // Zaten hesabın var mı?
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  'Hesabın yok mu?',
-                                  style: TextStyle(
-                                    color: p.muted,
-                                    fontSize: 14,
-                                  ),
+                                  'Zaten hesabın var mı?',
+                                  style:
+                                      TextStyle(color: p.muted, fontSize: 14),
                                 ),
                                 const SizedBox(width: 6),
                                 GestureDetector(
-                                  onTap: _loading ? null : _goToRegister,
+                                  onTap: _loading
+                                      ? null
+                                      : () => Navigator.pop(context),
                                   child: Text(
-                                    'Sign Up →',
+                                    'Giriş Yap →',
                                     style: TextStyle(
                                       color: p.accent,
                                       fontSize: 14,
@@ -227,7 +207,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildLoginCard(_AuthPalette p) {
+  Widget _buildCard(_Palette p) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(
@@ -247,50 +227,58 @@ class _AuthScreenState extends State<AuthScreen> {
             ],
           ),
           child: Form(
-            key: _loginKey,
+            key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Sign In',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: p.text,
-                  ),
-                ),
-                const SizedBox(height: 20),
                 _field(
-                  controller: _loginEmail,
+                  ctrl: _emailCtrl,
                   label: 'E-posta',
                   icon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v == null || !v.contains('@')
-                      ? 'Geçerli e-posta girin'
-                      : null,
+                  type: TextInputType.emailAddress,
                   palette: p,
+                  validator: (v) =>
+                      v == null || !v.contains('@') ? 'Geçerli e-posta girin' : null,
                 ),
                 const SizedBox(height: 14),
                 _field(
-                  controller: _loginPass,
+                  ctrl: _passCtrl,
                   label: 'Şifre',
                   icon: Icons.lock_outline,
-                  obscure: _loginObscure,
-                  suffixIcon: IconButton(
+                  palette: p,
+                  obscure: _passObscure,
+                  suffix: IconButton(
                     icon: Icon(
-                      _loginObscure ? Icons.visibility_off : Icons.visibility,
+                      _passObscure ? Icons.visibility_off : Icons.visibility,
                       color: p.accent,
                     ),
                     onPressed: () =>
-                        setState(() => _loginObscure = !_loginObscure),
+                        setState(() => _passObscure = !_passObscure),
                   ),
                   validator: (v) =>
                       v == null || v.length < 6 ? 'En az 6 karakter' : null,
-                  palette: p,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
+                _field(
+                  ctrl: _confirmCtrl,
+                  label: 'Şifre Tekrar',
+                  icon: Icons.lock_clock_outlined,
+                  palette: p,
+                  obscure: _confirmObscure,
+                  suffix: IconButton(
+                    icon: Icon(
+                      _confirmObscure ? Icons.visibility_off : Icons.visibility,
+                      color: p.accent,
+                    ),
+                    onPressed: () =>
+                        setState(() => _confirmObscure = !_confirmObscure),
+                  ),
+                  validator: (v) =>
+                      v != _passCtrl.text ? 'Şifreler eşleşmiyor' : null,
+                ),
+                const SizedBox(height: 28),
                 FilledButton(
-                  onPressed: _loading ? null : _login,
+                  onPressed: _loading ? null : _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: p.accent,
                     foregroundColor:
@@ -302,15 +290,15 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   child: _loading
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
+                          width: 20,
+                          height: 20,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: 2.2,
                             color: Colors.white,
                           ),
                         )
                       : const Text(
-                          'Giriş Yap',
+                          'Devam Et',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -326,18 +314,18 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _field({
-    required TextEditingController controller,
+    required TextEditingController ctrl,
     required String label,
     required IconData icon,
-    required _AuthPalette palette,
-    TextInputType? keyboardType,
+    required _Palette palette,
+    TextInputType? type,
     bool obscure = false,
-    Widget? suffixIcon,
+    Widget? suffix,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
+      controller: ctrl,
+      keyboardType: type,
       obscureText: obscure,
       validator: validator,
       style: TextStyle(
@@ -349,11 +337,11 @@ class _AuthScreenState extends State<AuthScreen> {
         labelText: label,
         labelStyle: TextStyle(color: palette.muted, fontSize: 13),
         prefixIcon: Icon(icon, color: palette.accent, size: 20),
-        suffixIcon: suffixIcon,
+        suffixIcon: suffix,
         filled: true,
         fillColor: palette.inputFill,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.border),
@@ -365,6 +353,50 @@ class _AuthScreenState extends State<AuthScreen> {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.accent, width: 1.3),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFFFF5C7A)),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Back Button ──────────────────────────────────────────────────────────────
+
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.palette, required this.onTap});
+  final _Palette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: palette.panel.withAlpha(180),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_back_ios_new_rounded,
+                color: palette.text, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              'Geri',
+              style: TextStyle(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -379,9 +411,8 @@ class _ModeSwitch extends StatelessWidget {
     required this.palette,
     required this.onChanged,
   });
-
   final bool darkMode;
-  final _AuthPalette palette;
+  final _Palette palette;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -396,14 +427,14 @@ class _ModeSwitch extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _ModePill(
+          _Pill(
             selected: !darkMode,
             label: 'Light',
             palette: palette,
             onTap: () => onChanged(false),
           ),
           const SizedBox(width: 6),
-          _ModePill(
+          _Pill(
             selected: darkMode,
             label: 'Dark',
             palette: palette,
@@ -415,17 +446,16 @@ class _ModeSwitch extends StatelessWidget {
   }
 }
 
-class _ModePill extends StatelessWidget {
-  const _ModePill({
+class _Pill extends StatelessWidget {
+  const _Pill({
     required this.selected,
     required this.label,
     required this.palette,
     required this.onTap,
   });
-
   final bool selected;
   final String label;
-  final _AuthPalette palette;
+  final _Palette palette;
   final VoidCallback onTap;
 
   @override
@@ -435,8 +465,7 @@ class _ModePill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? palette.accent : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -455,8 +484,8 @@ class _ModePill extends StatelessWidget {
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
-class _AuthPalette {
-  const _AuthPalette({
+class _Palette {
+  const _Palette({
     required this.backgroundStart,
     required this.backgroundMid,
     required this.backgroundEnd,
@@ -470,7 +499,7 @@ class _AuthPalette {
     required this.glow,
   });
 
-  factory _AuthPalette.dark() => const _AuthPalette(
+  factory _Palette.dark() => const _Palette(
         backgroundStart: Color(0xFF070719),
         backgroundMid: Color(0xFF0B0921),
         backgroundEnd: Color(0xFF050507),
@@ -484,7 +513,7 @@ class _AuthPalette {
         glow: Color(0xFF49E9FF),
       );
 
-  factory _AuthPalette.light() => const _AuthPalette(
+  factory _Palette.light() => const _Palette(
         backgroundStart: Color(0xFFC5FFB8),
         backgroundMid: Color(0xFFE9FFE4),
         backgroundEnd: Color(0xFFFFFDF8),
