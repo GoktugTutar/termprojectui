@@ -20,19 +20,16 @@ class ApiClient {
 
   // ── Token yönetimi ──────────────────────────────────────────────────────────
 
-  /// SharedPreferences'tan JWT token'ını okur; yoksa null döner.
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_tokenKey);
   }
 
-  /// JWT token'ını SharedPreferences'a kaydeder.
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
   }
 
-  /// Kayıtlı JWT token'ını siler (çıkış işlemi).
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
@@ -40,7 +37,6 @@ class ApiClient {
 
   // ── Ortak yardımcılar ───────────────────────────────────────────────────────
 
-  /// Authorization header dahil ortak HTTP başlıklarını döndürür.
   static Future<Map<String, String>> _authHeaders() async {
     final token = await getToken();
     return {
@@ -49,7 +45,6 @@ class ApiClient {
     };
   }
 
-  /// HTTP yanıtını işler: 2xx ise body'yi parse eder, aksi hâlde exception fırlatır.
   static Future<dynamic> _handle(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return Future.value(null);
@@ -68,7 +63,6 @@ class ApiClient {
 
   // ── AUTH ────────────────────────────────────────────────────────────────────
 
-  /// Mevcut kullanıcıyla oturum açar; başarılı olursa JWT access_token döner.
   static Future<String> login(String email, String password) async {
     final res = await http.post(
       Uri.parse('$_base/auth/login'),
@@ -79,7 +73,6 @@ class ApiClient {
     return data['access_token'] as String;
   }
 
-  /// Yeni kullanıcı kaydeder; başarılı olursa JWT access_token döner.
   static Future<String> register(String email, String password) async {
     final res = await http.post(
       Uri.parse('$_base/auth/register'),
@@ -92,14 +85,12 @@ class ApiClient {
 
   // ── USER ────────────────────────────────────────────────────────────────────
 
-  /// Oturumdaki kullanıcının profil bilgilerini getirir (GET /user/me).
   static Future<Map<String, dynamic>> getMe() async {
     final h = await _authHeaders();
     final res = await http.get(Uri.parse('$_base/user/me'), headers: h);
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Kullanıcı tercihlerini kaydeder: preferredStudyTime, studyStyle, busySlots.
   static Future<Map<String, dynamic>> setupUser(
     Map<String, dynamic> data,
   ) async {
@@ -112,7 +103,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Kullanıcının meşguliyet slotlarını toplu olarak günceller (PUT /user/busy-slots).
   static Future<Map<String, dynamic>> updateBusySlots(
     List<Map<String, dynamic>> busySlots,
   ) async {
@@ -125,7 +115,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Dijital ikiz öğrenci profilini getirir (GET /user/student-profile).
   static Future<Map<String, dynamic>> getStudentProfile() async {
     final h = await _authHeaders();
     final res = await http.get(
@@ -135,7 +124,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Aktif dönemi sonlandırır (POST /user/end-term).
   static Future<void> endTerm() async {
     final h = await _authHeaders();
     final res = await http.post(
@@ -146,7 +134,6 @@ class ApiClient {
     await _handle(res);
   }
 
-  /// Aktif dönemi kapatıp yeni boş dönem başlatır (POST /user/start-term).
   static Future<Map<String, dynamic>> startTerm({String? name}) async {
     final h = await _authHeaders();
     final res = await http.post(
@@ -159,14 +146,12 @@ class ApiClient {
 
   // ── LESSON ──────────────────────────────────────────────────────────────────
 
-  /// Kullanıcının tüm derslerini listeler (GET /lesson).
   static Future<List<dynamic>> getLessons() async {
     final h = await _authHeaders();
     final res = await http.get(Uri.parse('$_base/lesson'), headers: h);
     return await _handle(res) as List;
   }
 
-  /// Yeni ders oluşturur (POST /lesson).
   static Future<Map<String, dynamic>> createLesson(
     String name,
     int difficulty,
@@ -180,7 +165,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Mevcut dersi günceller (PUT /lesson/:id).
   static Future<Map<String, dynamic>> updateLesson(
     int id, {
     String? name,
@@ -198,15 +182,12 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Dersi siler (DELETE /lesson/:id).
   static Future<void> deleteLesson(int id) async {
     final h = await _authHeaders();
     final res = await http.delete(Uri.parse('$_base/lesson/$id'), headers: h);
     await _handle(res);
   }
 
-  /// Derse sınav tarihi ekler (POST /lesson/:id/exam).
-  /// [examDate] formatı: "YYYY-MM-DD"
   static Future<Map<String, dynamic>> addExam(
     int lessonId,
     String examDate,
@@ -220,8 +201,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Derse ödev / deadline ekler (POST /lesson/:id/deadline).
-  /// [deadlineDate] formatı: "YYYY-MM-DD", [title] opsiyonel.
   static Future<Map<String, dynamic>> addDeadline(
     int lessonId,
     String deadlineDate, {
@@ -238,7 +217,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Dersten deadline siler (DELETE /lesson/:lessonId/deadline/:deadlineId).
   static Future<void> deleteDeadline(int lessonId, int deadlineId) async {
     final h = await _authHeaders();
     final res = await http.delete(
@@ -250,8 +228,6 @@ class ApiClient {
 
   // ── PLANNER ─────────────────────────────────────────────────────────────────
 
-  /// Haftalık planı algoritma ile oluşturur (POST /planner/create).
-  /// Yanıt: {weekStart, blocks: [...]}
   static Future<Map<String, dynamic>> createWeeklyPlan() async {
     final h = await _authHeaders();
     final res = await http.post(
@@ -262,30 +238,24 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Mevcut haftanın planını getirir (GET /planner/week).
-  /// Yanıt: {weekStart, blocks: [...]}
   static Future<Map<String, dynamic>> getWeekPlan() async {
     final h = await _authHeaders();
     final res = await http.get(Uri.parse('$_base/planner/week'), headers: h);
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Planı verilen tarihten (yoksa bugünden) sonrası için yeniden hesaplar.
   static Future<Map<String, dynamic>> recalculate({String? fromDate}) async {
     final h = await _authHeaders();
     final res = await http.post(
       Uri.parse('$_base/planner/recalculate'),
       headers: h,
-      body: json.encode({'fromDate': ?fromDate}),
+      body: json.encode({'fromDate': fromDate}),
     );
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
   // ── CHECKLIST ───────────────────────────────────────────────────────────────
 
-  /// Belirli bir günün checklist'ini getirir (GET /checklist/:date).
-  /// O gün için checklist yoksa null döner.
-  /// [date] formatı: "YYYY-MM-DD"
   static Future<Map<String, dynamic>?> getChecklist(String date) async {
     final h = await _authHeaders();
     final res = await http.get(Uri.parse('$_base/checklist/$date'), headers: h);
@@ -297,8 +267,6 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
-  /// Son 35 günün checklist durumunu getirir (profil ısı haritası).
-  /// Yanıt: [{date, hasBlocks, hasChecklist}, ...]
   static Future<List<Map<String, dynamic>>> getChecklistHistory() async {
     final h = await _authHeaders();
     final res = await http.get(
@@ -311,8 +279,6 @@ class ApiClient {
         .toList();
   }
 
-  /// Belirli bir günün checklist durumunu getirir.
-  /// Yanıt: {date, blocked, missingDates, checklist}
   static Future<Map<String, dynamic>> getChecklistStatus(String date) async {
     final h = await _authHeaders();
     final res = await http.get(
@@ -322,8 +288,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Günlük checklist'i gönderir (POST /checklist/submit).
-  /// [items]: [{lessonId, plannedBlocks, completedBlocks, delayed?}]
   static Future<Map<String, dynamic>?> submitChecklist({
     String? date,
     required int stressLevel,
@@ -335,7 +299,7 @@ class ApiClient {
       Uri.parse('$_base/checklist/submit'),
       headers: h,
       body: json.encode({
-        'date': ?date,
+        if (date != null) 'date': date,
         'stressLevel': stressLevel,
         'fatigueLevel': fatigueLevel,
         'items': items,
@@ -348,9 +312,6 @@ class ApiClient {
 
   // ── FEEDBACK ────────────────────────────────────────────────────────────────
 
-  /// Haftalık geri bildirimi kaydeder (POST /feedback/weekly).
-  /// [weekloadFeedback]: "cok_yogundu" | "tam_uygundu" | "yetersizdi"
-  /// [lessonFeedbacks]: [{lessonId, needsMoreTime}]
   static Future<Map<String, dynamic>> submitWeeklyFeedback({
     required String weekloadFeedback,
     required List<Map<String, dynamic>> lessonFeedbacks,
@@ -367,7 +328,6 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Bu hafta için weekly feedback gönderilip gönderilmediğini kontrol eder.
   static Future<bool> getWeeklyFeedbackStatus() async {
     final h = await _authHeaders();
     final res = await http.get(
@@ -378,27 +338,28 @@ class ApiClient {
     return data['submitted'] == true;
   }
 
-  /// Aktif uyarı ve öneri mesajlarını getirir (GET /feedback/messages).
-  static Future<List<dynamic>> getFeedbackMessages() async {
+  /// Sistem feedback mesajlarını ve AI mesajını getirir (GET /system-feedback/message).
+  /// Yanıt: { messages: [...], aiMessage: "..." }
+  static Future<Map<String, dynamic>> getFeedbackMessages() async {
     final h = await _authHeaders();
     final res = await http.get(
-      Uri.parse('$_base/feedback/messages'),
+      Uri.parse('$_base/system-feedback/message'),
       headers: h,
     );
-    return await _handle(res) as List;
+    final data = await _handle(res);
+    // Backend düz liste dönerse (eski format) uyumlu hale getir
+    if (data is List) return {'messages': data, 'aiMessage': ''};
+    return Map<String, dynamic>.from(data as Map);
   }
 
   // ── DEBUG (sadece MODE=test) ─────────────────────────────────────────────────
 
-  /// Backend modunu döndürür: { mode: "test"|"prod", current: string }
   static Future<Map<String, dynamic>> getMode() async {
     final h = await _authHeaders();
     final res = await http.get(Uri.parse('$_base/debug/mode'), headers: h);
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  /// Test modunda backend saatini override eder (POST /debug/clock).
-  /// [isoDateTime] örn: "2026-05-08T10:00:00"
   static Future<void> setTestClock(String isoDateTime) async {
     final h = await _authHeaders();
     final res = await http.post(
@@ -408,4 +369,54 @@ class ApiClient {
     );
     await _handle(res);
   }
+
+  // ── AI COACH ────────────────────────────────────────────────────────────────
+
+  /// POST /ai-coach/what-if
+  /// userId JWT'den alınır, body'ye eklenmez.
+  static Future<Map<String, dynamic>> whatIf({
+    required String scenario,
+    int? focusLessonId,
+    String? emptyDayName,
+    int? emptyDayBlockCount,
+  }) async {
+    final h = await _authHeaders();
+    final body = <String, dynamic>{'scenario': scenario};
+    if (focusLessonId != null) body['focusLessonId'] = focusLessonId;
+    if (emptyDayName != null) body['emptyDayName'] = emptyDayName;
+    if (emptyDayBlockCount != null) body['emptyDayBlockCount'] = emptyDayBlockCount;
+    final res = await http.post(
+      Uri.parse('$_base/ai-coach/what-if'),
+      headers: h,
+      body: json.encode(body),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  /// POST /ai-coach/daily-coach
+  /// userId JWT'den alınır.
+  static Future<Map<String, dynamic>> dailyCoach() async {
+    final h = await _authHeaders();
+    final res = await http.post(
+      Uri.parse('$_base/ai-coach/daily-coach'),
+      headers: h,
+      body: '{}',
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  static Future<Map<String, dynamic>> getSleepStatus() async {
+  final h = await _authHeaders();
+  final res = await http.get(Uri.parse('$_base/checklist/sleep/status'), headers: h);
+  return Map<String, dynamic>.from(await _handle(res) as Map);
+}
+
+static Future<void> submitSleep(bool sleptWell) async {
+  final h = await _authHeaders();
+  await http.post(
+    Uri.parse('$_base/checklist/sleep'),
+    headers: h,
+    body: json.encode({'sleptWell': sleptWell}),
+  );
+}
 }
