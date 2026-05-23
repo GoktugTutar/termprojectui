@@ -107,7 +107,9 @@ String _formatMinutes(int minutes) {
 }
 
 class TodayScreen extends StatefulWidget {
-  const TodayScreen({super.key});
+  const TodayScreen({super.key, this.onOpenInsights});
+
+  final VoidCallback? onOpenInsights;
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -127,16 +129,14 @@ class _TodayScreenState extends State<TodayScreen>
   bool _checklistDisabled = false;
   String? _onboardingNotice;
   bool _noticeDismissed = false;
-  String _aiMessage = '';        // ← ekle
-  bool _aiMessageDismissed = false;  // ← ekle
+  String _aiMessage = ''; // ← ekle
+  bool _aiMessageDismissed = false; // ← ekle
   String _quickNote = '';
   double _sleepScore = 7;
   double _stressScore = 3;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
-  bool _weeklyFeedbackSubmitted = false;
   bool _sleepAsked = false;
-  List<({String id, String lessonName})> _feedbackLessons = [];
   List<
     ({
       String lessonName,
@@ -197,7 +197,9 @@ class _TodayScreenState extends State<TodayScreen>
         ApiClient.getMe(),
         ApiClient.getLessons().catchError((_) => <dynamic>[]),
         ApiClient.getFeedbackMessages().catchError((_) => <String, dynamic>{}),
-        ApiClient.getSleepStatus().catchError((_) => <String, dynamic>{'asked': true}),
+        ApiClient.getSleepStatus().catchError(
+          (_) => <String, dynamic>{'asked': true},
+        ),
       ]);
       Map<String, dynamic> data = parallelInit[0] as Map<String, dynamic>;
       final userData = Map<String, dynamic>.from(parallelInit[1] as Map);
@@ -325,11 +327,6 @@ class _TodayScreenState extends State<TodayScreen>
       events.sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
 
       final isLastDayOfWeek = AppTime.now().weekday == DateTime.sunday;
-      bool weeklyFeedbackSubmitted = false;
-      if (isLastDayOfWeek && !checklistDisabled) {
-        weeklyFeedbackSubmitted = await ApiClient.getWeeklyFeedbackStatus()
-            .catchError((_) => false);
-      }
       final prefs = await SharedPreferences.getInstance();
 
       if (!mounted) return;
@@ -344,21 +341,13 @@ class _TodayScreenState extends State<TodayScreen>
         _sleepScore = _readDoublePref(prefs, 'today_sleep_score', 7);
         _stressScore = _readDoublePref(prefs, 'today_stress_score', 3);
         _isLastDayOfWeek = isLastDayOfWeek;
-        _weeklyFeedbackSubmitted = weeklyFeedbackSubmitted;
         _upcomingEvents = events;
         _sleepAsked = sleepStatus['asked'] as bool? ?? false;
-        if (aiMsg.isNotEmpty) {   // ← ekle
+        if (aiMsg.isNotEmpty) {
+          // ← ekle
           _aiMessage = aiMsg;
           _aiMessageDismissed = false;
         }
-        _feedbackLessons = raw
-            .map(
-              (l) => (
-                id: (l['id'] as num).toString(),
-                lessonName: l['name'] as String? ?? '',
-              ),
-            )
-            .toList();
         _loading = false;
       });
     } catch (_) {
@@ -439,7 +428,57 @@ class _TodayScreenState extends State<TodayScreen>
       blocks: _todayBlocks,
       initialStudiedMinutes: _studiedMinutes,
     );
-    if (saved && mounted) setState(() => _todayChecklistSubmitted = true);
+    if (!saved || !mounted) return;
+    setState(() => _todayChecklistSubmitted = true);
+    if (_isLastDayOfWeek) {
+      _showWeeklyFeedbackPrompt();
+    }
+  }
+
+  Future<void> _showWeeklyFeedbackPrompt() async {
+    final goInsights = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        icon: Icon(Icons.rate_review_outlined, color: kAccent, size: 34),
+        title: Text(
+          'Haftanı değerlendir',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: kText1, fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'Haftanı değerlendirmek için tıkla.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: kText2, height: 1.35),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Sonra', style: TextStyle(color: kText2)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: kAccent),
+            child: Text('Analize git'),
+          ),
+        ],
+      ),
+    );
+
+    if (goInsights == true && mounted) {
+      widget.onOpenInsights?.call();
+    }
+  }
+
+  Future<void> _reloadAfterMissingChecklistSaved() async {
+    await _load();
+    if (!mounted) return;
+    if (AppTime.now().weekday == DateTime.sunday) {
+      _showWeeklyFeedbackPrompt();
+    }
   }
 
   Future<bool> _showChecklistSubmitDialog({
@@ -460,8 +499,6 @@ class _TodayScreenState extends State<TodayScreen>
           .toInt();
     }
 
-    var stressLevel = 3;
-    var fatigueLevel = 3;
     var saving = false;
     String? errorMsg;
     final result = await showDialog<bool>(
@@ -503,20 +540,6 @@ class _TodayScreenState extends State<TodayScreen>
                       ],
                     ),
                     SizedBox(height: 18),
-                    _ChecklistMetricSlider(
-                      label: 'Stres',
-                      value: stressLevel,
-                      onChanged: (value) =>
-                          setDialogState(() => stressLevel = value),
-                    ),
-                    SizedBox(height: 10),
-                    _ChecklistMetricSlider(
-                      label: 'Yorgunluk',
-                      value: fatigueLevel,
-                      onChanged: (value) =>
-                          setDialogState(() => fatigueLevel = value),
-                    ),
-                    Divider(height: 28, color: kBorder),
                     if (uniqueBlocks.isEmpty)
                       _EmptyPanelState(
                         icon: Icons.event_available_outlined,
@@ -610,8 +633,8 @@ class _TodayScreenState extends State<TodayScreen>
                               try {
                                 await ApiClient.submitChecklist(
                                   date: date,
-                                  stressLevel: stressLevel,
-                                  fatigueLevel: fatigueLevel,
+                                  stressLevel: 3,
+                                  fatigueLevel: 3,
                                   items: items,
                                 );
                                 if (ctx.mounted) Navigator.pop(ctx, true);
@@ -757,30 +780,11 @@ class _TodayScreenState extends State<TodayScreen>
                                             () => _studiedMinutes[lessonId] =
                                                 value,
                                           ),
-                                      onMissingSaved: _load,
+                                      onMissingSaved:
+                                          _reloadAfterMissingChecklistSaved,
                                       onSaveChecklist: _saveTodayChecklist,
                                     );
-                              final right =
-                                  _isLastDayOfWeek && !_checklistDisabled
-                                  ? Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        checklistWidget,
-                                        SizedBox(height: 14),
-                                        _WeeklyFeedbackCard(
-                                          submitted: _weeklyFeedbackSubmitted,
-                                          lessons: _feedbackLessons,
-                                          onSubmitted: () {
-                                            setState(
-                                              () => _weeklyFeedbackSubmitted =
-                                                  true,
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    )
-                                  : checklistWidget;
+                              final right = checklistWidget;
 
                               if (!wide) {
                                 return Column(
@@ -852,19 +856,23 @@ class _TodayScreenState extends State<TodayScreen>
                 onClose: () => setState(() => _noticeDismissed = true),
               ),
             ),
-            if (!_sleepAsked)
-              Positioned(
-                top: 80, left: 18, right: 18,
-                child: _SleepCard(
-                  onAnswer: (sleptWell) async {
-                    await ApiClient.submitSleep(sleptWell);
-                    setState(() => _sleepAsked = true);
-                  },
-                ),
+          if (!_sleepAsked)
+            Positioned(
+              top: 80,
+              left: 18,
+              right: 18,
+              child: _SleepCard(
+                onAnswer: (sleptWell) async {
+                  await ApiClient.submitSleep(sleptWell);
+                  setState(() => _sleepAsked = true);
+                },
               ),
+            ),
           if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
             Positioned(
-              bottom: 24, left: 18, right: 18,
+              bottom: 24,
+              left: 18,
+              right: 18,
               child: _AiMessageBanner(
                 message: _aiMessage,
                 onClose: () => setState(() => _aiMessageDismissed = true),
@@ -875,7 +883,6 @@ class _TodayScreenState extends State<TodayScreen>
     );
   }
 }
-
 
 class _AiMessageBanner extends StatelessWidget {
   const _AiMessageBanner({required this.message, required this.onClose});
@@ -902,7 +909,8 @@ class _AiMessageBanner extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 28, height: 28,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
               color: kAccent.withAlpha(34),
               shape: BoxShape.circle,
@@ -2367,53 +2375,6 @@ class _DialogIcon extends StatelessWidget {
   }
 }
 
-class _ChecklistMetricSlider extends StatelessWidget {
-  const _ChecklistMetricSlider({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 74,
-          child: Text(
-            label,
-            style: TextStyle(color: kText1, fontWeight: FontWeight.w700),
-          ),
-        ),
-        Expanded(
-          child: Slider(
-            value: value.toDouble(),
-            min: 1,
-            max: 5,
-            divisions: 4,
-            label: value.toString(),
-            activeColor: kAccent,
-            inactiveColor: kBorder,
-            onChanged: (v) => onChanged(v.toInt()),
-          ),
-        ),
-        SizedBox(
-          width: 34,
-          child: Text(
-            '$value/5',
-            textAlign: TextAlign.end,
-            style: TextStyle(color: kText2, fontSize: 12),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // ── Sleep dialog ──────────────────────────────────────────────────────────────
 
 class _SleepDialog extends StatelessWidget {
@@ -2656,387 +2617,6 @@ class _ComingUpCard extends StatelessWidget {
   }
 }
 
-// ── Weekly Feedback Card ──────────────────────────────────────────────────────
-
-class _WeeklyFeedbackCard extends StatefulWidget {
-  const _WeeklyFeedbackCard({
-    required this.submitted,
-    required this.lessons,
-    required this.onSubmitted,
-  });
-
-  final bool submitted;
-  final List<({String id, String lessonName})> lessons;
-  final VoidCallback onSubmitted;
-
-  @override
-  State<_WeeklyFeedbackCard> createState() => _WeeklyFeedbackCardState();
-}
-
-class _WeeklyFeedbackCardState extends State<_WeeklyFeedbackCard> {
-  String? _weekload;
-  late final Map<String, int> _perLesson;
-  bool _saving = false;
-  bool _expanded = false;
-
-  static const _opts = [
-    ('cok_yogundu', 'Çok yoğundu', Icons.sentiment_very_dissatisfied_outlined),
-    ('tam_uygundu', 'Tam uygundu', Icons.sentiment_satisfied_outlined),
-    (
-      'yetersizdi',
-      'Daha fazlasını yapabilirdim',
-      Icons.sentiment_dissatisfied_outlined,
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _perLesson = {for (final l in widget.lessons) l.id: 0};
-  }
-
-  Future<void> _submit() async {
-    setState(() => _saving = true);
-    try {
-      await ApiClient.submitWeeklyFeedback(
-        weekloadFeedback: _weekload ?? 'tam_uygundu',
-        lessonFeedbacks: widget.lessons
-            .map(
-              (l) => {
-                'lessonId': int.parse(l.id),
-                'needsMoreTime': _perLesson[l.id] ?? 0,
-              },
-            )
-            .toList(),
-      );
-      if (!mounted) return;
-      widget.onSubmitted();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          backgroundColor: kDanger,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.submitted) {
-      return Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kBorder),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.check_circle_outline_rounded,
-              color: Color(0xFF34C759),
-              size: 20,
-            ),
-            SizedBox(width: 10),
-            Text(
-              'Haftalık geri bildirim gönderildi.',
-              style: TextStyle(color: kText2, fontSize: 13),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(14),
-              bottom: _expanded ? Radius.zero : Radius.circular(14),
-            ),
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 14, 12, 14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: kAccent.withAlpha(38),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.rate_review_outlined,
-                      color: kAccent,
-                      size: 18,
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Haftalık değerlendirme',
-                          style: TextStyle(
-                            color: kText1,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          'Bu haftanı nasıl geçti?',
-                          style: TextStyle(color: kText2, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    _expanded
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    color: kText2,
-                    size: 20,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_expanded) ...[
-            Divider(height: 1, thickness: 0.5, color: kBorder),
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, 14, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'HAFTALIK YÜK',
-                    style: TextStyle(
-                      color: kText2,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  ..._opts.map((opt) {
-                    final (value, label, icon) = opt;
-                    final selected = _weekload == value;
-                    return GestureDetector(
-                      onTap: _saving
-                          ? null
-                          : () => setState(() => _weekload = value),
-                      child: AnimatedContainer(
-                        duration: Duration(milliseconds: 130),
-                        margin: EdgeInsets.only(bottom: 6),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? kAccent.withAlpha(38)
-                              : kBorder.withAlpha(60),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected ? kAccent : Colors.transparent,
-                            width: selected ? 1.2 : 0.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              icon,
-                              size: 18,
-                              color: selected ? kAccent : kText2,
-                            ),
-                            SizedBox(width: 10),
-                            Text(
-                              label,
-                              style: TextStyle(
-                                color: selected ? kText1 : kText2,
-                                fontSize: 13,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  if (widget.lessons.isNotEmpty) ...[
-                    SizedBox(height: 12),
-                    Text(
-                      'DERS BAZLI',
-                      style: TextStyle(
-                        color: kText2,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    ...widget.lessons.map((l) {
-                      final v = _perLesson[l.id] ?? 0;
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                l.lessonName,
-                                style: TextStyle(color: kText1, fontSize: 13),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            _NeedMoreTimeToggle(
-                              value: v,
-                              disabled: _saving,
-                              onChanged: (nv) =>
-                                  setState(() => _perLesson[l.id] = nv),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                  SizedBox(height: 14),
-                  FilledButton(
-                    onPressed: _saving ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: kAccent,
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: _saving
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            'Gönder',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _NeedMoreTimeToggle extends StatelessWidget {
-  const _NeedMoreTimeToggle({
-    required this.value,
-    required this.onChanged,
-    required this.disabled,
-  });
-
-  final int value;
-  final ValueChanged<int> onChanged;
-  final bool disabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ToggleBtn(
-          icon: Icons.remove_rounded,
-          active: value == -1,
-          activeColor: kDanger,
-          disabled: disabled,
-          onTap: () => onChanged(value == -1 ? 0 : -1),
-        ),
-        SizedBox(width: 4),
-        SizedBox(
-          width: 28,
-          child: Center(
-            child: Text(
-              value == 0 ? '±0' : (value > 0 ? '+$value' : '$value'),
-              style: TextStyle(
-                color: value == 0 ? kText2 : (value > 0 ? kAccent : kDanger),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: 4),
-        _ToggleBtn(
-          icon: Icons.add_rounded,
-          active: value == 1,
-          activeColor: kAccent,
-          disabled: disabled,
-          onTap: () => onChanged(value == 1 ? 0 : 1),
-        ),
-      ],
-    );
-  }
-}
-
-class _ToggleBtn extends StatelessWidget {
-  const _ToggleBtn({
-    required this.icon,
-    required this.active,
-    required this.activeColor,
-    required this.disabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool active;
-  final Color activeColor;
-  final bool disabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 120),
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: active ? activeColor.withAlpha(46) : kBorder.withAlpha(60),
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: active ? activeColor : Colors.transparent,
-            width: 1.2,
-          ),
-        ),
-        child: Icon(icon, size: 15, color: active ? activeColor : kText2),
-      ),
-    );
-  }
-
-  
-}
-
 class _SleepCard extends StatelessWidget {
   const _SleepCard({required this.onAnswer});
   final Future<void> Function(bool sleptWell) onAnswer;
@@ -3050,7 +2630,11 @@ class _SleepCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kBorder),
         boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(50), blurRadius: 12, offset: Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black.withAlpha(50),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -3060,13 +2644,25 @@ class _SleepCard extends StatelessWidget {
           Expanded(
             child: Text(
               'Dün iyi uyudun mu?',
-              style: TextStyle(color: kText1, fontSize: 14, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: kText1,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           SizedBox(width: 8),
-          _SleepButton(label: 'Evet', positive: true, onTap: () => onAnswer(true)),
+          _SleepButton(
+            label: 'Evet',
+            positive: true,
+            onTap: () => onAnswer(true),
+          ),
           SizedBox(width: 8),
-          _SleepButton(label: 'Hayır', positive: false, onTap: () => onAnswer(false)),
+          _SleepButton(
+            label: 'Hayır',
+            positive: false,
+            onTap: () => onAnswer(false),
+          ),
         ],
       ),
     );
@@ -3074,7 +2670,11 @@ class _SleepCard extends StatelessWidget {
 }
 
 class _SleepButton extends StatefulWidget {
-  const _SleepButton({required this.label, required this.positive, required this.onTap});
+  const _SleepButton({
+    required this.label,
+    required this.positive,
+    required this.onTap,
+  });
   final String label;
   final bool positive;
   final VoidCallback onTap;
@@ -3090,10 +2690,12 @@ class _SleepButtonState extends State<_SleepButton> {
   Widget build(BuildContext context) {
     final color = widget.positive ? kAccent : kDanger;
     return GestureDetector(
-      onTap: _loading ? null : () async {
-        setState(() => _loading = true);
-        widget.onTap();
-      },
+      onTap: _loading
+          ? null
+          : () async {
+              setState(() => _loading = true);
+              widget.onTap();
+            },
       child: AnimatedContainer(
         duration: Duration(milliseconds: 150),
         padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -3103,10 +2705,19 @@ class _SleepButtonState extends State<_SleepButton> {
           border: Border.all(color: color.withAlpha(120)),
         ),
         child: _loading
-            ? SizedBox(width: 14, height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2, color: color))
-            : Text(widget.label,
-                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            : Text(
+                widget.label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }

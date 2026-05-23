@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../core/app_time.dart';
 import '../theme.dart';
 import '../core/api_client.dart';
 import 'today_screen.dart';
@@ -42,7 +44,7 @@ class _MainScaffoldState extends State<MainScaffold> {
             aiChatOpen: _aiChatOpen,
             onToggleAiChat: _toggleAiChat,
             onCloseAiChat: _closeAiChat,
-            child: TodayScreen(),
+            child: TodayScreen(onOpenInsights: () => _selectTab(2)),
           ),
           _FullScreenFrame(
             navbar: navbar,
@@ -165,7 +167,9 @@ class _ThemeToggle extends StatelessWidget {
       animation: appTheme,
       builder: (context, _) {
         final light = appTheme.isLight;
-        final icon = light ? Icons.dark_mode_outlined : Icons.light_mode_outlined;
+        final icon = light
+            ? Icons.dark_mode_outlined
+            : Icons.light_mode_outlined;
         final label = light ? 'Dark mode' : 'Light mode';
         return GestureDetector(
           onTap: appTheme.toggle,
@@ -256,6 +260,48 @@ class _TalkWithAiButton extends StatelessWidget {
   }
 }
 
+class _NavDateLabel extends StatelessWidget {
+  const _NavDateLabel();
+
+  static const _days = [
+    'Pazartesi',
+    'Salı',
+    'Çarşamba',
+    'Perşembe',
+    'Cuma',
+    'Cumartesi',
+    'Pazar',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final now = AppTime.now();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _days[now.weekday - 1],
+          style: TextStyle(
+            color: kText1,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        SizedBox(height: 2),
+        Text(
+          DateFormat('dd.MM.yyyy').format(now),
+          style: TextStyle(
+            color: kText2,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── What-if sabit sorular ─────────────────────────────────────────────────────
 
 class _WhatIfQuestion {
@@ -299,8 +345,13 @@ const _kWhatIfQuestions = [
 ];
 
 const _kDayNames = [
-  'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe',
-  'Cuma', 'Cumartesi', 'Pazar',
+  'Pazartesi',
+  'Salı',
+  'Çarşamba',
+  'Perşembe',
+  'Cuma',
+  'Cumartesi',
+  'Pazar',
 ];
 
 // ── AI Chat Popup ─────────────────────────────────────────────────────────────
@@ -346,7 +397,10 @@ class _AiChatPopupState extends State<_AiChatPopup> {
       setState(() {
         _pendingQuestion = q;
         _messages.add((text: q.label, fromUser: true));
-        _messages.add((text: 'Hangi ders için bakmamı istersin?', fromUser: false));
+        _messages.add((
+          text: 'Hangi ders için bakmamı istersin?',
+          fromUser: false,
+        ));
       });
       _scrollToBottom();
       return;
@@ -408,7 +462,10 @@ class _AiChatPopupState extends State<_AiChatPopup> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _messages.add((text: 'Bağlantı hatası. Lütfen tekrar dene.', fromUser: false));
+        _messages.add((
+          text: 'Bağlantı hatası. Lütfen tekrar dene.',
+          fromUser: false,
+        ));
       });
     }
     _scrollToBottom();
@@ -438,7 +495,10 @@ class _AiChatPopupState extends State<_AiChatPopup> {
 
   void _reset() {
     setState(() {
-      _messages.add((text: 'Başka bir şeye bakmamı ister misin?', fromUser: false));
+      _messages.add((
+        text: 'Başka bir şeye bakmamı ister misin?',
+        fromUser: false,
+      ));
       _pendingQuestion = null;
       _chipsVisible = true;
     });
@@ -487,7 +547,11 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                       color: kAccent.withAlpha(34),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.auto_awesome_rounded, color: kAccent, size: 17),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      color: kAccent,
+                      size: 17,
+                    ),
                   ),
                   SizedBox(width: 10),
                   Expanded(
@@ -516,7 +580,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                 controller: _scrollController,
                 padding: EdgeInsets.all(12),
                 itemCount: _messages.length + _extraCount,
-                separatorBuilder: (_, __) => SizedBox(height: 8),
+                separatorBuilder: (_, _) => SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   if (index < _messages.length) {
                     final m = _messages[index];
@@ -528,7 +592,10 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                     return Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: kBorder.withAlpha(55),
                           borderRadius: BorderRadius.circular(12),
@@ -549,23 +616,34 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                   if (_chipsVisible) return _buildQuestionChips();
 
                   // Ders seçimi
-                  if (_pendingQuestion?.needsLesson == true) return _buildLessonChips();
+                  if (_pendingQuestion?.needsLesson == true) {
+                    return _buildLessonChips();
+                  }
 
                   // Gün seçimi
-                  if (_pendingQuestion?.needsDay == true) return _buildDayChips();
+                  if (_pendingQuestion?.needsDay == true) {
+                    return _buildDayChips();
+                  }
 
                   // Reset butonu
                   return Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       onPressed: _reset,
-                      icon: Icon(Icons.refresh_rounded, size: 14, color: kAccent),
+                      icon: Icon(
+                        Icons.refresh_rounded,
+                        size: 14,
+                        color: kAccent,
+                      ),
                       label: Text(
                         'Başka bir soru sor',
                         style: TextStyle(color: kAccent, fontSize: 12),
                       ),
                       style: TextButton.styleFrom(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         backgroundColor: kAccent.withAlpha(18),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -637,7 +715,10 @@ class _AiChatPopupState extends State<_AiChatPopup> {
 
   Widget _buildLessonChips() {
     if (_lessons.isEmpty) {
-      return Text('Ders bulunamadı.', style: TextStyle(color: kText2, fontSize: 12));
+      return Text(
+        'Ders bulunamadı.',
+        style: TextStyle(color: kText2, fontSize: 12),
+      );
     }
     return Wrap(
       spacing: 6,
@@ -782,6 +863,10 @@ class _FullScreenFrame extends StatelessWidget {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _NavDateLabel(),
+                        ),
                         Align(alignment: Alignment.center, child: navbar),
                         Align(
                           alignment: Alignment.centerRight,
