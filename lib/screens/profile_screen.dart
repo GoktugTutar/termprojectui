@@ -232,6 +232,22 @@ class _ProfileScreenState extends State<ProfileScreen>
     ).push(MaterialPageRoute(builder: (_) => const NewTermScreen()));
   }
 
+  Future<void> _openAddLesson() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: kSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => const _ProfileAddLessonSheet(),
+    );
+    if (saved == true && mounted) {
+      await _load();
+    }
+  }
+
   Future<void> _logout() async {
     await ApiClient.clearToken();
     if (!mounted) return;
@@ -341,7 +357,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ],
                     ),
                   ),
-                  _SectionLabel('Dersler'),
+                  Row(
+                    children: [
+                      Expanded(child: _SectionLabel('Dersler')),
+                      _MiniAddButton(onTap: _openAddLesson),
+                    ],
+                  ),
                   SizedBox(height: 10),
                   _ProfileLessonsPanel(
                     lessons: _lessons,
@@ -594,6 +615,34 @@ class _SectionActionHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MiniAddButton extends StatelessWidget {
+  const _MiniAddButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Ders ekle',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: kAccent.withAlpha(34),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: kAccent.withAlpha(150)),
+          ),
+          child: Icon(Icons.add_rounded, color: kAccent, size: 18),
+        ),
+      ),
     );
   }
 }
