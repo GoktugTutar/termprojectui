@@ -15,6 +15,7 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _index = 0;
   int _weekReloadSignal = 0;
+  bool _aiChatOpen = false;
 
   static const _destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Bugün'),
@@ -35,13 +36,34 @@ class _MainScaffoldState extends State<MainScaffold> {
         );
 
         final screens = <Widget>[
-          _FullScreenFrame(navbar: navbar, child: TodayScreen()),
           _FullScreenFrame(
             navbar: navbar,
+            aiChatOpen: _aiChatOpen,
+            onToggleAiChat: _toggleAiChat,
+            onCloseAiChat: _closeAiChat,
+            child: TodayScreen(),
+          ),
+          _FullScreenFrame(
+            navbar: navbar,
+            aiChatOpen: _aiChatOpen,
+            onToggleAiChat: _toggleAiChat,
+            onCloseAiChat: _closeAiChat,
             child: WeekScreen(reloadSignal: _weekReloadSignal),
           ),
-          _FullScreenFrame(navbar: navbar, child: InsightsScreen()),
-          _FullScreenFrame(navbar: navbar, child: ProfileScreen()),
+          _FullScreenFrame(
+            navbar: navbar,
+            aiChatOpen: _aiChatOpen,
+            onToggleAiChat: _toggleAiChat,
+            onCloseAiChat: _closeAiChat,
+            child: InsightsScreen(),
+          ),
+          _FullScreenFrame(
+            navbar: navbar,
+            aiChatOpen: _aiChatOpen,
+            onToggleAiChat: _toggleAiChat,
+            onCloseAiChat: _closeAiChat,
+            child: ProfileScreen(),
+          ),
         ];
 
         return Scaffold(
@@ -60,6 +82,14 @@ class _MainScaffoldState extends State<MainScaffold> {
       }
     });
   }
+
+  void _toggleAiChat() {
+    setState(() => _aiChatOpen = !_aiChatOpen);
+  }
+
+  void _closeAiChat() {
+    setState(() => _aiChatOpen = false);
+  }
 }
 
 class _TopNav extends StatelessWidget {
@@ -75,65 +105,60 @@ class _TopNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: kSurface.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: kBorder.withValues(alpha: 0.45)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 26,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...List.generate(destinations.length, (i) {
-              final (unsel, sel, label) = destinations[i];
-              final selected = i == currentIndex;
-              return GestureDetector(
-                onTap: () => onTap(i),
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 180),
-                  margin: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? kAccent.withAlpha(24)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        selected ? sel : unsel,
-                        color: selected ? kAccent : kText2,
-                        size: 18,
-                      ),
-                      SizedBox(width: 6),
-                    ],
-                  ),
+    final items = <Widget>[];
+    for (var i = 0; i < destinations.length; i++) {
+      final (unsel, sel, label) = destinations[i];
+      final selected = i == currentIndex;
+      items
+        ..add(
+          Tooltip(
+            message: label,
+            child: GestureDetector(
+              onTap: () => onTap(i),
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 180),
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? kAccent.withAlpha(20) : Colors.transparent,
+                  shape: BoxShape.circle,
                 ),
-              );
-            }),
-            SizedBox(width: 6),
-            _ThemeToggle(expanded: false),
-          ],
-        ),
-      ),
+                child: Icon(
+                  selected ? sel : unsel,
+                  color: selected ? kAccent : kText2,
+                  size: 21,
+                ),
+              ),
+            ),
+          ),
+        )
+        ..add(_NavSeparator());
+    }
+    items.add(_ThemeToggle(expanded: false));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(mainAxisSize: MainAxisSize.min, children: items),
     );
   }
 }
 
 // ── Bottom nav (mobile) ───────────────────────────────────────────────────────
+
+class _NavSeparator extends StatelessWidget {
+  const _NavSeparator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 22,
+      margin: EdgeInsets.symmetric(horizontal: 18),
+      color: kBorder.withAlpha(appTheme.isLight ? 150 : 120),
+    );
+  }
+}
 
 class _ThemeToggle extends StatelessWidget {
   const _ThemeToggle({required this.expanded});
@@ -154,17 +179,19 @@ class _ThemeToggle extends StatelessWidget {
           onTap: appTheme.toggle,
           child: AnimatedContainer(
             duration: Duration(milliseconds: 180),
-            width: expanded ? double.infinity : 52,
-            height: expanded ? null : 48,
+            width: expanded ? double.infinity : 42,
+            height: expanded ? null : 42,
             padding: EdgeInsets.symmetric(
               horizontal: expanded ? 14 : 0,
               vertical: expanded ? 12 : 0,
             ),
-            decoration: BoxDecoration(
-              color: kAccent.withAlpha(24),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: kAccent.withAlpha(45)),
-            ),
+            decoration: expanded
+                ? BoxDecoration(
+                    color: kAccent.withAlpha(24),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kAccent.withAlpha(45)),
+                  )
+                : BoxDecoration(color: Colors.transparent),
             child: expanded
                 ? Row(
                     children: [
@@ -180,7 +207,10 @@ class _ThemeToggle extends StatelessWidget {
                       ),
                     ],
                   )
-                : Center(child: Icon(icon, color: kAccent, size: 22)),
+                : Tooltip(
+                    message: label,
+                    child: Center(child: Icon(icon, color: kAccent, size: 22)),
+                  ),
           ),
         );
       },
@@ -188,18 +218,227 @@ class _ThemeToggle extends StatelessWidget {
   }
 }
 
-// ── Dotted Pattern Painter ────────────────────────────────────────────────────
+class _TalkWithAiButton extends StatelessWidget {
+  const _TalkWithAiButton({required this.active, required this.onTap});
+
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 180),
+        height: 48,
+        padding: EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          color: active ? kAccent : kAccent.withAlpha(26),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kAccent.withAlpha(active ? 180 : 70)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              color: active ? Colors.white : kAccent,
+              size: 18,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Talk with AI',
+              style: TextStyle(
+                color: active ? Colors.white : kAccent,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiChatPopup extends StatefulWidget {
+  const _AiChatPopup({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  State<_AiChatPopup> createState() => _AiChatPopupState();
+}
+
+class _AiChatPopupState extends State<_AiChatPopup> {
+  final _controller = TextEditingController();
+  final List<({String text, bool fromUser})> _messages = [
+    (
+      text: 'Merhaba, çalışma planın hakkında neye bakmamı istersin?',
+      fromUser: false,
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _messages.add((text: text, fromUser: true));
+      _messages.add((
+        text:
+            'Şimdilik bu alan UI prototipi. İstersen bunu gerçek AI endpointine bağlayabiliriz.',
+        fromUser: false,
+      ));
+      _controller.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 330,
+        height: 360,
+        decoration: BoxDecoration(
+          color: kSurface.withValues(alpha: 0.98),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kAccent.withAlpha(90)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(appTheme.isLight ? 26 : 110),
+              blurRadius: 30,
+              offset: Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(14, 12, 8, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: kAccent.withAlpha(34),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      color: kAccent,
+                      size: 17,
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Talk with AI',
+                      style: TextStyle(
+                        color: kText1,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: Icon(Icons.close_rounded, color: kText2, size: 18),
+                    tooltip: 'Kapat',
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: kBorder.withAlpha(130)),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.all(12),
+                itemCount: _messages.length,
+                separatorBuilder: (_, _) => SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final message = _messages[index];
+                  return Align(
+                    alignment: message.fromUser
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      constraints: BoxConstraints(maxWidth: 250),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: message.fromUser
+                            ? kAccent.withAlpha(42)
+                            : kBorder.withAlpha(appTheme.isLight ? 45 : 55),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        message.text,
+                        style: TextStyle(
+                          color: kText1,
+                          fontSize: 12,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      onSubmitted: (_) => _send(),
+                      style: TextStyle(color: kText1, fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Mesaj yaz...',
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _send,
+                    icon: Icon(Icons.arrow_upward_rounded, size: 18),
+                    style: IconButton.styleFrom(backgroundColor: kAccent),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _DottedPatternPainter extends CustomPainter {
-  final Color color;
-  final double dotSpacing;
-  final double dotSize;
-
-  _DottedPatternPainter({
+  const _DottedPatternPainter({
     required this.color,
     this.dotSpacing = 24,
     this.dotSize = 2,
   });
+
+  final Color color;
+  final double dotSpacing;
+  final double dotSize;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -225,118 +464,141 @@ class _DottedPatternPainter extends CustomPainter {
 // ── Full Screen Frame ────────────────────────────────────────────────────────
 
 class _FullScreenFrame extends StatelessWidget {
-  const _FullScreenFrame({required this.child, required this.navbar});
+  const _FullScreenFrame({
+    required this.child,
+    required this.navbar,
+    required this.aiChatOpen,
+    required this.onToggleAiChat,
+    required this.onCloseAiChat,
+  });
+
+  static const _outerMargin = EdgeInsets.fromLTRB(54, 0, 32, 54);
+  static const _navHeight = 96.0;
+  static const _panelGap = 30.0;
+  static const _frameRadius = 16.0;
 
   final Widget child;
   final Widget navbar;
+  final bool aiChatOpen;
+  final VoidCallback onToggleAiChat;
+  final VoidCallback onCloseAiChat;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _FrameButtonShadowPainter(
-                margin: EdgeInsets.fromLTRB(54, 28, 32, 54),
-                color: Colors.black,
-                radius: 16,
-              ),
-            ),
-          ),
-          Container(
-            margin: EdgeInsets.fromLTRB(54, 28, 32, 54),
-            decoration: BoxDecoration(
-              color: kSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kBorder.withValues(alpha: 0.3)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  // Pattern background
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _DottedPatternPainter(
-                        color: kBorder.withValues(alpha: 0.25),
-                        dotSpacing: 20,
-                        dotSize: 1.5,
-                      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final navRect = Rect.fromLTWH(
+            _outerMargin.left,
+            _outerMargin.top,
+            constraints.maxWidth - _outerMargin.horizontal,
+            _navHeight,
+          );
+          final contentTop = navRect.bottom + _panelGap;
+          final contentRect = Rect.fromLTRB(
+            _outerMargin.left,
+            contentTop,
+            constraints.maxWidth - _outerMargin.right,
+            constraints.maxHeight - _outerMargin.bottom,
+          );
+
+          return Stack(
+            children: [
+              Positioned.fromRect(
+                rect: navRect,
+                child: _FramedPanel(
+                  radius: _frameRadius,
+                  clipTop: false,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 34),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Align(alignment: Alignment.center, child: navbar),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: _TalkWithAiButton(
+                            active: aiChatOpen,
+                            onTap: onToggleAiChat,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  // Content with navbar
-                  Column(
-                    children: [
-                      // Navbar at top
-                      Padding(padding: EdgeInsets.all(12), child: navbar),
-                      // Content below
-                      Expanded(child: child),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+              Positioned.fromRect(
+                rect: contentRect,
+                child: _FramedPanel(radius: _frameRadius, child: child),
+              ),
+              if (aiChatOpen)
+                Positioned(
+                  top: navRect.bottom + 12,
+                  right: _outerMargin.right + 18,
+                  child: _AiChatPopup(onClose: onCloseAiChat),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _FrameButtonShadowPainter extends CustomPainter {
-  const _FrameButtonShadowPainter({
-    required this.margin,
-    required this.color,
+class _FramedPanel extends StatelessWidget {
+  const _FramedPanel({
+    required this.child,
     required this.radius,
+    this.clipTop = true,
   });
 
-  final EdgeInsets margin;
-  final Color color;
+  final Widget child;
   final double radius;
+  final bool clipTop;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(
-      margin.left,
-      margin.top,
-      size.width - margin.horizontal,
-      size.height - margin.vertical,
+  Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.vertical(
+      top: Radius.circular(clipTop ? radius : 0),
+      bottom: Radius.circular(radius),
     );
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
 
-    final outer = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        rect.left - 12,
-        rect.top - 12,
-        rect.right + 12,
-        rect.bottom + 12,
+    return Container(
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: appTheme.isLight
+              ? Color(0xFFDCCEFF)
+              : kAccent.withValues(alpha: 0.72),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      Radius.circular(radius + 12),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: Stack(
+          children: [
+            if (!appTheme.isLight)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _DottedPatternPainter(
+                    color: kBorder.withValues(alpha: 0.38),
+                    dotSpacing: 22,
+                    dotSize: 1.5,
+                  ),
+                ),
+              ),
+            Positioned.fill(child: child),
+          ],
+        ),
+      ),
     );
-    final inner = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-
-    final shadow = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRRect(outer)
-      ..addRRect(inner);
-
-    canvas.drawPath(shadow, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FrameButtonShadowPainter oldDelegate) {
-    return oldDelegate.margin != margin ||
-        oldDelegate.color != color ||
-        oldDelegate.radius != radius;
   }
 }

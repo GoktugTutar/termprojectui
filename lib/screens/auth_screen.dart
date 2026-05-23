@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import 'main_scaffold.dart';
-import 'onboarding_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -26,6 +25,8 @@ class _AuthScreenState extends State<AuthScreen> {
   final _registerPageController = PageController();
   final List<_RegisterLessonDraft> _lessonDrafts = [_RegisterLessonDraft()];
   final List<_RegisterBusySlotDraft> _busyDrafts = [_RegisterBusySlotDraft()];
+  String _regPreferredStudyTime = 'morning';
+  String _regStudyStyle = 'normal';
 
   bool _loading = false;
   bool _loginObscure = true;
@@ -79,7 +80,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (_registerPage != 0) _goToRegisterPage(0);
       return;
     }
-    if (_registerPage < 2) {
+    if (_registerPage < _lastRegisterPage) {
       _goToRegisterPage(_registerPage + 1);
       return;
     }
@@ -91,6 +92,10 @@ class _AuthScreenState extends State<AuthScreen> {
         _regPass.text.trim(),
       );
       await ApiClient.saveToken(token);
+      await ApiClient.setupUser({
+        'preferredStudyTime': _regPreferredStudyTime,
+        'studyStyle': _regStudyStyle,
+      });
 
       for (final draft in _lessonDrafts) {
         final name = draft.name.text.trim();
@@ -124,7 +129,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (_) => MainScaffold()),
       );
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
@@ -132,6 +137,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  static const int _lastRegisterPage = 3;
 
   int _timeMinutes(String time) {
     final parts = time.split(':');
@@ -144,22 +151,13 @@ class _AuthScreenState extends State<AuthScreen> {
       '${date.day.toString().padLeft(2, '0')}';
 
   void _goToRegisterPage(int page) {
-    final target = page.clamp(0, 2).toInt();
+    final target = page.clamp(0, _lastRegisterPage).toInt();
     setState(() => _registerPage = target);
     _registerPageController.animateToPage(
       target,
       duration: Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
     );
-  }
-
-  void _handleRegisterStepTap(int page) {
-    if (page <= _registerPage) {
-      _goToRegisterPage(page);
-      return;
-    }
-    if (_registerPage == 0 && !_registerKey.currentState!.validate()) return;
-    _goToRegisterPage(page);
   }
 
   void _showError(String msg) {
@@ -262,8 +260,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                         Expanded(
                                           child: _buildFrame(
                                             title: 'Sign In',
-                                            subtitle:
-                                                'Hesabina gir ve haftalik programina ulas.',
+                                            subtitle: '',
                                             palette: palette,
                                             child: _buildLoginForm(palette),
                                           ),
@@ -287,8 +284,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                         height: frameHeight,
                                         child: _buildFrame(
                                           title: 'Sign In',
-                                          subtitle:
-                                              'Hesabina gir ve haftalik programina ulas.',
+                                          subtitle: '',
                                           palette: palette,
                                           child: _buildLoginForm(palette),
                                         ),
@@ -358,16 +354,18 @@ class _AuthScreenState extends State<AuthScreen> {
                   color: palette.text,
                 ),
               ),
-              SizedBox(height: 12),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.5,
-                  color: palette.muted,
+              if (subtitle.isNotEmpty) ...[
+                SizedBox(height: 12),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: palette.muted,
+                  ),
                 ),
-              ),
-              SizedBox(height: 24),
+              ],
+              SizedBox(height: subtitle.isEmpty ? 30 : 24),
               Expanded(child: SingleChildScrollView(child: child)),
             ],
           ),
@@ -447,24 +445,43 @@ class _AuthScreenState extends State<AuthScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RegisterStepper(
-            page: _registerPage,
-            palette: palette,
-            onTap: _handleRegisterStepTap,
-          ),
-          SizedBox(height: 12),
           SizedBox(
-            height: 260,
+            height: 318,
             child: PageView(
               controller: _registerPageController,
               onPageChanged: (value) => setState(() => _registerPage = value),
               children: [
                 _buildRegisterPersonalPage(palette),
+                _buildRegisterPreferencesPage(palette),
                 _buildRegisterLessonsPage(palette),
                 _buildRegisterBusyPage(palette),
               ],
             ),
           ),
+          if (_registerPage < _lastRegisterPage) ...[
+            SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _loading
+                    ? null
+                    : () => _goToRegisterPage(_registerPage + 1),
+                style: TextButton.styleFrom(
+                  foregroundColor: palette.muted,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                  textStyle: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: 0,
+                  ),
+                ),
+                child: Text('skip'),
+              ),
+            ),
+          ],
           SizedBox(height: 14),
           Row(
             children: [
@@ -510,7 +527,9 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         )
                       : Text(
-                          _registerPage == 2 ? 'Kayit Ol ve Basla' : 'Devam',
+                          _registerPage == _lastRegisterPage
+                              ? 'Kayit Ol ve Basla'
+                              : 'Devam',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -572,6 +591,93 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             validator: (v) => v != _regPass.text ? 'Sifreler eslesmiyor' : null,
             palette: palette,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRegisterPreferencesPage(_AuthPalette palette) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Preferred study time',
+            style: TextStyle(color: palette.text, fontWeight: FontWeight.w800),
+          ),
+          SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 2.8,
+            children: [
+              _RegisterPreferenceTile(
+                label: 'Morning',
+                detail: '08-11',
+                icon: Icons.wb_sunny_outlined,
+                selected: _regPreferredStudyTime == 'morning',
+                palette: palette,
+                onTap: () => setState(() => _regPreferredStudyTime = 'morning'),
+              ),
+              _RegisterPreferenceTile(
+                label: 'Afternoon',
+                detail: '12-15',
+                icon: Icons.wb_cloudy_outlined,
+                selected: _regPreferredStudyTime == 'afternoon',
+                palette: palette,
+                onTap: () =>
+                    setState(() => _regPreferredStudyTime = 'afternoon'),
+              ),
+              _RegisterPreferenceTile(
+                label: 'Evening',
+                detail: '18-21',
+                icon: Icons.nights_stay_outlined,
+                selected: _regPreferredStudyTime == 'evening',
+                palette: palette,
+                onTap: () => setState(() => _regPreferredStudyTime = 'evening'),
+              ),
+              _RegisterPreferenceTile(
+                label: 'Night',
+                detail: '21-24',
+                icon: Icons.bedtime_outlined,
+                selected: _regPreferredStudyTime == 'night',
+                palette: palette,
+                onTap: () => setState(() => _regPreferredStudyTime = 'night'),
+              ),
+            ],
+          ),
+          SizedBox(height: 14),
+          Text(
+            'Study style',
+            style: TextStyle(color: palette.text, fontWeight: FontWeight.w800),
+          ),
+          SizedBox(height: 8),
+          _RegisterStyleChoice(
+            value: 'deep_focus',
+            label: 'Deep focus',
+            selectedValue: _regStudyStyle,
+            palette: palette,
+            onChanged: (value) => setState(() => _regStudyStyle = value),
+          ),
+          SizedBox(height: 8),
+          _RegisterStyleChoice(
+            value: 'distributed',
+            label: 'Distributed',
+            selectedValue: _regStudyStyle,
+            palette: palette,
+            onChanged: (value) => setState(() => _regStudyStyle = value),
+          ),
+          SizedBox(height: 8),
+          _RegisterStyleChoice(
+            value: 'normal',
+            label: 'Balanced',
+            selectedValue: _regStudyStyle,
+            palette: palette,
+            onChanged: (value) => setState(() => _regStudyStyle = value),
           ),
         ],
       ),
@@ -753,85 +859,151 @@ class _RegisterBusySlotDraft {
   void dispose() {}
 }
 
-class _RegisterStepper extends StatelessWidget {
-  const _RegisterStepper({
-    required this.page,
+class _RegisterPreferenceTile extends StatelessWidget {
+  const _RegisterPreferenceTile({
+    required this.label,
+    required this.detail,
+    required this.icon,
+    required this.selected,
     required this.palette,
     required this.onTap,
   });
 
-  static const _labels = ['Kişisel', 'Dersler', 'Busy'];
-
-  final int page;
+  final String label;
+  final String detail;
+  final IconData icon;
+  final bool selected;
   final _AuthPalette palette;
-  final ValueChanged<int> onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(_labels.length, (index) {
-        final selected = index == page;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              right: index == _labels.length - 1 ? 0 : 8,
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => onTap(index),
-              child: AnimatedContainer(
-                duration: Duration(milliseconds: 180),
-                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? palette.accent.withAlpha(35)
-                      : palette.inputFill,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: selected ? palette.accent : palette.border,
-                    width: selected ? 1.4 : 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 22,
-                      height: 22,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: selected ? palette.accent : Colors.transparent,
-                        border: Border.all(color: palette.accent),
-                      ),
-                      child: Text(
-                        '${index + 1}',
-                        style: TextStyle(
-                          color: selected ? Colors.white : palette.accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        _labels[index],
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: selected ? palette.text : palette.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? palette.accent.withAlpha(34) : palette.inputFill,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? palette.accent : palette.border,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: selected ? palette.accent : palette.border.withAlpha(90),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? Colors.white : palette.text,
+                size: 18,
               ),
             ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    detail,
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RegisterStyleChoice extends StatelessWidget {
+  const _RegisterStyleChoice({
+    required this.value,
+    required this.label,
+    required this.selectedValue,
+    required this.palette,
+    required this.onChanged,
+  });
+
+  final String value;
+  final String label;
+  final String selectedValue;
+  final _AuthPalette palette;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value == selectedValue;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => onChanged(value),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? palette.accent.withAlpha(34) : palette.inputFill,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? palette.accent : palette.border,
+            width: selected ? 1.4 : 1,
           ),
-        );
-      }),
+        ),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: Duration(milliseconds: 160),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? palette.accent : palette.muted,
+                  width: 1.6,
+                ),
+                color: selected ? palette.accent : Colors.transparent,
+              ),
+              child: selected
+                  ? Icon(Icons.check_rounded, color: Colors.white, size: 15)
+                  : null,
+            ),
+            SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -46,6 +46,28 @@ BoxDecoration _keycapDecoration({
   );
 }
 
+BoxDecoration _quickActionDecoration({required bool secondary}) {
+  final bg = secondary
+      ? (appTheme.isLight ? Color(0xFFA78BFA) : Color(0xFF8A6CFF))
+      : (appTheme.isLight ? Color(0xFF0B5A4D) : Color(0xFF123D38));
+  final border = secondary
+      ? (appTheme.isLight ? Color(0xFF6D55C8) : Color(0xFFA78BFA))
+      : (appTheme.isLight ? Color(0xFF073C35) : Color(0xFF49E9FF));
+
+  return BoxDecoration(
+    color: bg,
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: border.withAlpha(appTheme.isLight ? 150 : 190)),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withAlpha(appTheme.isLight ? 34 : 90),
+        blurRadius: 12,
+        offset: Offset(0, 6),
+      ),
+    ],
+  );
+}
+
 String _formatDateLabel(String date) {
   const months = [
     'Ocak',
@@ -107,7 +129,6 @@ class _TodayScreenState extends State<TodayScreen>
   bool _noticeDismissed = false;
   String _quickNote = '';
   double _sleepScore = 7;
-  double _fatigueScore = 3;
   double _stressScore = 3;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
@@ -312,7 +333,6 @@ class _TodayScreenState extends State<TodayScreen>
         _onboardingNotice = onboardingNotice;
 
         _sleepScore = _readDoublePref(prefs, 'today_sleep_score', 7);
-        _fatigueScore = _readDoublePref(prefs, 'today_fatigue_score', 3);
         _stressScore = _readDoublePref(prefs, 'today_stress_score', 3);
         _isLastDayOfWeek = isLastDayOfWeek;
         _weeklyFeedbackSubmitted = weeklyFeedbackSubmitted;
@@ -678,19 +698,11 @@ class _TodayScreenState extends State<TodayScreen>
                               final wide = constraints.maxWidth >= 860;
                               final topControls = _TodayTopControls(
                                 sleepScore: _sleepScore,
-                                fatigueScore: _fatigueScore,
                                 stressScore: _stressScore,
                                 onSleepChanged: (value) {
                                   setState(() => _sleepScore = value);
                                   _saveWellbeingValue(
                                     'today_sleep_score',
-                                    value,
-                                  );
-                                },
-                                onFatigueChanged: (value) {
-                                  setState(() => _fatigueScore = value);
-                                  _saveWellbeingValue(
-                                    'today_fatigue_score',
                                     value,
                                   );
                                 },
@@ -885,7 +897,7 @@ class _FirstWeekChecklistPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: BoxConstraints(minHeight: 360),
+      constraints: BoxConstraints(minHeight: _kTodayPanelStackHeight),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
       decoration: _keycapDecoration(),
       child: Column(
@@ -914,18 +926,14 @@ class _FirstWeekChecklistPanel extends StatelessWidget {
 class _TodayTopControls extends StatelessWidget {
   const _TodayTopControls({
     required this.sleepScore,
-    required this.fatigueScore,
     required this.stressScore,
     required this.onSleepChanged,
-    required this.onFatigueChanged,
     required this.onStressChanged,
   });
 
   final double sleepScore;
-  final double fatigueScore;
   final double stressScore;
   final ValueChanged<double> onSleepChanged;
-  final ValueChanged<double> onFatigueChanged;
   final ValueChanged<double> onStressChanged;
 
   @override
@@ -937,10 +945,8 @@ class _TodayTopControls extends StatelessWidget {
           final compact = constraints.maxWidth < 520;
           final wellbeing = _TodayWellbeingPanel(
             sleepScore: sleepScore,
-            fatigueScore: fatigueScore,
             stressScore: stressScore,
             onSleepChanged: onSleepChanged,
-            onFatigueChanged: onFatigueChanged,
             onStressChanged: onStressChanged,
           );
 
@@ -952,8 +958,11 @@ class _TodayTopControls extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AvatarHeader(),
-                  SizedBox(width: 24),
-                  SizedBox(width: 180, child: wellbeing),
+                  SizedBox(width: 72),
+                  Padding(
+                    padding: EdgeInsets.only(top: 34),
+                    child: SizedBox(width: 166, child: wellbeing),
+                  ),
                 ],
               ),
             );
@@ -963,8 +972,11 @@ class _TodayTopControls extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AvatarHeader(),
-              SizedBox(width: 34),
-              SizedBox(width: 320, child: wellbeing),
+              SizedBox(width: 116),
+              Padding(
+                padding: EdgeInsets.only(top: 42),
+                child: SizedBox(width: 184, child: wellbeing),
+              ),
             ],
           );
         },
@@ -1031,57 +1043,42 @@ class _TodayGreetingTitle extends StatelessWidget {
 class _TodayWellbeingPanel extends StatelessWidget {
   const _TodayWellbeingPanel({
     required this.sleepScore,
-    required this.fatigueScore,
     required this.stressScore,
     required this.onSleepChanged,
-    required this.onFatigueChanged,
     required this.onStressChanged,
   });
 
   final double sleepScore;
-  final double fatigueScore;
   final double stressScore;
   final ValueChanged<double> onSleepChanged;
-  final ValueChanged<double> onFatigueChanged;
   final ValueChanged<double> onStressChanged;
 
   @override
   Widget build(BuildContext context) {
     final safeSleepScore = sleepScore.isFinite ? sleepScore : 7.0;
-    final safeFatigueScore = fatigueScore.isFinite ? fatigueScore : 3.0;
     final safeStressScore = stressScore.isFinite ? stressScore : 3.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _WellbeingBar(
-          label: 'Uyku',
-          valueText: '${safeSleepScore.toStringAsFixed(1)}h',
+        _WellbeingChoiceControl(
+          icon: Icons.nightlight_round,
+          tooltip: 'Uyku',
           value: safeSleepScore,
-          min: 0,
-          max: 10,
-          divisions: 20,
+          lowValue: 4,
+          neutralValue: 7,
+          highValue: 9,
           onChanged: onSleepChanged,
         ),
-        SizedBox(height: 4),
-        _WellbeingBar(
-          label: 'Yorgunluk',
-          valueText: '${safeFatigueScore.round()}/5',
-          value: safeFatigueScore,
-          min: 1,
-          max: 5,
-          divisions: 4,
-          onChanged: onFatigueChanged,
-        ),
-        SizedBox(height: 4),
-        _WellbeingBar(
-          label: 'Stres',
-          valueText: '${safeStressScore.round()}/5',
+        SizedBox(height: 6),
+        _WellbeingChoiceControl(
+          icon: Icons.bolt_rounded,
+          tooltip: 'Stres',
           value: safeStressScore,
-          min: 1,
-          max: 5,
-          divisions: 4,
+          lowValue: 1,
+          neutralValue: 3,
+          highValue: 5,
           onChanged: onStressChanged,
         ),
       ],
@@ -1089,165 +1086,141 @@ class _TodayWellbeingPanel extends StatelessWidget {
   }
 }
 
-class _WellbeingBar extends StatelessWidget {
-  const _WellbeingBar({
-    required this.label,
-    required this.valueText,
+class _WellbeingChoiceControl extends StatelessWidget {
+  const _WellbeingChoiceControl({
+    required this.icon,
+    required this.tooltip,
     required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
+    required this.lowValue,
+    required this.neutralValue,
+    required this.highValue,
     required this.onChanged,
   });
 
-  final String label;
-  final String valueText;
+  final IconData icon;
+  final String tooltip;
   final double value;
-  final double min;
-  final double max;
-  final int divisions;
+  final double lowValue;
+  final double neutralValue;
+  final double highValue;
   final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final railColor = appTheme.isLight
-        ? kAccent.withAlpha(135)
-        : Color(0xFF5B3FD6);
-    final railGlow = appTheme.isLight
-        ? kAccent.withAlpha(45)
-        : Color(0xFF8A6CFF).withAlpha(90);
-    final bladeColor = appTheme.isLight ? Color(0xFF00A6C8) : Color(0xFF49E9FF);
-    final safeMax = max > min ? max : min + 1;
-    final safeValue = value.isFinite
-        ? value.clamp(min, safeMax).toDouble()
-        : min;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: kText1,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Spacer(),
-            Text(
-              valueText,
-              style: TextStyle(
-                color: kText2,
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 3),
-        SizedBox(
-          height: 24,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              const sideInset = 8.0;
-              final usableWidth = math.max(1.0, constraints.maxWidth - 16);
-              final normalized = ((safeValue - min) / (safeMax - min)).clamp(
-                0.0,
-                1.0,
-              );
+    final selectedIndex = _selectedIndex;
+    final innerColor = appTheme.isLight ? Color(0xFFFFFCF6) : Color(0xFFF4F0FF);
+    final selectedColor = kAccent;
+    final inactiveText = appTheme.isLight ? Color(0xFF48685F) : kText1;
 
-              void updateFromLocalPosition(Offset localPosition) {
-                final raw = ((localPosition.dx - sideInset) / usableWidth)
-                    .clamp(0.0, 1.0);
-                var next = min + raw * (safeMax - min);
-                if (divisions > 0) {
-                  final step = (safeMax - min) / divisions;
-                  next = min + ((next - min) / step).round() * step;
-                }
-                onChanged(next.clamp(min, safeMax).toDouble());
-              }
-
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanDown: (details) =>
-                    updateFromLocalPosition(details.localPosition),
-                onPanUpdate: (details) =>
-                    updateFromLocalPosition(details.localPosition),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(
-                      left: sideInset,
-                      right: sideInset,
-                      child: Container(
-                        height: 12,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: [
-                            BoxShadow(
-                              color: railGlow,
-                              blurRadius: 12,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: railColor.withAlpha(90),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: railColor.withAlpha(170),
-                                width: 0.8,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: sideInset,
-                      child: Container(
-                        width: 2,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: railColor.withAlpha(150),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: sideInset + normalized * usableWidth - 2,
-                      child: Container(
-                        width: 4,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: bladeColor,
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: [
-                            BoxShadow(
-                              color: bladeColor.withAlpha(180),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
-                            BoxShadow(
-                              color: bladeColor.withAlpha(80),
-                              blurRadius: 18,
-                              spreadRadius: 3,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+    return SizedBox(
+      height: 32,
+      child: Row(
+        children: [
+          Tooltip(
+            message: tooltip,
+            child: Icon(icon, color: kText1, size: 18),
           ),
+          SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              height: 30,
+              padding: EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: innerColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  _ChoiceSegment(
+                    label: 'Az',
+                    selected: selectedIndex == 0,
+                    selectedIcon: Icons.close_rounded,
+                    selectedColor: selectedColor,
+                    inactiveText: inactiveText,
+                    onTap: () => onChanged(lowValue),
+                  ),
+                  _ChoiceSegment(
+                    label: 'Nötr',
+                    selected: selectedIndex == 1,
+                    selectedIcon: Icons.check_rounded,
+                    selectedColor: selectedColor,
+                    inactiveText: inactiveText,
+                    onTap: () => onChanged(neutralValue),
+                  ),
+                  _ChoiceSegment(
+                    label: 'Çok',
+                    selected: selectedIndex == 2,
+                    selectedIcon: Icons.check_rounded,
+                    selectedColor: selectedColor,
+                    inactiveText: inactiveText,
+                    onTap: () => onChanged(highValue),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int get _selectedIndex {
+    if (!value.isFinite) return 1;
+    final lowDistance = (value - lowValue).abs();
+    final neutralDistance = (value - neutralValue).abs();
+    final highDistance = (value - highValue).abs();
+    if (lowDistance <= neutralDistance && lowDistance <= highDistance) {
+      return 0;
+    }
+    if (highDistance <= neutralDistance && highDistance <= lowDistance) {
+      return 2;
+    }
+    return 1;
+  }
+}
+
+class _ChoiceSegment extends StatelessWidget {
+  const _ChoiceSegment({
+    required this.label,
+    required this.selected,
+    required this.selectedIcon,
+    required this.selectedColor,
+    required this.inactiveText,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final IconData selectedIcon;
+  final Color selectedColor;
+  final Color inactiveText;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? selectedColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: selected
+              ? Icon(selectedIcon, color: Colors.white, size: 16)
+              : Text(
+                  label,
+                  style: TextStyle(
+                    color: inactiveText,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1309,15 +1282,21 @@ class _TimerToolCard extends StatelessWidget {
         child: Ink(
           height: 136,
           padding: EdgeInsets.all(16),
-          decoration: _keycapDecoration(),
+          decoration: _quickActionDecoration(secondary: false),
           child: Stack(
             children: [
               Align(
                 alignment: Alignment.center,
                 child: Icon(
                   Icons.timer_outlined,
-                  color: kAccent.withAlpha(appTheme.isLight ? 180 : 210),
+                  color: Colors.white.withAlpha(205),
                   size: 78,
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: _QuickActionArrow(
+                  color: Colors.white.withAlpha(appTheme.isLight ? 135 : 170),
                 ),
               ),
               Align(
@@ -1329,7 +1308,7 @@ class _TimerToolCard extends StatelessWidget {
                     Text(
                       'Saat',
                       style: TextStyle(
-                        color: kText1,
+                        color: Colors.white,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -1339,7 +1318,10 @@ class _TimerToolCard extends StatelessWidget {
                     SizedBox(height: 3),
                     Text(
                       'Süre tut',
-                      style: TextStyle(color: kText2, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(190),
+                        fontSize: 12,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1377,19 +1359,25 @@ class _QuickToolCard extends StatelessWidget {
         child: Ink(
           height: 136,
           padding: EdgeInsets.all(16),
-          decoration: _keycapDecoration(),
+          decoration: _quickActionDecoration(secondary: true),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: kAccent, size: 24),
+              Row(
+                children: [
+                  Icon(icon, color: Colors.white, size: 24),
+                  Spacer(),
+                  _QuickActionArrow(color: Colors.white.withAlpha(160)),
+                ],
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
                     style: TextStyle(
-                      color: kText1,
+                      color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1399,7 +1387,10 @@ class _QuickToolCard extends StatelessWidget {
                   SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: TextStyle(color: kText2, fontSize: 12),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(195),
+                      fontSize: 12,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1409,6 +1400,25 @@ class _QuickToolCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _QuickActionArrow extends StatelessWidget {
+  const _QuickActionArrow({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color, width: 1.4),
+      ),
+      child: Icon(Icons.arrow_forward_rounded, color: color, size: 15),
     );
   }
 }

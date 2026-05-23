@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
 import '../core/app_time.dart';
@@ -28,7 +29,6 @@ String? _busyDateKey(dynamic value) {
 
 String _dateKey(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-
 
 class _ProfileBusySlot {
   final int dayOfWeek;
@@ -341,6 +341,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ],
                     ),
                   ),
+                  _SectionLabel('Dersler'),
+                  SizedBox(height: 10),
+                  _ProfileLessonsPanel(
+                    lessons: _lessons,
+                    daysToExam: _daysToExam,
+                  ),
+                  SizedBox(height: 24),
                   // Preferred study time
                   _SectionLabel('Preferred study time'),
                   SizedBox(height: 8),
@@ -441,13 +448,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                             'Save preferences',
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
-                  ),
-                  SizedBox(height: 24),
-                  _SectionLabel('Dersler'),
-                  SizedBox(height: 10),
-                  _ProfileLessonsPanel(
-                    lessons: _lessons,
-                    daysToExam: _daysToExam,
                   ),
                   SizedBox(height: 24),
                   // Checklist geçmişi ısı haritası
@@ -871,6 +871,21 @@ class _ProfileLessonsPanel extends StatefulWidget {
 
 class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
   final _scrollController = ScrollController();
+  final Map<String, _LessonGradeEntry> _grades = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGrades();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileLessonsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lessons.length != widget.lessons.length) {
+      _loadGrades();
+    }
+  }
 
   @override
   void dispose() {
@@ -878,10 +893,155 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     super.dispose();
   }
 
+  Future<void> _loadGrades() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = <String, _LessonGradeEntry>{};
+    for (final lesson in widget.lessons) {
+      final grade = prefs.getString(_gradeValueKey(lesson.id));
+      final happy = prefs.getBool(_gradeHappyKey(lesson.id));
+      if ((grade != null && grade.trim().isNotEmpty) || happy != null) {
+        loaded[lesson.id] = _LessonGradeEntry(
+          grade: grade?.trim() ?? '',
+          happy: happy,
+        );
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _grades
+        ..clear()
+        ..addAll(loaded);
+    });
+  }
+
+  Future<void> _editGrade(Lesson lesson) async {
+    final current = _grades[lesson.id];
+    final gradeController = TextEditingController(text: current?.grade ?? '');
+    bool? happy = current?.happy;
+
+    final result = await showDialog<_LessonGradeEntry?>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: kSurface,
+              title: Text('Grade', style: TextStyle(color: kText1)),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      lesson.lessonName,
+                      style: TextStyle(
+                        color: kText2,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 14),
+                    TextField(
+                      controller: gradeController,
+                      autofocus: true,
+                      keyboardType: TextInputType.text,
+                      style: TextStyle(color: kText1),
+                      decoration: InputDecoration(
+                        labelText: 'Aldığın not',
+                        hintText: 'AA, 92, B+...',
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Sonuçtan mutlu musun?',
+                      style: TextStyle(
+                        color: kText1,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _GradeMoodButton(
+                            label: 'Evet',
+                            icon: Icons.sentiment_satisfied_alt_rounded,
+                            selected: happy == true,
+                            onTap: () => setDialogState(() => happy = true),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: _GradeMoodButton(
+                            label: 'Hayır',
+                            icon: Icons.sentiment_dissatisfied_rounded,
+                            selected: happy == false,
+                            onTap: () => setDialogState(() => happy = false),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text('İptal', style: TextStyle(color: kText2)),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, _LessonGradeEntry.empty),
+                  child: Text('Temizle', style: TextStyle(color: _kDanger)),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                      _LessonGradeEntry(
+                        grade: gradeController.text.trim(),
+                        happy: happy,
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(backgroundColor: kAccent),
+                  child: Text('Kaydet'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    gradeController.dispose();
+    if (result == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (result.isEmpty) {
+      await prefs.remove(_gradeValueKey(lesson.id));
+      await prefs.remove(_gradeHappyKey(lesson.id));
+      if (!mounted) return;
+      setState(() => _grades.remove(lesson.id));
+      return;
+    }
+
+    await prefs.setString(_gradeValueKey(lesson.id), result.grade);
+    if (result.happy == null) {
+      await prefs.remove(_gradeHappyKey(lesson.id));
+    } else {
+      await prefs.setBool(_gradeHappyKey(lesson.id), result.happy!);
+    }
+    if (!mounted) return;
+    setState(() => _grades[lesson.id] = result);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 430,
+      height: 336,
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: kSurface,
@@ -897,7 +1057,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
             )
           : Scrollbar(
               controller: _scrollController,
-              thumbVisibility: widget.lessons.length > 4,
+              thumbVisibility: widget.lessons.length > 2,
               child: ListView.separated(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
@@ -908,6 +1068,8 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                   return _ProfileLessonRow(
                     lesson: lesson,
                     daysToExam: widget.daysToExam(lesson),
+                    grade: _grades[lesson.id],
+                    onGradeTap: () => _editGrade(lesson),
                   );
                 },
               ),
@@ -916,11 +1078,34 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
   }
 }
 
+String _gradeValueKey(String lessonId) => 'profile_lesson_grade_$lessonId';
+
+String _gradeHappyKey(String lessonId) =>
+    'profile_lesson_grade_happy_$lessonId';
+
+class _LessonGradeEntry {
+  const _LessonGradeEntry({required this.grade, required this.happy});
+
+  static const empty = _LessonGradeEntry(grade: '', happy: null);
+
+  final String grade;
+  final bool? happy;
+
+  bool get isEmpty => grade.trim().isEmpty && happy == null;
+}
+
 class _ProfileLessonRow extends StatelessWidget {
-  const _ProfileLessonRow({required this.lesson, required this.daysToExam});
+  const _ProfileLessonRow({
+    required this.lesson,
+    required this.daysToExam,
+    required this.grade,
+    required this.onGradeTap,
+  });
 
   final Lesson lesson;
   final int? daysToExam;
+  final _LessonGradeEntry? grade;
+  final VoidCallback onGradeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -952,7 +1137,6 @@ class _ProfileLessonRow extends StatelessWidget {
     final examValue = daysToExam == null || lesson.exams.isEmpty
         ? '—'
         : lesson.exams.first.dateOnly;
-    final totalDelay = lesson.keyfiDelayCount + lesson.zorunluDelayCount;
     final needsMore = lesson.needsMoreTime == 1
         ? '+1'
         : lesson.needsMoreTime == -1
@@ -1019,11 +1203,7 @@ class _ProfileLessonRow extends StatelessWidget {
                           style: TextStyle(color: kText2, fontSize: 12),
                         ),
                         SizedBox(width: 8),
-                        _DelayBadge(
-                          totalDelay: totalDelay,
-                          keyfiDelay: lesson.keyfiDelayCount,
-                          zorunluDelay: lesson.zorunluDelayCount,
-                        ),
+                        _GradeBadge(grade: grade, onTap: onGradeTap),
                       ],
                     ),
                   ],
@@ -1066,11 +1246,15 @@ class _ProfileLessonRow extends StatelessWidget {
                 value: examValue,
               ),
               _ProfilePico(
-                icon: Icons.repeat,
-                label: 'Delays',
-                value: '$totalDelay',
-                sub: lesson.keyfiDelayCount > 0 ? 'slot mode' : null,
-                tone: totalDelay >= 3 ? _kWarning : null,
+                icon: Icons.workspace_premium_outlined,
+                label: 'Grade',
+                value: grade?.grade.isNotEmpty == true ? grade!.grade : '—',
+                sub: grade?.happy == null
+                    ? null
+                    : grade!.happy!
+                    ? 'happy'
+                    : 'not happy',
+                tone: grade?.happy == false ? _kWarning : null,
               ),
               _ProfilePico(
                 icon: Icons.auto_awesome_outlined,
@@ -1085,39 +1269,84 @@ class _ProfileLessonRow extends StatelessWidget {
   }
 }
 
-class _DelayBadge extends StatelessWidget {
-  const _DelayBadge({
-    required this.totalDelay,
-    required this.keyfiDelay,
-    required this.zorunluDelay,
-  });
+class _GradeBadge extends StatelessWidget {
+  const _GradeBadge({required this.grade, required this.onTap});
 
-  final int totalDelay;
-  final int keyfiDelay;
-  final int zorunluDelay;
+  final _LessonGradeEntry? grade;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final tone = totalDelay >= 3 ? _kWarning : kText2;
+    final hasGrade = grade != null && !grade!.isEmpty;
+    final tone = grade?.happy == false ? _kWarning : kAccent;
     return Tooltip(
-      message: 'Kullanıcı delay: $keyfiDelay · Zorunlu delay: $zorunluDelay',
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      message: 'Not ve memnuniyet bilgisini gir',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: hasGrade ? tone.withAlpha(28) : kBorder.withAlpha(34),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: hasGrade ? tone.withAlpha(80) : kBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.edit_note_rounded, size: 13, color: tone),
+              SizedBox(width: 4),
+              Text(
+                hasGrade && grade!.grade.isNotEmpty ? grade!.grade : 'Grade',
+                style: TextStyle(
+                  color: hasGrade ? tone : kText2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GradeMoodButton extends StatelessWidget {
+  const _GradeMoodButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
-          color: tone.withAlpha(28),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: tone.withAlpha(80)),
+          color: selected ? kAccent.withAlpha(42) : kBorder.withAlpha(34),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? kAccent : kBorder),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.more_time_rounded, size: 13, color: tone),
-            SizedBox(width: 4),
+            Icon(icon, color: selected ? kAccent : kText2, size: 18),
+            SizedBox(width: 6),
             Text(
-              '$totalDelay',
+              label,
               style: TextStyle(
-                color: tone,
-                fontSize: 11,
+                color: selected ? kText1 : kText2,
                 fontWeight: FontWeight.w800,
               ),
             ),
