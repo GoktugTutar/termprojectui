@@ -30,6 +30,11 @@ String? _busyDateKey(dynamic value) {
 String _dateKey(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
+DateTime _localDateOnly(DateTime date) {
+  final local = date.toLocal();
+  return DateTime(local.year, local.month, local.day);
+}
+
 class _ProfileBusySlot {
   final int dayOfWeek;
   final String startTime;
@@ -156,10 +161,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   int? _daysToExam(Lesson lesson) {
     int? best;
     final now = AppTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     for (final exam in lesson.exams) {
       try {
-        final date = DateTime.parse(exam.examDate);
-        final diff = date.difference(now).inDays;
+        final date = _localDateOnly(DateTime.parse(exam.examDate));
+        final diff = date.difference(today).inDays;
+        if (diff < 0) continue;
         if (best == null || diff < best) best = diff;
       } catch (_) {}
     }
@@ -946,8 +953,13 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     final prefs = await SharedPreferences.getInstance();
     final loaded = <String, _LessonGradeEntry>{};
     for (final lesson in widget.lessons) {
-      final grade = prefs.getString(_gradeValueKey(lesson.id));
-      final happy = prefs.getBool(_gradeHappyKey(lesson.id));
+      final backendResult = lesson.examResults.isNotEmpty
+          ? lesson.examResults.first
+          : null;
+      final grade =
+          backendResult?.grade ?? prefs.getString(_gradeValueKey(lesson.id));
+      final happy =
+          backendResult?.satisfied ?? prefs.getBool(_gradeHappyKey(lesson.id));
       if ((grade != null && grade.trim().isNotEmpty) || happy != null) {
         loaded[lesson.id] = _LessonGradeEntry(
           grade: grade?.trim() ?? '',
@@ -1069,26 +1081,95 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     if (result == null) return;
 
     final prefs = await SharedPreferences.getInstance();
+    final lessonId = int.tryParse(lesson.id);
+    final exam = _resultExamForLesson(lesson);
     if (result.isEmpty) {
-      await prefs.remove(_gradeValueKey(lesson.id));
-      await prefs.remove(_gradeHappyKey(lesson.id));
+      try {
+        if (lessonId != null && exam != null) {
+          await ApiClient.deleteExamResult(lessonId: lessonId, examId: exam.id);
+        }
+        await prefs.remove(_gradeValueKey(lesson.id));
+        await prefs.remove(_gradeHappyKey(lesson.id));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() => _grades.remove(lesson.id));
       return;
     }
 
-    await prefs.setString(_gradeValueKey(lesson.id), result.grade);
-    if (result.happy == null) {
-      await prefs.remove(_gradeHappyKey(lesson.id));
-    } else {
-      await prefs.setBool(_gradeHappyKey(lesson.id), result.happy!);
+    try {
+      if (lessonId != null && exam != null) {
+        await ApiClient.saveExamResult(
+          lessonId: lessonId,
+          examId: exam.id,
+          grade: result.grade,
+          satisfied: result.happy,
+        );
+      }
+      await prefs.setString(_gradeValueKey(lesson.id), result.grade);
+      if (result.happy == null) {
+        await prefs.remove(_gradeHappyKey(lesson.id));
+      } else {
+        await prefs.setBool(_gradeHappyKey(lesson.id), result.happy!);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
     if (!mounted) return;
     setState(() => _grades[lesson.id] = result);
   }
 
+  LessonExam? _resultExamForLesson(Lesson lesson) {
+    if (lesson.exams.isEmpty) return null;
+    final now = AppTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final pastExams =
+        lesson.exams.where((exam) {
+          final parsed = DateTime.tryParse(exam.examDate);
+          if (parsed == null) return false;
+          return !_localDateOnly(parsed).isAfter(today);
+        }).toList()..sort((a, b) {
+          final aDate = _localDateOnly(DateTime.parse(a.examDate));
+          final bDate = _localDateOnly(DateTime.parse(b.examDate));
+          return bDate.compareTo(aDate);
+        });
+    return pastExams.isNotEmpty ? pastExams.first : lesson.exams.first;
+  }
+
+  bool _needsResultEntry(Lesson lesson) {
+    if (_grades[lesson.id]?.isEmpty == false) return false;
+    final now = AppTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(Duration(days: 1));
+    return lesson.exams.any((exam) {
+      final parsed = DateTime.tryParse(exam.examDate);
+      if (parsed == null) return false;
+      return _localDateOnly(parsed) == yesterday;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final resultReminderLessons = widget.lessons
+        .where(_needsResultEntry)
+        .map((l) => l.lessonName)
+        .toList();
+
     return Container(
       height: 336,
       padding: EdgeInsets.all(12),
@@ -1110,10 +1191,19 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
               child: ListView.separated(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
-                itemCount: widget.lessons.length,
+                itemCount:
+                    widget.lessons.length +
+                    (resultReminderLessons.isNotEmpty ? 1 : 0),
                 separatorBuilder: (_, _) => SizedBox(height: 8),
                 itemBuilder: (context, index) {
-                  final lesson = widget.lessons[index];
+                  if (resultReminderLessons.isNotEmpty && index == 0) {
+                    return _ExamResultReminder(
+                      lessonNames: resultReminderLessons,
+                    );
+                  }
+                  final lessonIndex =
+                      index - (resultReminderLessons.isNotEmpty ? 1 : 0);
+                  final lesson = widget.lessons[lessonIndex];
                   return _ProfileLessonRow(
                     lesson: lesson,
                     daysToExam: widget.daysToExam(lesson),
@@ -1141,6 +1231,43 @@ class _LessonGradeEntry {
   final bool? happy;
 
   bool get isEmpty => grade.trim().isEmpty && happy == null;
+}
+
+class _ExamResultReminder extends StatelessWidget {
+  const _ExamResultReminder({required this.lessonNames});
+
+  final List<String> lessonNames;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = lessonNames.take(2).join(', ');
+    final extra = lessonNames.length > 2 ? ' +${lessonNames.length - 2}' : '';
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kAccent.withAlpha(24),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kAccent.withAlpha(70)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.edit_note_rounded, color: kAccent, size: 18),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$names$extra sınav sonucunu profilden girebilirsin; böylece performansını daha iyi yorumlayabiliriz.',
+              style: TextStyle(
+                color: kText1,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ProfileLessonRow extends StatelessWidget {

@@ -106,6 +106,11 @@ String _formatMinutes(int minutes) {
   return '${hours}h ${mins}m';
 }
 
+DateTime _localDateOnly(DateTime date) {
+  final local = date.toLocal();
+  return DateTime(local.year, local.month, local.day);
+}
+
 class TodayScreen extends StatefulWidget {
   const TodayScreen({super.key, this.onOpenInsights});
 
@@ -131,6 +136,8 @@ class _TodayScreenState extends State<TodayScreen>
   bool _noticeDismissed = false;
   String _aiMessage = ''; // ← ekle
   bool _aiMessageDismissed = false; // ← ekle
+  String _examResultMessage = '';
+  bool _examResultMessageDismissed = false;
   String _quickNote = '';
   String _displayName = 'Öğrenci';
   String _gpaLabel = 'GPA -';
@@ -209,6 +216,7 @@ class _TodayScreenState extends State<TodayScreen>
       final raw = parallelInit[2] as List<dynamic>;
       final feedbackData = parallelInit[3] as Map<String, dynamic>;
       final aiMsg = feedbackData['aiMessage'] as String? ?? '';
+      final examResultMsg = feedbackData['examResultMessage'] as String? ?? '';
       final displayName = _displayNameFromUser(userData);
       final gpaLabel = _gpaLabelFromUser(userData);
       final termLabel = _termLabelFromUser(userData);
@@ -298,8 +306,9 @@ class _TodayScreenState extends State<TodayScreen>
         final lessonName = (l['name'] as String? ?? '');
         final examList = (l['exams'] as List?) ?? [];
         for (final e in examList) {
-          final date = DateTime.tryParse(e['examDate'] as String? ?? '');
-          if (date == null) continue;
+          final parsed = DateTime.tryParse(e['examDate'] as String? ?? '');
+          if (parsed == null) continue;
+          final date = _localDateOnly(parsed);
           final daysLeft = date
               .difference(DateTime(now.year, now.month, now.day))
               .inDays;
@@ -315,8 +324,9 @@ class _TodayScreenState extends State<TodayScreen>
         }
         final dlList = (l['deadlines'] as List?) ?? [];
         for (final d in dlList) {
-          final date = DateTime.tryParse(d['deadlineDate'] as String? ?? '');
-          if (date == null) continue;
+          final parsed = DateTime.tryParse(d['deadlineDate'] as String? ?? '');
+          if (parsed == null) continue;
+          final date = _localDateOnly(parsed);
           final daysLeft = date
               .difference(DateTime(now.year, now.month, now.day))
               .inDays;
@@ -355,6 +365,10 @@ class _TodayScreenState extends State<TodayScreen>
           _aiMessage = aiMsg;
           _aiMessageDismissed = false;
         }
+        if (examResultMsg != _examResultMessage) {
+          _examResultMessageDismissed = false;
+        }
+        _examResultMessage = examResultMsg;
         _loading = false;
       });
     } catch (_) {
@@ -939,7 +953,8 @@ class _TodayScreenState extends State<TodayScreen>
                 ),
               ),
             ),
-          if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
+          if ((_examResultMessage.isNotEmpty && !_examResultMessageDismissed) ||
+              (_aiMessage.isNotEmpty && !_aiMessageDismissed))
             Positioned(
               left: 18,
               top: 14,
@@ -948,9 +963,26 @@ class _TodayScreenState extends State<TodayScreen>
                   760,
                   math.max(280, MediaQuery.sizeOf(context).width - 36),
                 ),
-                child: _AiMessageBanner(
-                  message: _aiMessage,
-                  onClose: () => setState(() => _aiMessageDismissed = true),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_examResultMessage.isNotEmpty &&
+                        !_examResultMessageDismissed) ...[
+                      _AiMessageBanner(
+                        message: _examResultMessage,
+                        onClose: () =>
+                            setState(() => _examResultMessageDismissed = true),
+                      ),
+                      if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
+                        SizedBox(height: 10),
+                    ],
+                    if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
+                      _AiMessageBanner(
+                        message: _aiMessage,
+                        onClose: () =>
+                            setState(() => _aiMessageDismissed = true),
+                      ),
+                  ],
                 ),
               ),
             ),

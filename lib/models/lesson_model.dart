@@ -32,6 +32,30 @@ class LessonDeadline {
       deadlineDate.length >= 10 ? deadlineDate.substring(0, 10) : deadlineDate;
 }
 
+class LessonExamResult {
+  final int id;
+  final int examId;
+  final String grade;
+  final bool? satisfied;
+  final String createdAt;
+
+  LessonExamResult({
+    required this.id,
+    required this.examId,
+    required this.grade,
+    required this.satisfied,
+    required this.createdAt,
+  });
+
+  factory LessonExamResult.fromJson(Map<String, dynamic> j) => LessonExamResult(
+    id: (j['id'] as num).toInt(),
+    examId: (j['examId'] as num).toInt(),
+    grade: j['grade']?.toString() ?? '',
+    satisfied: j['satisfied'] as bool?,
+    createdAt: j['createdAt']?.toString() ?? '',
+  );
+}
+
 /// Backend /lesson endpoint'inden gelen ders modeli.
 class Lesson {
   final String id;
@@ -42,6 +66,7 @@ class Lesson {
   final int keyfiDelayCount;
   final int zorunluDelayCount;
   final int needsMoreTime;
+  final List<LessonExamResult> examResults;
 
   Lesson({
     required this.id,
@@ -52,6 +77,7 @@ class Lesson {
     required this.keyfiDelayCount,
     required this.zorunluDelayCount,
     required this.needsMoreTime,
+    required this.examResults,
   });
 
   factory Lesson.fromJson(Map<String, dynamic> j) => Lesson(
@@ -67,5 +93,8 @@ class Lesson {
     keyfiDelayCount: (j['keyfiDelayCount'] as num?)?.toInt() ?? 0,
     zorunluDelayCount: (j['zorunluDelayCount'] as num?)?.toInt() ?? 0,
     needsMoreTime: (j['needsMoreTime'] as num?)?.toInt() ?? 0,
+    examResults: ((j['examResults'] as List?) ?? [])
+        .map((r) => LessonExamResult.fromJson(r as Map<String, dynamic>))
+        .toList(),
   );
 }

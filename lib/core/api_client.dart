@@ -258,6 +258,37 @@ class ApiClient {
     await _handle(res);
   }
 
+  static Future<Map<String, dynamic>> saveExamResult({
+    required int lessonId,
+    required int examId,
+    String? grade,
+    bool? satisfied,
+  }) async {
+    final h = await _authHeaders();
+    final res = await http.post(
+      Uri.parse('$_base/lesson/$lessonId/exam-result'),
+      headers: h,
+      body: json.encode({
+        'examId': examId,
+        'grade': grade,
+        'satisfied': satisfied,
+      }),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  static Future<void> deleteExamResult({
+    required int lessonId,
+    required int examId,
+  }) async {
+    final h = await _authHeaders();
+    final res = await http.delete(
+      Uri.parse('$_base/lesson/$lessonId/exam-result/$examId'),
+      headers: h,
+    );
+    await _handle(res);
+  }
+
   // ── PLANNER ─────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> createWeeklyPlan() async {
