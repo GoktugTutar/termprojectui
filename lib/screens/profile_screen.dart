@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
@@ -964,6 +965,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
         loaded[lesson.id] = _LessonGradeEntry(
           grade: grade?.trim() ?? '',
           happy: happy,
+          failReason: backendResult?.failReason,
         );
       }
     }
@@ -979,98 +981,221 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     final current = _grades[lesson.id];
     final gradeController = TextEditingController(text: current?.grade ?? '');
     bool? happy = current?.happy;
+    String? failReason = lesson.examResults.isNotEmpty
+        ? lesson.examResults.first.failReason
+        : null;
+    String aiComment = '';
+    String? aiError;
+    bool aiLoading = false;
+    final lessonId = int.tryParse(lesson.id);
+    final exam = _resultExamForLesson(lesson);
+
+    Future<void> loadCoachComment(
+      void Function(void Function()) setDialogState,
+      BuildContext dialogContext,
+    ) async {
+      if (lessonId == null || exam == null || failReason == null) return;
+      setDialogState(() {
+        aiLoading = true;
+        aiError = null;
+        aiComment = '';
+      });
+      try {
+        final saved = await ApiClient.saveExamResult(
+          lessonId: lessonId,
+          examId: exam.id,
+          grade: gradeController.text.trim(),
+          satisfied: false,
+          failReason: failReason,
+        );
+        final resultId = (saved['id'] as num).toInt();
+        final coach = await ApiClient.getExamResultCoachMessage(resultId);
+        if (!dialogContext.mounted) return;
+        setDialogState(() {
+          aiComment = coach['message']?.toString() ?? '';
+          aiLoading = false;
+        });
+      } catch (e) {
+        if (!dialogContext.mounted) return;
+        setDialogState(() {
+          aiError = e.toString().replaceAll('Exception: ', '');
+          aiLoading = false;
+        });
+      }
+    }
 
     final result = await showDialog<_LessonGradeEntry?>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            return Dialog(
               backgroundColor: kSurface,
-              title: Text('Grade', style: TextStyle(color: kText1)),
-              content: SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      lesson.lessonName,
-                      style: TextStyle(
-                        color: kText2,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 300),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        lesson.lessonName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: kText1,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 14),
-                    TextField(
-                      controller: gradeController,
-                      autofocus: true,
-                      keyboardType: TextInputType.text,
-                      style: TextStyle(color: kText1),
-                      decoration: InputDecoration(
-                        labelText: 'Aldığın not',
-                        hintText: 'AA, 92, B+...',
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Sonuçtan mutlu musun?',
-                      style: TextStyle(
-                        color: kText1,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _GradeMoodButton(
-                            label: 'Evet',
-                            icon: Icons.sentiment_satisfied_alt_rounded,
-                            selected: happy == true,
-                            onTap: () => setDialogState(() => happy = true),
+                      SizedBox(height: 12),
+                      TextField(
+                        controller: gradeController,
+                        autofocus: true,
+                        keyboardType: TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                        ],
+                        style: TextStyle(
+                          color: kText1,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Aldığın not',
+                          hintText: '92',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: _GradeMoodButton(
-                            label: 'Hayır',
-                            icon: Icons.sentiment_dissatisfied_rounded,
-                            selected: happy == false,
-                            onTap: () => setDialogState(() => happy = false),
+                      ),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _GradeMoodButton(
+                              label: 'Evet',
+                              icon: Icons.sentiment_satisfied_alt_rounded,
+                              selected: happy == true,
+                              onTap: () => setDialogState(() {
+                                happy = true;
+                                failReason = null;
+                                aiComment = '';
+                                aiError = null;
+                              }),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: _GradeMoodButton(
+                              label: 'Hayır',
+                              icon: Icons.sentiment_dissatisfied_rounded,
+                              selected: happy == false,
+                              onTap: () => setDialogState(() => happy = false),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (happy == false) ...[
+                        SizedBox(height: 14),
+                        Text(
+                          'Sence neden kötü geçti?',
+                          style: TextStyle(
+                            color: kText1,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
+                        SizedBox(height: 8),
+                        ..._examFailReasonOptions.map(
+                          (option) => Padding(
+                            padding: EdgeInsets.only(bottom: 7),
+                            child: _FailReasonButton(
+                              label: option.label,
+                              selected: failReason == option.value,
+                              onTap: () {
+                                setDialogState(() => failReason = option.value);
+                                loadCoachComment(setDialogState, dialogContext);
+                              },
+                            ),
+                          ),
+                        ),
+                        if (aiLoading)
+                          Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: LinearProgressIndicator(
+                              minHeight: 3,
+                              color: kAccent,
+                              backgroundColor: kBorder,
+                            ),
+                          ),
+                        if (aiError != null)
+                          Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text(
+                              aiError!,
+                              style: TextStyle(color: _kDanger, fontSize: 12),
+                            ),
+                          ),
+                        if (aiComment.isNotEmpty)
+                          Container(
+                            margin: EdgeInsets.only(top: 8),
+                            padding: EdgeInsets.all(11),
+                            decoration: BoxDecoration(
+                              color: kAccent.withAlpha(22),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: kAccent.withAlpha(60)),
+                            ),
+                            child: Text(
+                              aiComment,
+                              style: TextStyle(
+                                color: kText1,
+                                fontSize: 12.5,
+                                height: 1.35,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                       ],
-                    ),
-                  ],
+                      SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton(
+                          onPressed: () {
+                            Navigator.pop(
+                              dialogContext,
+                              _LessonGradeEntry(
+                                grade: gradeController.text.trim(),
+                                happy: happy,
+                                failReason: happy == false ? failReason : null,
+                              ),
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: kAccent,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 11,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: Text('Kaydet'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: Text('İptal', style: TextStyle(color: kText2)),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pop(dialogContext, _LessonGradeEntry.empty),
-                  child: Text('Temizle', style: TextStyle(color: _kDanger)),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.pop(
-                      dialogContext,
-                      _LessonGradeEntry(
-                        grade: gradeController.text.trim(),
-                        happy: happy,
-                      ),
-                    );
-                  },
-                  style: FilledButton.styleFrom(backgroundColor: kAccent),
-                  child: Text('Kaydet'),
-                ),
-              ],
             );
           },
         );
@@ -1081,8 +1206,6 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     if (result == null) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final lessonId = int.tryParse(lesson.id);
-    final exam = _resultExamForLesson(lesson);
     if (result.isEmpty) {
       try {
         if (lessonId != null && exam != null) {
@@ -1112,6 +1235,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
           examId: exam.id,
           grade: result.grade,
           satisfied: result.happy,
+          failReason: result.failReason,
         );
       }
       await prefs.setString(_gradeValueKey(lesson.id), result.grade);
@@ -1151,25 +1275,8 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     return pastExams.isNotEmpty ? pastExams.first : lesson.exams.first;
   }
 
-  bool _needsResultEntry(Lesson lesson) {
-    if (_grades[lesson.id]?.isEmpty == false) return false;
-    final now = AppTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(Duration(days: 1));
-    return lesson.exams.any((exam) {
-      final parsed = DateTime.tryParse(exam.examDate);
-      if (parsed == null) return false;
-      return _localDateOnly(parsed) == yesterday;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final resultReminderLessons = widget.lessons
-        .where(_needsResultEntry)
-        .map((l) => l.lessonName)
-        .toList();
-
     return Container(
       height: 336,
       padding: EdgeInsets.all(12),
@@ -1191,19 +1298,10 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
               child: ListView.separated(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
-                itemCount:
-                    widget.lessons.length +
-                    (resultReminderLessons.isNotEmpty ? 1 : 0),
+                itemCount: widget.lessons.length,
                 separatorBuilder: (_, _) => SizedBox(height: 8),
                 itemBuilder: (context, index) {
-                  if (resultReminderLessons.isNotEmpty && index == 0) {
-                    return _ExamResultReminder(
-                      lessonNames: resultReminderLessons,
-                    );
-                  }
-                  final lessonIndex =
-                      index - (resultReminderLessons.isNotEmpty ? 1 : 0);
-                  final lesson = widget.lessons[lessonIndex];
+                  final lesson = widget.lessons[index];
                   return _ProfileLessonRow(
                     lesson: lesson,
                     daysToExam: widget.daysToExam(lesson),
@@ -1223,48 +1321,77 @@ String _gradeHappyKey(String lessonId) =>
     'profile_lesson_grade_happy_$lessonId';
 
 class _LessonGradeEntry {
-  const _LessonGradeEntry({required this.grade, required this.happy});
-
-  static const empty = _LessonGradeEntry(grade: '', happy: null);
+  const _LessonGradeEntry({
+    required this.grade,
+    required this.happy,
+    this.failReason,
+  });
 
   final String grade;
   final bool? happy;
+  final String? failReason;
 
   bool get isEmpty => grade.trim().isEmpty && happy == null;
 }
 
-class _ExamResultReminder extends StatelessWidget {
-  const _ExamResultReminder({required this.lessonNames});
+class _ExamFailReasonOption {
+  const _ExamFailReasonOption(this.value, this.label);
 
-  final List<String> lessonNames;
+  final String value;
+  final String label;
+}
+
+const _examFailReasonOptions = [
+  _ExamFailReasonOption('insufficient_preparation', 'Yeterince hazırlanamadım'),
+  _ExamFailReasonOption(
+    'poor_understanding',
+    'Çalıştım ama konuyu tam anlayamadım',
+  ),
+  _ExamFailReasonOption(
+    'exam_anxiety',
+    'Konuyu biliyordum ama sınav kaygısı yaşadım',
+  ),
+  _ExamFailReasonOption(
+    'time_management_in_exam',
+    'Sınavda zamanı yetiştiremedim',
+  ),
+  _ExamFailReasonOption('poor_sleep_before', 'Sınavdan önce kötü uyudum'),
+  _ExamFailReasonOption('overwhelmed_by_workload', 'Genel iş yükü fazla geldi'),
+  _ExamFailReasonOption('lack_of_focus', 'Çalıştım ama odaklanamadım'),
+];
+
+class _FailReasonButton extends StatelessWidget {
+  const _FailReasonButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final names = lessonNames.take(2).join(', ');
-    final extra = lessonNames.length > 2 ? ' +${lessonNames.length - 2}' : '';
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: kAccent.withAlpha(24),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kAccent.withAlpha(70)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.edit_note_rounded, color: kAccent, size: 18),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '$names$extra sınav sonucunu profilden girebilirsin; böylece performansını daha iyi yorumlayabiliriz.',
-              style: TextStyle(
-                color: kText1,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
-              ),
-            ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(9),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? kAccent.withAlpha(36) : kBorder.withAlpha(34),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: selected ? kAccent : kBorder),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? kText1 : kText2,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
           ),
-        ],
+        ),
       ),
     );
   }

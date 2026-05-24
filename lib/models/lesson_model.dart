@@ -37,6 +37,7 @@ class LessonExamResult {
   final int examId;
   final String grade;
   final bool? satisfied;
+  final String? failReason;
   final String createdAt;
 
   LessonExamResult({
@@ -44,6 +45,7 @@ class LessonExamResult {
     required this.examId,
     required this.grade,
     required this.satisfied,
+    required this.failReason,
     required this.createdAt,
   });
 
@@ -52,6 +54,7 @@ class LessonExamResult {
     examId: (j['examId'] as num).toInt(),
     grade: j['grade']?.toString() ?? '',
     satisfied: j['satisfied'] as bool?,
+    failReason: j['failReason']?.toString(),
     createdAt: j['createdAt']?.toString() ?? '',
   );
 }

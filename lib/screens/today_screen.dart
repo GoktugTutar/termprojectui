@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -474,9 +475,6 @@ class _TodayScreenState extends State<TodayScreen>
           .fold(0, (s, b) => s + b.blockCount) *
       30;
 
-  String _checklistTitleForDate(String date) =>
-      '${_formatDateLabel(date)} checklist';
-
   Future<void> _saveTodayChecklist() async {
     final saved = await _showChecklistSubmitDialog(
       date: _today,
@@ -585,51 +583,33 @@ class _TodayScreenState extends State<TodayScreen>
 
     var saving = false;
     String? errorMsg;
+    var stressLevel = 3;
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => Dialog(
-          backgroundColor: kSurface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: EdgeInsets.symmetric(horizontal: 32, vertical: 40),
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 520),
+            constraints: BoxConstraints(maxWidth: 560),
             child: Padding(
-              padding: EdgeInsets.all(22),
+              padding: EdgeInsets.zero,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        _DialogIcon(icon: Icons.checklist_rounded),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _checklistTitleForDate(date),
-                            style: TextStyle(
-                              color: kText1,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          icon: Icon(Icons.close_rounded, color: kText2),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 18),
                     if (uniqueBlocks.isEmpty)
-                      _EmptyPanelState(
-                        icon: Icons.event_available_outlined,
-                        title: 'Planlanmış ders yok',
-                        subtitle:
-                            'Bu gün yalnızca günlük durum olarak kapanacak.',
+                      Text(
+                        'Planlanmış ders yok',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
                       )
                     else
                       ...uniqueBlocks.map((block) {
@@ -645,111 +625,109 @@ class _TodayScreenState extends State<TodayScreen>
                               Text(
                                 block.lessonName,
                                 style: TextStyle(
-                                  color: kText1,
-                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
                               SizedBox(height: 2),
                               Text(
                                 '$completed / $planned blok tamamlandı',
-                                style: TextStyle(color: kText2, fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white.withAlpha(210),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                              Slider(
-                                value: completed.toDouble(),
-                                min: 0,
-                                max: planned.toDouble(),
-                                divisions: planned > 0 ? planned : 1,
-                                label: completed.toString(),
-                                activeColor: kAccent,
-                                inactiveColor: kBorder,
+                              SizedBox(height: 10),
+                              _BatteryBlockSlider(
+                                completed: completed,
+                                planned: planned,
                                 onChanged: (value) => setDialogState(
-                                  () => completedMap[block.lessonId] = value
-                                      .round(),
+                                  () => completedMap[block.lessonId] = value,
                                 ),
                               ),
                             ],
                           ),
                         );
                       }),
-                    SizedBox(height: 8),
+                    SizedBox(height: 10),
+                    _StressQuestion(
+                      value: stressLevel,
+                      onChanged: (value) =>
+                          setDialogState(() => stressLevel = value),
+                    ),
+                    SizedBox(height: 14),
                     if (errorMsg != null)
                       Padding(
                         padding: EdgeInsets.only(bottom: 10),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withAlpha(30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.red.withAlpha(100),
-                            ),
-                          ),
-                          child: Text(
-                            errorMsg!,
-                            style: TextStyle(color: Colors.red, fontSize: 13),
+                        child: Text(
+                          errorMsg!,
+                          style: TextStyle(
+                            color: Color(0xFFFF8A8A),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
-                    FilledButton.icon(
-                      onPressed: saving
-                          ? null
-                          : () async {
-                              setDialogState(() {
-                                saving = true;
-                                errorMsg = null;
-                              });
-                              final items = uniqueBlocks.map((block) {
-                                final planned = blocks
-                                    .where((b) => b.lessonId == block.lessonId)
-                                    .fold(0, (sum, b) => sum + b.blockCount);
-                                final completed =
-                                    completedMap[block.lessonId] ?? 0;
-                                return {
-                                  'lessonId': block.lessonId,
-                                  'plannedBlocks': planned,
-                                  'completedBlocks': completed,
-                                  'delayed': completed < planned,
-                                };
-                              }).toList();
-                              try {
-                                await ApiClient.submitChecklist(
-                                  date: date,
-                                  stressLevel: 3,
-                                  fatigueLevel: 3,
-                                  items: items,
-                                );
-                                if (ctx.mounted) Navigator.pop(ctx, true);
-                              } catch (e) {
-                                if (!ctx.mounted) return;
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: saving
+                            ? null
+                            : () async {
                                 setDialogState(() {
-                                  saving = false;
-                                  errorMsg = e.toString().replaceAll(
-                                    'Exception: ',
-                                    '',
-                                  );
+                                  saving = true;
+                                  errorMsg = null;
                                 });
-                              }
-                            },
-                      icon: saving
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Icon(Icons.check_rounded, size: 18),
-                      label: Text(saving ? 'Kaydediliyor...' : 'Kaydet'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kAccent,
-                        disabledBackgroundColor: kBorder,
-                        padding: EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                                final items = uniqueBlocks.map((block) {
+                                  final planned = blocks
+                                      .where(
+                                        (b) => b.lessonId == block.lessonId,
+                                      )
+                                      .fold(0, (sum, b) => sum + b.blockCount);
+                                  final completed =
+                                      completedMap[block.lessonId] ?? 0;
+                                  return {
+                                    'lessonId': block.lessonId,
+                                    'plannedBlocks': planned,
+                                    'completedBlocks': completed,
+                                    'delayed': completed < planned,
+                                  };
+                                }).toList();
+                                try {
+                                  await ApiClient.submitChecklist(
+                                    date: date,
+                                    stressLevel: stressLevel,
+                                    fatigueLevel: 3,
+                                    items: items,
+                                  );
+                                  if (ctx.mounted) Navigator.pop(ctx, true);
+                                } catch (e) {
+                                  if (!ctx.mounted) return;
+                                  setDialogState(() {
+                                    saving = false;
+                                    errorMsg = e.toString().replaceAll(
+                                      'Exception: ',
+                                      '',
+                                    );
+                                  });
+                                }
+                              },
+                        icon: saving
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(Icons.check_rounded, size: 18),
+                        label: Text(saving ? 'Kaydediliyor...' : 'Kaydet'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          textStyle: TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ),
                     ),
@@ -988,6 +966,192 @@ class _TodayScreenState extends State<TodayScreen>
             ),
         ],
       ),
+    );
+  }
+}
+
+class _BatteryBlockSlider extends StatelessWidget {
+  const _BatteryBlockSlider({
+    required this.completed,
+    required this.planned,
+    required this.onChanged,
+  });
+
+  final int completed;
+  final int planned;
+  final ValueChanged<int> onChanged;
+
+  void _updateFromPosition(double dx, double width) {
+    if (planned <= 0 || width <= 0) return;
+    final ratio = (dx / width).clamp(0.0, 1.0);
+    onChanged((ratio * planned).round().clamp(0, planned));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final bodyWidth = width - 18;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    _updateFromPosition(details.localPosition.dx, bodyWidth),
+                onHorizontalDragUpdate: (details) =>
+                    _updateFromPosition(details.localPosition.dx, bodyWidth),
+                child: SizedBox(
+                  height: 86,
+                  child: Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Positioned(
+                        left: 0,
+                        right: 18,
+                        child: SizedBox(
+                          height: 70,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Color(0xFF222222),
+                                width: 6,
+                              ),
+                            ),
+                            child: Row(
+                              children: List.generate(planned.clamp(1, 8), (i) {
+                                final filled = i < completed;
+                                return Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 3,
+                                      vertical: 5,
+                                    ),
+                                    child: AnimatedContainer(
+                                      duration: Duration(milliseconds: 130),
+                                      decoration: BoxDecoration(
+                                        color: filled
+                                            ? Color(0xFF18B354)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(3),
+                                        border: filled
+                                            ? null
+                                            : Border.all(
+                                                color: Color(
+                                                  0xFF18B354,
+                                                ).withAlpha(70),
+                                              ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        child: Container(
+                          width: 22,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Color(0xFF222222),
+                            borderRadius: BorderRadius.horizontal(
+                              right: Radius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(width: 12),
+        SizedBox(
+          width: 54,
+          child: Text(
+            '$completed/$planned',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StressQuestion extends StatelessWidget {
+  const _StressQuestion({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Bugünkü stresin nasıldı?',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        SizedBox(height: 8),
+        Row(
+          children: List.generate(5, (i) {
+            final level = i + 1;
+            final selected = value == level;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: i == 4 ? 0 : 7),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => onChanged(level),
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 150),
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Colors.white
+                          : Colors.white.withAlpha(20),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withAlpha(selected ? 255 : 120),
+                      ),
+                    ),
+                    child: Text(
+                      '$level',
+                      style: TextStyle(
+                        color: selected ? Color(0xFF1B1B1B) : Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
     );
   }
 }
@@ -2105,6 +2269,15 @@ class _TimerDialog extends StatefulWidget {
 class _TimerDialogState extends State<_TimerDialog> {
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
+  bool _stopwatchMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -2112,26 +2285,12 @@ class _TimerDialogState extends State<_TimerDialog> {
     super.dispose();
   }
 
-  String get _elapsedLabel {
-    final elapsed = _stopwatch.elapsed;
-    final hours = elapsed.inHours;
-    final minutes = elapsed.inMinutes.remainder(60);
-    final seconds = elapsed.inSeconds.remainder(60);
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(hours)}:${two(minutes)}:${two(seconds)}';
-  }
-
   void _toggle() {
     setState(() {
       if (_stopwatch.isRunning) {
         _stopwatch.stop();
-        _timer?.cancel();
-        _timer = null;
       } else {
         _stopwatch.start();
-        _timer ??= Timer.periodic(Duration(seconds: 1), (_) {
-          if (mounted) setState(() {});
-        });
       }
     });
   }
@@ -2141,76 +2300,86 @@ class _TimerDialogState extends State<_TimerDialog> {
       _stopwatch
         ..stop()
         ..reset();
-      _timer?.cancel();
-      _timer = null;
     });
+  }
+
+  Duration get _clockElapsed {
+    final now = AppTime.now();
+    return Duration(hours: now.hour, minutes: now.minute, seconds: now.second);
+  }
+
+  String get _stopwatchLabel {
+    final elapsed = _stopwatch.elapsed;
+    final hours = elapsed.inHours;
+    final minutes = elapsed.inMinutes.remainder(60);
+    final seconds = elapsed.inSeconds.remainder(60);
+    String two(int value) => value.toString().padLeft(2, '0');
+    if (hours > 0) return '${two(hours)}:${two(minutes)}:${two(seconds)}';
+    return '${two(minutes)}:${two(seconds)}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: EdgeInsets.all(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  _DialogIcon(icon: Icons.timer_outlined),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Saat',
-                      style: TextStyle(
-                        color: kText1,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: Icon(Icons.close_rounded, color: kText2),
-                  ),
-                ],
-              ),
-              SizedBox(height: 26),
-              Center(
-                child: Text(
-                  _elapsedLabel,
-                  style: TextStyle(
-                    color: kText1,
-                    fontSize: 44,
-                    fontWeight: FontWeight.w900,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+      child: SizedBox(
+        width: 280,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _TimerModeButton(
+                    label: 'Kronometre',
+                    icon: Icons.timer_outlined,
+                    selected: _stopwatchMode,
+                    onTap: () => setState(() => _stopwatchMode = true),
                   ),
                 ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: _TimerModeButton(
+                    label: 'Saat',
+                    icon: Icons.schedule_rounded,
+                    selected: !_stopwatchMode,
+                    onTap: () => setState(() => _stopwatchMode = false),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 14),
+            if (_stopwatchMode)
+              SizedBox(
+                height: 180,
+                child: Center(
+                  child: Text(
+                    _stopwatchLabel,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 72,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              )
+            else
+              SizedBox.square(
+                dimension: 240,
+                child: CustomPaint(
+                  painter: _AnalogTimerPainter(elapsed: _clockElapsed),
+                ),
               ),
-              SizedBox(height: 26),
+            if (_stopwatchMode) ...[
+              SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _reset,
-                      icon: Icon(Icons.restart_alt_rounded, size: 18),
-                      label: Text('Sıfırla'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kText1,
-                        side: BorderSide(color: kBorder),
-                        padding: EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
+                    child: TextButton.icon(
                       onPressed: _toggle,
                       icon: Icon(
                         _stopwatch.isRunning
@@ -2219,23 +2388,149 @@ class _TimerDialogState extends State<_TimerDialog> {
                         size: 20,
                       ),
                       label: Text(_stopwatch.isRunning ? 'Duraklat' : 'Başlat'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kAccent,
-                        padding: EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        textStyle: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: _reset,
+                      icon: Icon(Icons.restart_alt_rounded, size: 18),
+                      label: Text('Sıfırla'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        textStyle: TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
                 ],
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _TimerModeButton extends StatelessWidget {
+  const _TimerModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.white.withAlpha(28),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withAlpha(180)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: selected ? Color(0xFF111111) : Colors.white,
+              size: 16,
+            ),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? Color(0xFF111111) : Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalogTimerPainter extends CustomPainter {
+  const _AnalogTimerPainter({required this.elapsed});
+
+  final Duration elapsed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2;
+
+    canvas.drawCircle(center, radius, Paint()..color = Colors.black);
+
+    final numberStyle = TextStyle(
+      color: Colors.white,
+      fontSize: radius * 0.25,
+      fontWeight: FontWeight.w900,
+    );
+    for (var i = 1; i <= 12; i++) {
+      final angle = (i / 12) * math.pi * 2 - math.pi / 2;
+      final position =
+          center + Offset(math.cos(angle), math.sin(angle)) * (radius * 0.78);
+      final painter = TextPainter(
+        text: TextSpan(text: '$i', style: numberStyle),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      painter.paint(
+        canvas,
+        position - Offset(painter.width / 2, painter.height / 2),
+      );
+    }
+
+    final seconds = elapsed.inSeconds % 60;
+    final minutes = elapsed.inMinutes % 60;
+    final hours = elapsed.inHours % 12;
+    final secondAngle = (seconds / 60) * math.pi * 2 - math.pi / 2;
+    final minuteAngle =
+        ((minutes + seconds / 60) / 60) * math.pi * 2 - math.pi / 2;
+    final hourAngle = ((hours + minutes / 60) / 12) * math.pi * 2 - math.pi / 2;
+
+    void hand(double angle, double length, Color color, double width) {
+      canvas.drawLine(
+        center,
+        center + Offset(math.cos(angle), math.sin(angle)) * (radius * length),
+        Paint()
+          ..color = color
+          ..strokeWidth = width
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    hand(hourAngle, 0.48, Colors.white, 4.5);
+    hand(minuteAngle, 0.72, Colors.white, 4);
+    hand(secondAngle, 0.78, Color(0xFFFFA000), 2.2);
+
+    canvas.drawCircle(center, 5, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 3, Paint()..color = Color(0xFFFFA000));
+  }
+
+  @override
+  bool shouldRepaint(covariant _AnalogTimerPainter oldDelegate) =>
+      oldDelegate.elapsed != elapsed;
 }
 
 class _NotesDialog extends StatefulWidget {
@@ -2271,76 +2566,70 @@ class _NotesDialogState extends State<_NotesDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: EdgeInsets.symmetric(horizontal: 28, vertical: 34),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 520),
-        child: Padding(
-          padding: EdgeInsets.all(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  _DialogIcon(icon: Icons.edit_note_rounded),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Notlar',
+        constraints: BoxConstraints(maxWidth: 640, maxHeight: 720),
+        child: AspectRatio(
+          aspectRatio: 0.78,
+          child: CustomPaint(
+            painter: _NotebookPagePainter(),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(76, 34, 26, 76),
+                    child: TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      expands: true,
+                      minLines: null,
+                      maxLines: null,
+                      textAlignVertical: TextAlignVertical.top,
+                      keyboardType: TextInputType.multiline,
+                      cursorColor: Color(0xFF43574F),
                       style: TextStyle(
-                        color: kText1,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF263A34),
+                        fontSize: 18,
+                        height: 1.55,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Bugün için notlarını yaz...',
+                        hintStyle: TextStyle(
+                          color: Color(0xFF6B7568).withAlpha(150),
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isCollapsed: true,
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: Icon(Icons.close_rounded, color: kText2),
-                  ),
-                ],
-              ),
-              SizedBox(height: 18),
-              TextField(
-                controller: _controller,
-                autofocus: true,
-                minLines: 8,
-                maxLines: 12,
-                style: TextStyle(color: kText1, fontSize: 15),
-                decoration: InputDecoration(
-                  hintText: 'Bugün için notlarını yaz...',
-                  hintStyle: TextStyle(color: kText2),
-                  filled: true,
-                  fillColor: kBorder.withAlpha(60),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: kBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: kBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: kAccent),
+                ),
+                Positioned(
+                  right: 22,
+                  bottom: 22,
+                  child: FilledButton.icon(
+                    onPressed: _save,
+                    icon: Icon(Icons.check_rounded, size: 18),
+                    label: Text('Kaydet'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Color(0xFF0B5A4D),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 13,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _save,
-                icon: Icon(Icons.check_rounded, size: 18),
-                label: Text('Kaydet'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: kAccent,
-                  padding: EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2348,23 +2637,51 @@ class _NotesDialogState extends State<_NotesDialog> {
   }
 }
 
-class _DialogIcon extends StatelessWidget {
-  const _DialogIcon({required this.icon});
+class _NotebookPagePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final bgPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFFFF48A), Color(0xFFFFF06D)],
+      ).createShader(rect);
+    canvas.drawRect(rect, bgPaint);
 
-  final IconData icon;
+    final linePaint = Paint()
+      ..color = Color(0xFFD9CC53).withAlpha(130)
+      ..strokeWidth = 1.2;
+    const lineGap = 24.0;
+    for (double y = 28; y < size.height; y += lineGap) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+    }
+
+    final marginPaint = Paint()
+      ..color = Color(0xFFC95549).withAlpha(175)
+      ..strokeWidth = 2.2;
+    canvas.drawLine(Offset(52, 0), Offset(52, size.height), marginPaint);
+
+    final topRulePaint = Paint()
+      ..color = Color(0xFFD2C54C).withAlpha(150)
+      ..strokeWidth = 1.1;
+    canvas.drawLine(Offset(0, 18), Offset(size.width, 18), topRulePaint);
+    for (double x = 94; x < size.width - 34; x += 28) {
+      canvas.drawLine(Offset(x, 7), Offset(x, 18), topRulePaint);
+    }
+
+    final vignette = Paint()
+      ..shader = RadialGradient(
+        center: Alignment.center,
+        radius: 0.9,
+        colors: [Colors.transparent, Colors.black.withAlpha(22)],
+        stops: [0.72, 1],
+      ).createShader(rect);
+    canvas.drawRect(rect, vignette);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: kAccent.withAlpha(38),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: kAccent, size: 22),
-    );
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ── Sleep dialog ──────────────────────────────────────────────────────────────

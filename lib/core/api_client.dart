@@ -263,6 +263,7 @@ class ApiClient {
     required int examId,
     String? grade,
     bool? satisfied,
+    String? failReason,
   }) async {
     final h = await _authHeaders();
     final res = await http.post(
@@ -272,7 +273,20 @@ class ApiClient {
         'examId': examId,
         'grade': grade,
         'satisfied': satisfied,
+        'failReason': failReason,
       }),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  static Future<Map<String, dynamic>> getExamResultCoachMessage(
+    int examResultId,
+  ) async {
+    final h = await _authHeaders();
+    final res = await http.post(
+      Uri.parse('$_base/ai-coach/exam-result/$examResultId/coach-message'),
+      headers: h,
+      body: '{}',
     );
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
