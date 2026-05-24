@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
 import '../core/app_time.dart';
@@ -29,7 +30,7 @@ class _InsightsScreenState extends State<InsightsScreen>
   String _completionStr = '—';
   Map<String, dynamic>? _profile;
   String _stressStr = '—';
-  String _aiMessage = ''; 
+  String _aiMessage = '';
 
   @override
   void initState() {
@@ -38,12 +39,11 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Future<void> _load() async {
-    print('_load called');
+    debugPrint('_load called');
     setState(() => _loading = true);
     try {
       final feedbackData = await ApiClient.getFeedbackMessages();
       final rawLessons = await ApiClient.getLessons();
-
 
       // Fetch student profile (single call replaces 7 checklist calls)
       Map<String, dynamic>? profile;
@@ -72,7 +72,9 @@ class _InsightsScreenState extends State<InsightsScreen>
           debugPrint('[INSIGHTS] lesson parse error: $e  raw=$l');
         }
       }
-      debugPrint('[INSIGHTS] rawLessons=${rawLessons.length} parsed=${lessons.length}');
+      debugPrint(
+        '[INSIGHTS] rawLessons=${rawLessons.length} parsed=${lessons.length}',
+      );
 
       if (!mounted) return;
       setState(() {
@@ -128,7 +130,7 @@ class _InsightsScreenState extends State<InsightsScreen>
                         _buildTrends(),
                         if (_profile != null) _buildProfileCard(),
                         _buildMessages(),
-                        if (_aiMessage.isNotEmpty) _buildAiMessage(), 
+                        if (_aiMessage.isNotEmpty) _buildAiMessage(),
                         SliverToBoxAdapter(child: SizedBox(height: 100)),
                       ],
                     ),
@@ -418,49 +420,49 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Widget _buildAiMessage() {
-  return SliverToBoxAdapter(
-    child: Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [kAccent.withAlpha(30), kAccent.withAlpha(10)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: kAccent.withAlpha(80)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: kAccent.withAlpha(40),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.auto_awesome_rounded, color: kAccent, size: 16),
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+        child: Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [kAccent.withAlpha(30), kAccent.withAlpha(10)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _aiMessage,
-                style: TextStyle(
-                  color: kText1,
-                  fontSize: 14,
-                  height: 1.5,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kAccent.withAlpha(80)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: kAccent.withAlpha(40),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: kAccent,
+                  size: 16,
                 ),
               ),
-            ),
-          ],
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _aiMessage,
+                  style: TextStyle(color: kText1, fontSize: 14, height: 1.5),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildMessages() {
     if (_messages.isEmpty) {
@@ -773,6 +775,8 @@ class _WeeklyFeedbackSheetState extends State<_WeeklyFeedbackSheet> {
         weekloadFeedback: _weekload ?? 'tam_uygundu',
         lessonFeedbacks: lessonFeedbacks,
       );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_weeklyFeedbackPromptKey(), true);
       if (!mounted) return;
       Navigator.pop(context);
       widget.onSent();
@@ -786,6 +790,16 @@ class _WeeklyFeedbackSheetState extends State<_WeeklyFeedbackSheet> {
         ),
       );
     }
+  }
+
+  String _weeklyFeedbackPromptKey() {
+    final now = AppTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = today.subtract(
+      Duration(days: now.weekday == DateTime.sunday ? 6 : now.weekday - 1),
+    );
+    final week = weekStart.toIso8601String().substring(0, 10);
+    return 'weekly_feedback_prompt_dismissed_$week';
   }
 
   @override

@@ -131,6 +131,22 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
+  static Future<Map<String, dynamic>> saveAvatar({
+    required String avatarSvg,
+    required String avatarOptions,
+  }) async {
+    final h = await _authHeaders();
+    final res = await http.put(
+      Uri.parse('$_base/user/avatar'),
+      headers: h,
+      body: json.encode({
+        'avatarSvg': avatarSvg,
+        'avatarOptions': avatarOptions,
+      }),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
   static Future<Map<String, dynamic>> getStudentProfile() async {
     final h = await _authHeaders();
     final res = await http.get(

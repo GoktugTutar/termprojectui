@@ -138,6 +138,7 @@ class _TodayScreenState extends State<TodayScreen>
   AvatarExpression _avatarExpression = AvatarExpression.normal;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
+  bool _weeklyFeedbackPromptOpen = false;
   bool _sleepAsked = false;
   List<
     ({
@@ -470,13 +471,50 @@ class _TodayScreenState extends State<TodayScreen>
     );
     if (!saved || !mounted) return;
     setState(() => _todayChecklistSubmitted = true);
-    if (_isLastDayOfWeek) {
-      _showWeeklyFeedbackPrompt();
+    if (_isLastDayOfWeek) _maybeShowWeeklyFeedbackPrompt();
+  }
+
+  String _weeklyFeedbackPromptKey() {
+    final now = AppTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = today.subtract(
+      Duration(days: now.weekday == DateTime.sunday ? 6 : now.weekday - 1),
+    );
+    final week = DateFormat('yyyy-MM-dd').format(weekStart);
+    return 'weekly_feedback_prompt_dismissed_$week';
+  }
+
+  Future<void> _maybeShowWeeklyFeedbackPrompt() async {
+    if (_weeklyFeedbackPromptOpen) return;
+    if (AppTime.now().weekday != DateTime.sunday) return;
+
+    _weeklyFeedbackPromptOpen = true;
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final promptKey = _weeklyFeedbackPromptKey();
+      if (prefs.getBool(promptKey) == true) return;
+
+      final submitted = await ApiClient.getWeeklyFeedbackStatus().catchError(
+        (_) => false,
+      );
+      if (!mounted) return;
+      if (submitted) {
+        await prefs.setBool(promptKey, true);
+        return;
+      }
+
+      final goInsights = await _showWeeklyFeedbackPrompt();
+      await prefs.setBool(promptKey, true);
+      if (goInsights == true && mounted) {
+        widget.onOpenInsights?.call();
+      }
+    } finally {
+      _weeklyFeedbackPromptOpen = false;
     }
   }
 
-  Future<void> _showWeeklyFeedbackPrompt() async {
-    final goInsights = await showDialog<bool>(
+  Future<bool?> _showWeeklyFeedbackPrompt() {
+    return showDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
@@ -505,18 +543,12 @@ class _TodayScreenState extends State<TodayScreen>
         ],
       ),
     );
-
-    if (goInsights == true && mounted) {
-      widget.onOpenInsights?.call();
-    }
   }
 
   Future<void> _reloadAfterMissingChecklistSaved() async {
     await _load();
     if (!mounted) return;
-    if (AppTime.now().weekday == DateTime.sunday) {
-      _showWeeklyFeedbackPrompt();
-    }
+    _maybeShowWeeklyFeedbackPrompt();
   }
 
   Future<bool> _showChecklistSubmitDialog({
@@ -909,12 +941,17 @@ class _TodayScreenState extends State<TodayScreen>
             ),
           if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
             Positioned(
-              bottom: 24,
               left: 18,
-              right: 18,
-              child: _AiMessageBanner(
-                message: _aiMessage,
-                onClose: () => setState(() => _aiMessageDismissed = true),
+              top: 14,
+              child: SizedBox(
+                width: math.min(
+                  760,
+                  math.max(280, MediaQuery.sizeOf(context).width - 36),
+                ),
+                child: _AiMessageBanner(
+                  message: _aiMessage,
+                  onClose: () => setState(() => _aiMessageDismissed = true),
+                ),
               ),
             ),
         ],

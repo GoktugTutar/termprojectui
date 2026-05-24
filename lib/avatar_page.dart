@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:avatar_maker/avatar_maker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'core/api_client.dart';
+
 class AvatarHeader extends StatefulWidget {
   const AvatarHeader({super.key, this.expression = AvatarExpression.normal});
 
@@ -12,12 +14,15 @@ class AvatarHeader extends StatefulWidget {
 }
 
 class _AvatarHeaderState extends State<AvatarHeader> {
-  final AvatarMakerController _avatarController =
-      NonPersistentAvatarMakerController(customizedPropertyCategories: []);
+  late AvatarMakerController _avatarController;
 
   @override
   void initState() {
     super.initState();
+    _avatarController = NonPersistentAvatarMakerController(
+      customizedPropertyCategories: [],
+    );
+    _loadAvatarFromDb();
     _applyAvatarExpression(_avatarController, widget.expression);
   }
 
@@ -27,6 +32,21 @@ class _AvatarHeaderState extends State<AvatarHeader> {
     if (oldWidget.expression != widget.expression) {
       _applyAvatarExpression(_avatarController, widget.expression);
     }
+  }
+
+  Future<void> _loadAvatarFromDb() async {
+    try {
+      final user = await ApiClient.getMe();
+      final avatarSvg = user['avatarSvg']?.toString();
+      if (!mounted || avatarSvg == null || avatarSvg.trim().isEmpty) return;
+      setState(() {
+        _avatarController = NonPersistentAvatarMakerController.fromSvg(
+          svg: avatarSvg,
+          customizedPropertyCategories: [],
+        );
+        _applyAvatarExpression(_avatarController, widget.expression);
+      });
+    } catch (_) {}
   }
 
   @override
@@ -88,7 +108,7 @@ class AvatarCustomizePage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                AvatarMakerSaveWidget(controller: controller),
+                _AvatarDbSaveButton(controller: controller),
                 const SizedBox(width: 8),
                 AvatarMakerRandomWidget(controller: controller),
                 const SizedBox(width: 8),
@@ -107,6 +127,56 @@ class AvatarCustomizePage extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AvatarDbSaveButton extends StatefulWidget {
+  const _AvatarDbSaveButton({required this.controller});
+
+  final AvatarMakerController controller;
+
+  @override
+  State<_AvatarDbSaveButton> createState() => _AvatarDbSaveButtonState();
+}
+
+class _AvatarDbSaveButtonState extends State<_AvatarDbSaveButton> {
+  bool _saving = false;
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ApiClient.saveAvatar(
+        avatarSvg: widget.controller.getAvatarSVGSync(),
+        avatarOptions: widget.controller.getJsonOptionsSync(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Avatar kaydedildi.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Avatarı kaydet',
+      onPressed: _saving ? null : _save,
+      icon: _saving
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.save_rounded),
     );
   }
 }
