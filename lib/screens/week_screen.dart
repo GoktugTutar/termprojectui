@@ -915,6 +915,20 @@ class _WeekScreenState extends State<WeekScreen>
       } else {
         await _load();
       }
+    } else if (result is Map<String, dynamic> &&
+        result['type'] == 'routineBusy') {
+      final slotDate = result['date'] as String;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Rutin busy time eklendi — program yeniden hesaplanıyor...',
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      await _recalculate(fromDate: slotDate);
     } else if (result == true) {
       await _load();
     }
@@ -1402,7 +1416,8 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
   String _startTime = '09:00';
   String _endTime = '10:00';
   int _fatigueLevel = 2;
-  String _busyIconKey = 'energy';
+  final String _busyIconKey = 'energy';
+  bool _isRoutineBusy = false;
   bool _loadingLessons = true;
   bool _saving = false;
   String? _error;
@@ -1452,9 +1467,6 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
   String get _dateKey =>
       '${widget.date.year.toString().padLeft(4, '0')}-${widget.date.month.toString().padLeft(2, '0')}-${widget.date.day.toString().padLeft(2, '0')}';
 
-  String get _dateLabel =>
-      '${widget.date.day}.${widget.date.month}.${widget.date.year}';
-
   int _timeToMinutes(String value) {
     final parts = value.split(':').map(int.parse).toList();
     return parts[0] * 60 + parts[1];
@@ -1462,45 +1474,6 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
 
   bool get _needsLesson =>
       _type == _CalendarEntryType.exam || _type == _CalendarEntryType.deadline;
-
-  Widget _buildBusyIconPicker() {
-    final color = _fatigueColor(_fatigueLevel);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _busyIconChoices.map((choice) {
-        final selected = choice.key == _busyIconKey;
-        return Tooltip(
-          message: choice.tooltip,
-          child: GestureDetector(
-            onTap: _saving
-                ? null
-                : () => setState(() => _busyIconKey = choice.key),
-            child: AnimatedContainer(
-              duration: Duration(milliseconds: 160),
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: selected
-                    ? color.withAlpha(appTheme.isLight ? 34 : 48)
-                    : kBorder.withAlpha(appTheme.isLight ? 42 : 56),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selected ? color : kBorder.withAlpha(120),
-                  width: selected ? 1.5 : 0.8,
-                ),
-              ),
-              child: Icon(
-                choice.icon,
-                color: selected ? color : kText2,
-                size: 20,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
 
   Future<void> _save() async {
     final start = _timeToMinutes(_startTime);
@@ -1527,15 +1500,15 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
           endTime: _endTime,
           fatigueLevel: _fatigueLevel,
           iconKey: _busyIconKey,
-          isRoutine: false,
-          date: _dateKey,
+          isRoutine: _isRoutineBusy,
+          date: _isRoutineBusy ? null : _dateKey,
         );
         final slots = widget.existingSlots.map((s) => s.toJson()).toList();
         slots.add(slot.toJson());
         await ApiClient.updateBusySlots(slots);
         if (!mounted) return;
         Navigator.pop(context, {
-          'type': 'nonRoutineBusy',
+          'type': _isRoutineBusy ? 'routineBusy' : 'nonRoutineBusy',
           'date': _dateKey,
           'startTime': _startTime,
           'endTime': _endTime,
@@ -1569,74 +1542,48 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: kSurface,
+      backgroundColor: kBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 440),
-        child: Padding(
-          padding: EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: kAccent.withAlpha(34),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.add_rounded, color: kAccent, size: 21),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _dateLabel,
-                      style: TextStyle(
-                        color: kText1,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    icon: Icon(Icons.close_rounded, color: kText2, size: 20),
-                    tooltip: 'Kapat',
-                  ),
-                ],
-              ),
-              SizedBox(height: 14),
-              SegmentedButton<_CalendarEntryType>(
-                segments: const [
-                  ButtonSegment(
-                    value: _CalendarEntryType.busy,
-                    icon: Icon(Icons.block_rounded, size: 16),
-                    label: Text('Busy'),
-                  ),
-                  ButtonSegment(
-                    value: _CalendarEntryType.exam,
-                    icon: Icon(Icons.school_outlined, size: 16),
-                    label: Text('Sınav'),
-                  ),
-                  ButtonSegment(
-                    value: _CalendarEntryType.deadline,
-                    icon: Icon(Icons.assignment_outlined, size: 16),
-                    label: Text('Ödev'),
-                  ),
-                ],
-                selected: {_type},
-                onSelectionChanged: _saving
-                    ? null
-                    : (value) => setState(() => _type = value.first),
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  foregroundColor: WidgetStatePropertyAll(kText1),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SegmentedButton<_CalendarEntryType>(
+              segments: const [
+                ButtonSegment(
+                  value: _CalendarEntryType.busy,
+                  icon: Icon(Icons.block_rounded, size: 16),
+                  label: Text('Busy'),
                 ),
+                ButtonSegment(
+                  value: _CalendarEntryType.exam,
+                  icon: Icon(Icons.school_outlined, size: 16),
+                  label: Text('Sınav'),
+                ),
+                ButtonSegment(
+                  value: _CalendarEntryType.deadline,
+                  icon: Icon(Icons.assignment_outlined, size: 16),
+                  label: Text('Ödev'),
+                ),
+              ],
+              selected: {_type},
+              onSelectionChanged: _saving
+                  ? null
+                  : (value) => setState(() => _type = value.first),
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                foregroundColor: WidgetStatePropertyAll(kText1),
               ),
-              SizedBox(height: 14),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(18, 14, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               if (_loadingLessons && _needsLesson)
                 Center(child: CircularProgressIndicator(color: kAccent))
               else ...[
@@ -1712,6 +1659,38 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                 ),
                 if (_type == _CalendarEntryType.busy) ...[
                   SizedBox(height: 10),
+                  Text(
+                    'Busy time rutin mi?',
+                    style: TextStyle(
+                      color: kText1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        icon: Icon(Icons.calendar_today_outlined, size: 15),
+                        label: Text('Bu hafta'),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        icon: Icon(Icons.repeat_rounded, size: 15),
+                        label: Text('Rutin'),
+                      ),
+                    ],
+                    selected: {_isRoutineBusy},
+                    onSelectionChanged: _saving
+                        ? null
+                        : (value) =>
+                              setState(() => _isRoutineBusy = value.first),
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: WidgetStatePropertyAll(kText1),
+                    ),
+                  ),
+                  SizedBox(height: 10),
                   Row(
                     children: [
                       Text(
@@ -1743,20 +1722,11 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                       ),
                     ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Busy icon',
-                    style: TextStyle(
-                      color: kText1,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  _buildBusyIconPicker(),
                   SizedBox(height: 6),
                   Text(
-                    'Sadece bu haftaya eklenir. Her hafta tekrar eden rutinler için profil ekranını kullan.',
+                    _isRoutineBusy
+                        ? 'Her hafta aynı gün ve saatte planlamayı etkiler.'
+                        : 'Sadece seçili haftaya eklenir.',
                     style: TextStyle(color: kText2, fontSize: 11),
                   ),
                 ],
@@ -1798,6 +1768,8 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
               ),
             ],
           ),
+            ),
+          ],
         ),
       ),
     );

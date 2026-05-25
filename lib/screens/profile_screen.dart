@@ -1012,7 +1012,10 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
         final coach = await ApiClient.getExamResultCoachMessage(resultId);
         if (!dialogContext.mounted) return;
         setDialogState(() {
-          aiComment = coach['message']?.toString() ?? '';
+          final message = coach['message']?.toString().trim() ?? '';
+          aiComment = message.isNotEmpty
+              ? message
+              : 'Bu sebebi kaydettim. Sınav öncesi çalışma ve stres verilerine göre sonraki plan yorumlarında bunu dikkate alacağım.';
           aiLoading = false;
         });
       } catch (e) {

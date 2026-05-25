@@ -940,16 +940,17 @@ class _FramedPanel extends StatelessWidget {
         borderRadius: borderRadius,
         child: Stack(
           children: [
-            if (!appTheme.isLight)
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _DottedPatternPainter(
-                    color: kBorder.withValues(alpha: 0.38),
-                    dotSpacing: 22,
-                    dotSize: 1.5,
-                  ),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _DottedPatternPainter(
+                  color: appTheme.isLight
+                      ? kBorder.withValues(alpha: 0.24)
+                      : kBorder.withValues(alpha: 0.38),
+                  dotSpacing: 22,
+                  dotSize: appTheme.isLight ? 1.25 : 1.5,
                 ),
               ),
+            ),
             Positioned.fill(child: child),
           ],
         ),
