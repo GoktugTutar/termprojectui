@@ -411,27 +411,28 @@ class _WeekScreenState extends State<WeekScreen>
     }
   }
 
-  /// notFitted varsa hangi lessonlerin sığmadığını snackbar ile bildirir.
+  /// unplacedLessonIds varsa hangi derslerin sığmadığını snackbar ile bildirir.
   void _showNotFittedWarning(
     Map<String, dynamic> data,
     List<Lesson> lessonList,
   ) {
-    final notFitted = data['notFitted'] as Map<String, dynamic>? ?? {};
-    if (notFitted.isEmpty || !mounted) return;
-    final names = notFitted.keys
-        .map((idStr) {
+    final rawList = data['unplacedLessonIds'] as List<dynamic>? ?? [];
+    if (rawList.isEmpty || !mounted) return;
+    final unplacedIds = rawList.map((e) => (e as num).toInt()).toList();
+    final names = unplacedIds
+        .map((id) {
           final lesson = lessonList.cast<Lesson?>().firstWhere(
-            (l) => l?.id == idStr,
+            (l) => l?.id == id.toString(),
             orElse: () => null,
           );
-          return lesson?.lessonName ?? 'Lesson #$idStr';
+          return lesson?.lessonName ?? 'Ders #$id';
         })
         .join(', ');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Lessons that did not fit this week: $names'),
+        content: Text('Bu haftaya sığmayan dersler: $names'),
         backgroundColor: const Color(0xFFF2B14A),
-        duration: Duration(seconds: 5),
+        duration: const Duration(seconds: 5),
       ),
     );
   }

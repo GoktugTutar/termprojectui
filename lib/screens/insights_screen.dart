@@ -31,6 +31,7 @@ class _InsightsScreenState extends State<InsightsScreen>
   Map<String, dynamic>? _profile;
   String _stressStr = '—';
   String _aiMessage = '';
+  bool _weeklySubmitted = false;
 
   @override
   void initState() {
@@ -76,6 +77,11 @@ class _InsightsScreenState extends State<InsightsScreen>
         '[INSIGHTS] rawLessons=${rawLessons.length} parsed=${lessons.length}',
       );
 
+      bool weeklySubmitted = false;
+      try {
+        weeklySubmitted = await ApiClient.getWeeklyFeedbackStatus();
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _messages = feedbackData['messages'] as List? ?? [];
@@ -85,6 +91,7 @@ class _InsightsScreenState extends State<InsightsScreen>
         _completionStr = completionStr;
         _aiMessage = feedbackData['aiMessage'] as String? ?? '';
         _stressStr = stressStr;
+        _weeklySubmitted = weeklySubmitted;
         _loading = false;
       });
     } catch (e, st) {
@@ -178,21 +185,24 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Widget _buildCta() {
+    final submitted = _weeklySubmitted;
+    final cardColor = submitted ? _kSuccess : kAccent;
+
     return SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
         child: GestureDetector(
-          onTap: _openWeeklySheet,
+          onTap: submitted ? null : _openWeeklySheet,
           child: Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [kAccent.withAlpha(46), kAccent.withAlpha(15)],
+                colors: [cardColor.withAlpha(46), cardColor.withAlpha(15)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kAccent.withAlpha(90)),
+              border: Border.all(color: cardColor.withAlpha(90)),
             ),
             child: Row(
               children: [
@@ -200,10 +210,14 @@ class _InsightsScreenState extends State<InsightsScreen>
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: kAccent,
+                    color: cardColor,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.auto_awesome, color: kBg, size: 20),
+                  child: Icon(
+                    submitted ? Icons.check : Icons.auto_awesome,
+                    color: kBg,
+                    size: 20,
+                  ),
                 ),
                 SizedBox(width: 14),
                 Expanded(
@@ -220,13 +234,15 @@ class _InsightsScreenState extends State<InsightsScreen>
                       ),
                       SizedBox(height: 2),
                       Text(
-                        "Tells Step 1 what next week's multiplier should be",
+                        submitted
+                            ? 'Bu haftalık gönderdin — multiplier ayarlandı'
+                            : "Tells Step 1 what next week's multiplier should be",
                         style: TextStyle(color: kText2, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: kAccent),
+                if (!submitted) Icon(Icons.chevron_right, color: cardColor),
               ],
             ),
           ),

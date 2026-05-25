@@ -22,35 +22,32 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  // Adımlar: 0=tercihler, 1=lessonler, 2=busy times
+  // Adımlar: 0=akademik bilgiler, 1=tercihler, 2=dersler, 3=busy times
   int _step = 0;
-  static const int _totalSteps = 3;
+  static const int _totalSteps = 4;
 
   bool _initLoading = true;
   bool _finishing = false;
 
-  // ── Adım 0: Preferences ─────────────────────────────────────────────────────
+  // ── Adım 0: Akademik bilgiler ────────────────────────────────────────────────
+  int _gradeLevel = 1;
+  final _gpaCtrl = TextEditingController();
+  final _termCtrl = TextEditingController();
+
+  // ── Adım 1: Tercihler ────────────────────────────────────────────────────────
   String _preferredStudyTime = 'morning';
   String _studyStyle = 'normal';
 
-  // ── Adım 1: Lessonler ───────────────────────────────────────────────────────
+  // ── Adım 2: Dersler ──────────────────────────────────────────────────────────
   List<Map<String, dynamic>> _lessons = [];
 
-  // ── Adım 2: Busy grid ─────────────────────────────────────────────────────
+  // ── Adım 3: Busy grid ────────────────────────────────────────────────────────
   // [gün 0-6][saat 0-15]
-  //   0 = boş (müsait)
-  //   1 = orta yoğun   → fatigueLevel: 2
-  //   2 = çok yoğun    → fatigueLevel: 4
-  static const int _gridStartHour = 7; // 07:00
-  static const int _gridHourCount = 16; // 07:00 – 23:00
+  //   0 = boş (müsait)  1 = az yoğun  2 = orta  3 = yoğun  4 = çok yoğun  5 = maks
+  static const int _gridStartHour = 8; // 08:00 — sistemin PLACEMENT_START ile aynı
+  static const int _gridHourCount = 16; // 08:00 – 00:00
   static const List<String> _shortDays = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
+    'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz',
   ];
 
   final List<List<int>> _busyGrid = List.generate(
@@ -67,6 +64,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void initState() {
     super.initState();
     _initTerm();
+  }
+
+  @override
+  void dispose() {
+    _gpaCtrl.dispose();
+    _termCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _initTerm() async {
@@ -138,6 +142,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await ApiClient.setupUser({
         'preferredStudyTime': _preferredStudyTime,
         'studyStyle': _studyStyle,
+        'gradeLevel': _gradeLevel,
+        if (_gpaCtrl.text.trim().isNotEmpty)
+          'gpa': double.tryParse(_gpaCtrl.text.trim().replaceAll(',', '.')) ?? 0.0,
+        if (_termCtrl.text.trim().isNotEmpty)
+          'academicTerm': _termCtrl.text.trim(),
       });
       final slots = _buildBusySlots();
       if (slots.isNotEmpty) {
@@ -221,19 +230,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildCurrentStep() {
     switch (_step) {
       case 0:
-        return _buildPreferencesStep();
+        return _buildAcademicStep();
       case 1:
-        return _buildLessonsStep();
+        return _buildPreferencesStep();
       case 2:
+        return _buildLessonsStep();
+      case 3:
         return _buildBusyStep();
       default:
         return const SizedBox.shrink();
     }
   }
 
-  // ── Adım 0: Preferences ─────────────────────────────────────────────────────
+  // ── Adım 0: Akademik bilgiler ─────────────────────────────────────────────────
 
-  Widget _buildPreferencesStep() {
+  Widget _buildAcademicStep() {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
@@ -253,7 +264,145 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Set your study preferences',
+                'Akademik bilgilerin',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Algoritma bu bilgileri çalışma yükünü kişiselleştirmek için kullanır.',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Sınıf ──────────────────────────────────────────────────────
+              Text(
+                'Kaçıncı sınıfsın?',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: List.generate(8, (i) {
+                  final n = i + 1;
+                  final sel = n == _gradeLevel;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _gradeLevel = n),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        height: 46,
+                        margin: EdgeInsets.only(right: i < 7 ? 6 : 0),
+                        decoration: BoxDecoration(
+                          color: sel ? kAccent.withAlpha(46) : kSurface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: sel ? kAccent : kBorder,
+                            width: sel ? 1.4 : 1,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$n',
+                            style: TextStyle(
+                              color: sel ? kAccent : kText2,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 24),
+
+              // ── GPA ────────────────────────────────────────────────────────
+              Text(
+                'Mevcut GPA (opsiyonel)',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '0.00 – 4.00 arasında gir. Boş bırakabilirsin.',
+                style: TextStyle(color: kText2, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _gpaCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(color: kText1),
+                decoration: const InputDecoration(
+                  hintText: 'örn. 3.20',
+                  prefixIcon: Icon(Icons.workspace_premium_outlined),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // ── Dönem ──────────────────────────────────────────────────────
+              Text(
+                'Bu dönemin adı (opsiyonel)',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Örn. "2026 Bahar". Profil ekranında sonradan değiştirilebilir.',
+                style: TextStyle(color: kText2, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _termCtrl,
+                style: TextStyle(color: kText1),
+                decoration: const InputDecoration(
+                  hintText: 'örn. 2026 Bahar',
+                  prefixIcon: Icon(Icons.event_note_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Adım 1: Tercihler ────────────────────────────────────────────────────────
+
+  Widget _buildPreferencesStep() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '2 / $_totalSteps',
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Çalışma tercihlerini belirle',
                 style: TextStyle(
                   color: kText1,
                   fontSize: 26,
@@ -381,7 +530,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '2 / $_totalSteps',
+                    '3 / $_totalSteps',
                     style: TextStyle(
                       color: kText2,
                       fontSize: 11,
@@ -391,7 +540,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Add your lessons',
+                    'Derslerini ekle',
                     style: TextStyle(
                       color: kText1,
                       fontSize: 26,
@@ -462,7 +611,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '3 / $_totalSteps',
+                '4 / $_totalSteps',
                 style: TextStyle(
                   color: kText2,
                   fontSize: 11,
@@ -472,7 +621,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Mark your busy times',
+                'Meşgul zamanlarını işaretle',
                 style: TextStyle(
                   color: kText1,
                   fontSize: 24,
@@ -711,8 +860,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(width: 12),
           ],
 
-          // "Add lesson" butonu — sadece lesson adımında
-          if (_step == 1) ...[
+          // "Ders ekle" butonu — sadece ders adımında
+          if (_step == 2) ...[
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _initLoading ? null : _openAddLesson,
@@ -756,8 +905,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     )
                   : Text(
                       isLast
-                          ? (_busyGridIsEmpty ? 'Skip and Start' : 'Start')
-                          : (_step == 1 && _lessons.isEmpty ? 'Skip' : 'Next'),
+                          ? (_busyGridIsEmpty ? 'Atla ve Başla' : 'Başla')
+                          : (_step == 2 && _lessons.isEmpty ? 'Geç' : 'İleri'),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
             ),
@@ -830,7 +979,7 @@ class _StepBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labels = ['Preferences', 'Lessonler', 'Busy times'];
+    final labels = ['Bilgiler', 'Tercihler', 'Dersler', 'Meşgul'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
