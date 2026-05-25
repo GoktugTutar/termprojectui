@@ -1904,26 +1904,46 @@ class _MissingChecklistTabsPanelState
 
   Future<void> _submit() async {
     final blocks = widget.blocksForDate(_activeDate);
-    final uniqueBlocks = <ScheduledBlock>[];
-    final seen = <int>{};
-    for (final block in blocks) {
-      if (seen.add(block.lessonId)) uniqueBlocks.add(block);
-    }
+
+    // Normal ve review blokları ayır
+    final normalBlocks = blocks.where((b) => !b.isReview).toList();
+    final reviewBlocks = blocks.where((b) => b.isReview).toList();
+
     final items = <Map<String, dynamic>>[];
-    for (final block in uniqueBlocks) {
-      final planned = blocks
+
+    // Normal bloklar — lessonId bazında deduplicate
+    final seen = <int>{};
+    for (final block in normalBlocks) {
+      if (!seen.add(block.lessonId)) continue;
+      final planned = normalBlocks
           .where((b) => b.lessonId == block.lessonId)
           .fold(0, (sum, b) => sum + b.blockCount);
       final completedBlocks = ((_studiedMinutes[block.lessonId] ?? 0) / 30)
           .round()
           .clamp(0, planned)
           .toInt();
-      if (items.any((item) => item['lessonId'] == block.lessonId)) continue;
       items.add({
         'lessonId': block.lessonId,
         'plannedBlocks': planned,
         'completedBlocks': completedBlocks,
         'delayed': completedBlocks < planned,
+        'isReview': false,
+      });
+    }
+
+    // Review bloklar — her biri ayrı item, isReview: true
+    for (final block in reviewBlocks) {
+      final planned = block.blockCount;
+      final completedBlocks = ((_studiedMinutes[block.lessonId] ?? 0) / 30)
+          .round()
+          .clamp(0, planned)
+          .toInt();
+      items.add({
+        'lessonId': block.lessonId,
+        'plannedBlocks': planned,
+        'completedBlocks': completedBlocks,
+        'delayed': completedBlocks < planned,
+        'isReview': true,
       });
     }
 
