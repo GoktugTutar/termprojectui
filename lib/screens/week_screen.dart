@@ -31,17 +31,17 @@ class _BusyIconChoice {
 }
 
 const _busyIconChoices = [
-  _BusyIconChoice(key: 'phone', icon: Icons.call_rounded, tooltip: 'Telefon'),
+  _BusyIconChoice(key: 'phone', icon: Icons.call_rounded, tooltip: 'Phone'),
   _BusyIconChoice(key: 'wifi', icon: Icons.wifi_rounded, tooltip: 'Online'),
-  _BusyIconChoice(key: 'group', icon: Icons.groups_rounded, tooltip: 'Grup'),
-  _BusyIconChoice(key: 'search', icon: Icons.search_rounded, tooltip: 'Arama'),
+  _BusyIconChoice(key: 'group', icon: Icons.groups_rounded, tooltip: 'Group'),
+  _BusyIconChoice(key: 'search', icon: Icons.search_rounded, tooltip: 'Search'),
   _BusyIconChoice(
     key: 'calendar',
     icon: Icons.calendar_month_rounded,
-    tooltip: 'Takvim',
+    tooltip: 'Calendar',
   ),
   _BusyIconChoice(key: 'video', icon: Icons.videocam_rounded, tooltip: 'Video'),
-  _BusyIconChoice(key: 'energy', icon: Icons.bolt_rounded, tooltip: 'Enerji'),
+  _BusyIconChoice(key: 'energy', icon: Icons.bolt_rounded, tooltip: 'Energy'),
 ];
 
 Color _fatigueColor(int level) {
@@ -66,7 +66,7 @@ String? _busySlotDateKey(dynamic value) {
 
 /// Kullanıcının meşgul slotu (UI katmanı için).
 class _BusySlot {
-  final int dayOfWeek; // 1=Pzt … 7=Paz
+  final int dayOfWeek; // 1=Mon … 7=Sun
   final String startTime;
   final String endTime;
   final int fatigueLevel;
@@ -156,7 +156,7 @@ class _TopRightWeekNotice extends StatelessWidget {
               icon: Icon(Icons.close_rounded, color: kText2, size: 16),
               padding: EdgeInsets.zero,
               constraints: BoxConstraints.tightFor(width: 28, height: 28),
-              tooltip: 'Kapat',
+              tooltip: 'Close',
             ),
           ],
         ),
@@ -209,27 +209,27 @@ class _WeekScreenState extends State<WeekScreen>
     'Dec',
   ];
   static const _monthNames = [
-    'Ocak',
-    'Şubat',
-    'Mart',
-    'Nisan',
-    'Mayıs',
-    'Haziran',
-    'Temmuz',
-    'Ağustos',
-    'Eylül',
-    'Ekim',
-    'Kasım',
-    'Aralık',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   static const _dowFullLabels = [
-    'Pzt',
-    'Sal',
-    'Çar',
-    'Per',
-    'Cum',
-    'Cmt',
-    'Paz',
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
   ];
 
   @override
@@ -270,8 +270,8 @@ class _WeekScreenState extends State<WeekScreen>
     super.dispose();
   }
 
-  /// Haftalık plan ve kullanıcı profilini (busySlots için) paralel yükler.
-  /// Yeni hafta başladıysa ve ders varsa planı otomatik oluşturur.
+  /// Weeklık plan ve kullanıcı profilini (busySlots için) paralel yükler.
+  /// Yeni hafta başladıysa ve lesson varsa planı otomatik oluşturur.
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
@@ -299,9 +299,9 @@ class _WeekScreenState extends State<WeekScreen>
       final checklistDisabled = status['checklistDisabled'] == true;
       final onboardingNotice = checklistDisabled
           ? (!canCreatePlan
-                ? 'Lütfen derslerini ve busy time’larını gir. Bunları ekleyince bu hafta için programın hazırlanacak.'
+                ? 'Please add your lessons and busy times. Once you add them, your schedule for this week will be prepared.'
                 : (status['message']?.toString() ??
-                      'İlk hafta adaptasyon haftası. Programın hazır; bu hafta checklist sunulmayacak.'))
+                      'The first week is an adaptation week. Your schedule is ready; checklists will start next week.'))
           : null;
       Map<String, dynamic>? newPlanData;
 
@@ -411,7 +411,7 @@ class _WeekScreenState extends State<WeekScreen>
     }
   }
 
-  /// notFitted varsa hangi derslerin sığmadığını snackbar ile bildirir.
+  /// notFitted varsa hangi lessonlerin sığmadığını snackbar ile bildirir.
   void _showNotFittedWarning(
     Map<String, dynamic> data,
     List<Lesson> lessonList,
@@ -424,12 +424,12 @@ class _WeekScreenState extends State<WeekScreen>
             (l) => l?.id == idStr,
             orElse: () => null,
           );
-          return lesson?.lessonName ?? 'Ders #$idStr';
+          return lesson?.lessonName ?? 'Lesson #$idStr';
         })
         .join(', ');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Bu haftaya sığmayan dersler: $names'),
+        content: Text('Lessons that did not fit this week: $names'),
         backgroundColor: const Color(0xFFF2B14A),
         duration: Duration(seconds: 5),
       ),
@@ -635,7 +635,7 @@ class _WeekScreenState extends State<WeekScreen>
   /// Dar ekran tek gün grid görünümü.
   Widget _buildNarrowGrid() {
     final date = _weekDates.isEmpty ? '' : _weekDates[_selectedDayIndex];
-    final dow = _selectedDayIndex + 1; // 1=Pzt … 7=Paz
+    final dow = _selectedDayIndex + 1; // 1=Mon … 7=Sun
     final blocks = _plan?.blocksForDate(date) ?? [];
     final busy = _busySlotsForDate(date);
     return _TimeGrid(
@@ -820,7 +820,7 @@ class _WeekScreenState extends State<WeekScreen>
       events.add(
         _CalendarEvent(
           type: _CalendarEntryType.busy,
-          label: slot.isRoutine ? 'Rutin busy' : 'Busy time',
+          label: slot.isRoutine ? 'Routine busy' : 'Busy time',
           subtitle: '${slot.startTime} - ${slot.endTime}',
           color: color,
           icon: _busyIconForKey(slot.iconKey),
@@ -837,7 +837,7 @@ class _WeekScreenState extends State<WeekScreen>
         events.add(
           _CalendarEvent(
             type: _CalendarEntryType.exam,
-            label: 'Sınav',
+            label: 'Exam',
             subtitle: lesson.lessonName,
             color: color,
             icon: Icons.school_outlined,
@@ -853,7 +853,7 @@ class _WeekScreenState extends State<WeekScreen>
             type: _CalendarEntryType.deadline,
             label: deadline.title?.trim().isNotEmpty == true
                 ? deadline.title!.trim()
-                : 'Ödev',
+                : 'Assignment',
             subtitle: lesson.lessonName,
             color: color,
             icon: Icons.assignment_outlined,
@@ -888,7 +888,7 @@ class _WeekScreenState extends State<WeekScreen>
     );
 
     if (result is Map<String, dynamic> && result['type'] == 'nonRoutineBusy') {
-      // Haftalık busy slot eklendi — mevcut planla çakışıyor mu?
+      // Weeklık busy slot eklendi — mevcut planla çakışıyor mu?
       final slotDate = result['date'] as String;
       final slotStart = _parseTimeToMin(result['startTime'] as String);
       final slotEnd = _parseTimeToMin(result['endTime'] as String);
@@ -906,7 +906,7 @@ class _WeekScreenState extends State<WeekScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Ders bloğuyla çakışma tespit edildi — program yeniden hesaplanıyor...',
+              'Conflict with a lesson block detected. Recalculating the schedule...',
             ),
             duration: Duration(seconds: 3),
           ),
@@ -922,7 +922,7 @@ class _WeekScreenState extends State<WeekScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Rutin busy time eklendi — program yeniden hesaplanıyor...',
+              'Routine busy time added. Recalculating the schedule...',
             ),
             duration: Duration(seconds: 3),
           ),
@@ -938,11 +938,11 @@ class _WeekScreenState extends State<WeekScreen>
     final hasLessons = _lessons.isNotEmpty;
     final hasBusySlots = _busySlots.isNotEmpty;
     final title = !hasLessons || !hasBusySlots
-        ? 'Ders ve busy time gerekli'
+        ? 'Lessons and busy time required'
         : 'No weekly plan yet';
     final subtitle = !hasLessons || !hasBusySlots
-        ? 'Lütfen derslerini ve busy time’larını gir. Bunları ekleyince bu hafta için programın hazırlanacak.'
-        : 'Plan otomatik oluşmadıysa tekrar deneyebilirsin.';
+        ? 'Please add your lessons and busy times. Once you add them, your schedule for this week will be prepared.'
+        : 'If the schedule was not created automatically, you can try again.';
 
     return Center(
       child: Padding(
@@ -985,7 +985,7 @@ class _WeekScreenState extends State<WeekScreen>
                   _showAddCalendarEntry(dt);
                 },
                 icon: Icon(Icons.event_busy_rounded, size: 18),
-                label: Text('Busy time ekle'),
+                label: Text('Add busy time'),
                 style: FilledButton.styleFrom(backgroundColor: kAccent),
               ),
             ],
@@ -1020,13 +1020,13 @@ class _ProgramViewSwitch extends StatelessWidget {
         children: [
           _SwitchButton(
             icon: Icons.view_week_outlined,
-            tooltip: 'Program',
+            tooltip: 'Schedule',
             selected: currentIndex == 0,
             onTap: () => onChanged(0),
           ),
           _SwitchButton(
             icon: Icons.calendar_month_outlined,
-            tooltip: 'Aylık',
+            tooltip: 'Monthly',
             selected: currentIndex == 1,
             onTap: () => onChanged(1),
           ),
@@ -1111,7 +1111,7 @@ class _MonthControls extends StatelessWidget {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(
-            'Bugün',
+            'Today',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
           ),
         ),
@@ -1131,7 +1131,9 @@ class _IconControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: icon == Icons.chevron_left_rounded ? 'Önceki ay' : 'Sonraki ay',
+      message: icon == Icons.chevron_left_rounded
+          ? 'Previous month'
+          : 'Next month',
       child: GestureDetector(
         onTap: onTap,
         child: Container(
@@ -1479,11 +1481,11 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
     final start = _timeToMinutes(_startTime);
     final end = _timeToMinutes(_endTime);
     if (end <= start) {
-      setState(() => _error = 'Bitiş saati başlangıçtan sonra olmalı.');
+      setState(() => _error = 'End time must be after start time.');
       return;
     }
     if (_needsLesson && _selectedLesson == null) {
-      setState(() => _error = 'Önce bir ders seçmelisin.');
+      setState(() => _error = 'Select a lesson first.');
       return;
     }
 
@@ -1519,7 +1521,7 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
       } else {
         final rawTitle = _titleCtrl.text.trim();
         final title = rawTitle.isEmpty
-            ? 'Ödev $_startTime-$_endTime'
+            ? 'Assignment $_startTime-$_endTime'
             : '$rawTitle ($_startTime-$_endTime)';
         await ApiClient.addDeadline(
           int.parse(_selectedLesson!.id),
@@ -1561,12 +1563,12 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                 ButtonSegment(
                   value: _CalendarEntryType.exam,
                   icon: Icon(Icons.school_outlined, size: 16),
-                  label: Text('Sınav'),
+                  label: Text('Exam'),
                 ),
                 ButtonSegment(
                   value: _CalendarEntryType.deadline,
                   icon: Icon(Icons.assignment_outlined, size: 16),
-                  label: Text('Ödev'),
+                  label: Text('Assignment'),
                 ),
               ],
               selected: {_type},
@@ -1584,190 +1586,195 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-              if (_loadingLessons && _needsLesson)
-                Center(child: CircularProgressIndicator(color: kAccent))
-              else ...[
-                if (_needsLesson)
-                  DropdownButtonFormField<Lesson>(
-                    initialValue: _selectedLesson,
-                    items: _lessons
-                        .map(
-                          (lesson) => DropdownMenuItem(
-                            value: lesson,
-                            child: Text(
-                              lesson.lessonName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _saving
-                        ? null
-                        : (lesson) => setState(() => _selectedLesson = lesson),
-                    decoration: InputDecoration(labelText: 'Ders'),
-                  ),
-                if (_type == _CalendarEntryType.deadline) ...[
-                  SizedBox(height: 10),
-                  TextField(
-                    controller: _titleCtrl,
-                    enabled: !_saving,
-                    decoration: InputDecoration(
-                      labelText: 'Ödev başlığı',
-                      hintText: 'Proje teslimi',
-                    ),
-                  ),
-                ],
-                SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _startTime,
-                        items: _timeOptions
+                  if (_loadingLessons && _needsLesson)
+                    Center(child: CircularProgressIndicator(color: kAccent))
+                  else ...[
+                    if (_needsLesson)
+                      DropdownButtonFormField<Lesson>(
+                        initialValue: _selectedLesson,
+                        items: _lessons
                             .map(
-                              (time) => DropdownMenuItem(
-                                value: time,
-                                child: Text(time),
+                              (lesson) => DropdownMenuItem(
+                                value: lesson,
+                                child: Text(
+                                  lesson.lessonName,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             )
                             .toList(),
                         onChanged: _saving
                             ? null
-                            : (value) => setState(() => _startTime = value!),
-                        decoration: InputDecoration(labelText: 'Başlangıç'),
+                            : (lesson) =>
+                                  setState(() => _selectedLesson = lesson),
+                        decoration: InputDecoration(labelText: 'Lesson'),
                       ),
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _endTime,
-                        items: _timeOptions
-                            .map(
-                              (time) => DropdownMenuItem(
-                                value: time,
-                                child: Text(time),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _saving
-                            ? null
-                            : (value) => setState(() => _endTime = value!),
-                        decoration: InputDecoration(labelText: 'Bitiş'),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_type == _CalendarEntryType.busy) ...[
-                  SizedBox(height: 10),
-                  Text(
-                    'Busy time rutin mi?',
-                    style: TextStyle(
-                      color: kText1,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(
-                        value: false,
-                        icon: Icon(Icons.calendar_today_outlined, size: 15),
-                        label: Text('Bu hafta'),
-                      ),
-                      ButtonSegment(
-                        value: true,
-                        icon: Icon(Icons.repeat_rounded, size: 15),
-                        label: Text('Rutin'),
+                    if (_type == _CalendarEntryType.deadline) ...[
+                      SizedBox(height: 10),
+                      TextField(
+                        controller: _titleCtrl,
+                        enabled: !_saving,
+                        decoration: InputDecoration(
+                          labelText: 'Assignment title',
+                          hintText: 'Project deadline',
+                        ),
                       ),
                     ],
-                    selected: {_isRoutineBusy},
-                    onSelectionChanged: _saving
-                        ? null
-                        : (value) =>
-                              setState(() => _isRoutineBusy = value.first),
-                    style: ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: WidgetStatePropertyAll(kText1),
+                    SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _startTime,
+                            items: _timeOptions
+                                .map(
+                                  (time) => DropdownMenuItem(
+                                    value: time,
+                                    child: Text(time),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _saving
+                                ? null
+                                : (value) =>
+                                      setState(() => _startTime = value!),
+                            decoration: InputDecoration(labelText: 'Start'),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _endTime,
+                            items: _timeOptions
+                                .map(
+                                  (time) => DropdownMenuItem(
+                                    value: time,
+                                    child: Text(time),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _saving
+                                ? null
+                                : (value) => setState(() => _endTime = value!),
+                            decoration: InputDecoration(labelText: 'End'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  SizedBox(height: 10),
-                  Row(
-                    children: [
+                    if (_type == _CalendarEntryType.busy) ...[
+                      SizedBox(height: 10),
                       Text(
-                        'Yorgunluk',
+                        'Busy time rutin mi?',
                         style: TextStyle(
                           color: kText1,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      Expanded(
-                        child: Slider(
-                          value: _fatigueLevel.toDouble(),
-                          min: 1,
-                          max: 5,
-                          divisions: 4,
-                          label: _fatigueLevel.toString(),
-                          activeColor: kAccent,
-                          inactiveColor: kBorder,
-                          onChanged: _saving
-                              ? null
-                              : (value) => setState(
-                                  () => _fatigueLevel = value.round(),
-                                ),
+                      SizedBox(height: 8),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            icon: Icon(Icons.calendar_today_outlined, size: 15),
+                            label: Text('This week'),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            icon: Icon(Icons.repeat_rounded, size: 15),
+                            label: Text('Routine'),
+                          ),
+                        ],
+                        selected: {_isRoutineBusy},
+                        onSelectionChanged: _saving
+                            ? null
+                            : (value) =>
+                                  setState(() => _isRoutineBusy = value.first),
+                        style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: WidgetStatePropertyAll(kText1),
                         ),
                       ),
+                      SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Text(
+                            'Fatigue',
+                            style: TextStyle(
+                              color: kText1,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _fatigueLevel.toDouble(),
+                              min: 1,
+                              max: 5,
+                              divisions: 4,
+                              label: _fatigueLevel.toString(),
+                              activeColor: kAccent,
+                              inactiveColor: kBorder,
+                              onChanged: _saving
+                                  ? null
+                                  : (value) => setState(
+                                      () => _fatigueLevel = value.round(),
+                                    ),
+                            ),
+                          ),
+                          Text(
+                            '$_fatigueLevel/5',
+                            style: TextStyle(color: kText2, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 6),
                       Text(
-                        '$_fatigueLevel/5',
-                        style: TextStyle(color: kText2, fontSize: 12),
+                        _isRoutineBusy
+                            ? 'Affects planning on the same day and time every week.'
+                            : 'Only added to the selected week.',
+                        style: TextStyle(color: kText2, fontSize: 11),
                       ),
                     ],
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    _isRoutineBusy
-                        ? 'Her hafta aynı gün ve saatte planlamayı etkiler.'
-                        : 'Sadece seçili haftaya eklenir.',
-                    style: TextStyle(color: kText2, fontSize: 11),
+                  ],
+                  if (_type == _CalendarEntryType.exam) ...[
+                    SizedBox(height: 8),
+                    Text(
+                      'Exams are currently saved by day; the time range is not stored as a note.',
+                      style: TextStyle(color: kText2, fontSize: 11),
+                    ),
+                  ],
+                  if (_error != null) ...[
+                    SizedBox(height: 10),
+                    Text(
+                      _error!,
+                      style: TextStyle(color: _kDanger, fontSize: 12),
+                    ),
+                  ],
+                  SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _saving || (_loadingLessons && _needsLesson)
+                        ? null
+                        : _save,
+                    icon: _saving
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(Icons.check_rounded, size: 18),
+                    label: Text(_saving ? 'Saving...' : 'Save'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kAccent,
+                      padding: EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                   ),
                 ],
-              ],
-              if (_type == _CalendarEntryType.exam) ...[
-                SizedBox(height: 8),
-                Text(
-                  'Sınavlar şu an gün bazlı kaydediliyor; saat aralığı not olarak tutulmaz.',
-                  style: TextStyle(color: kText2, fontSize: 11),
-                ),
-              ],
-              if (_error != null) ...[
-                SizedBox(height: 10),
-                Text(_error!, style: TextStyle(color: _kDanger, fontSize: 12)),
-              ],
-              SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _saving || (_loadingLessons && _needsLesson)
-                    ? null
-                    : _save,
-                icon: _saving
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Icon(Icons.check_rounded, size: 18),
-                label: Text(_saving ? 'Kaydediliyor...' : 'Kaydet'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: kAccent,
-                  padding: EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
               ),
-            ],
-          ),
             ),
           ],
         ),
@@ -1778,7 +1785,7 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
 
 // ── Time Grid ─────────────────────────────────────────────────────────────────
 
-/// Saat çizgili zaman ızgarası; gutter + n gün sütunundan oluşur.
+/// Time çizgili zaman ızgarası; gutter + n gün sütunundan oluşur.
 class _TimeGrid extends StatelessWidget {
   const _TimeGrid({
     required this.dates,
@@ -1809,7 +1816,7 @@ class _TimeGrid extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Saat gutter
+              // Time gutter
               SizedBox(
                 width: _gutterW,
                 child: Stack(
@@ -1863,7 +1870,7 @@ class _TimeGrid extends StatelessWidget {
 int _dateToDow(String date) {
   if (date.length < 10) return 1;
   try {
-    return DateTime.parse(date).weekday; // 1=Pzt … 7=Paz
+    return DateTime.parse(date).weekday; // 1=Mon … 7=Sun
   } catch (_) {
     return 1;
   }
@@ -1902,7 +1909,7 @@ class _DayColumn extends StatelessWidget {
 
     final color = lessonColor(block.lessonId);
     final name = block.lessonName.trim().isEmpty
-        ? 'Ders'
+        ? 'Lesson'
         : block.lessonName.trim();
     final label = block.isReview ? '$name (Tekrar)' : name;
 
@@ -2109,7 +2116,7 @@ class _DayColumn extends StatelessWidget {
               ),
             );
           }),
-          // Ders adları her çalışma slotunun en üstünde ayrı katman olarak görünür.
+          // Lesson adları her çalışma slotunun en üstünde ayrı katman olarak görünür.
           ...blocks.map(_blockNameOverlay),
           // Now çizgisi (sadece bugün)
           if (showNow)
@@ -2144,7 +2151,7 @@ class _DayColumn extends StatelessWidget {
   }
 }
 
-/// Ders adı ayrı overlay olarak çizildiği için blok içinde sadece ek zaman bilgisi kalır.
+/// Lesson adı ayrı overlay olarak çizildiği için blok içinde sadece ek zaman bilgisi kalır.
 class _BlockContent extends StatelessWidget {
   const _BlockContent({required this.block, required this.color});
 

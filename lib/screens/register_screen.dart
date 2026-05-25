@@ -110,7 +110,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 18),
-                // Üst bar: Geri + Dark/Light switch
+                // Üst bar: Back + Dark/Light switch
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
@@ -162,7 +162,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Hesap Oluştur',
+                                  'Create Account',
                                   style: TextStyle(
                                     fontSize: 34,
                                     fontWeight: FontWeight.w900,
@@ -173,7 +173,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'E-posta ve şifrenle devam et.',
+                                  'Continue with your email and password.',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: p.muted,
@@ -186,12 +186,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             // Form kartı
                             _buildCard(p),
                             const SizedBox(height: 20),
-                            // Zaten hesabın var mı?
+                            // Already have an account?
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  'Zaten hesabın var mı?',
+                                  'Already have an account?',
                                   style: TextStyle(
                                     color: p.muted,
                                     fontSize: 14,
@@ -203,7 +203,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       ? null
                                       : () => Navigator.pop(context),
                                   child: Text(
-                                    'Giriş Yap →',
+                                    'Sign In →',
                                     style: TextStyle(
                                       color: p.accent,
                                       fontSize: 14,
@@ -253,12 +253,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               children: [
                 _field(
                   ctrl: _emailCtrl,
-                  label: 'E-posta',
+                  label: 'Email',
                   icon: Icons.email_outlined,
                   type: TextInputType.emailAddress,
                   palette: p,
                   validator: (v) => v == null || !v.contains('@')
-                      ? 'Geçerli e-posta girin'
+                      ? 'Enter a valid email'
                       : null,
                 ),
                 const SizedBox(height: 14),
@@ -267,14 +267,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Expanded(
                       child: _field(
                         ctrl: _gradeLevelCtrl,
-                        label: 'Sınıf',
+                        label: 'Class Year',
                         icon: Icons.school_outlined,
                         type: TextInputType.number,
                         palette: p,
                         validator: (v) {
                           final value = int.tryParse(v?.trim() ?? '');
-                          if (value == null) return 'Sınıf girin';
-                          if (value < 1 || value > 8) return '1-8 arası';
+                          if (value == null) return 'Class Year girin';
+                          if (value < 1 || value > 8) return 'Between 1 and 8';
                           return null;
                         },
                       ),
@@ -294,7 +294,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             (v ?? '').trim().replaceAll(',', '.'),
                           );
                           if (value == null) return 'GPA girin';
-                          if (value < 0 || value > 4) return '0-4 arası';
+                          if (value < 0 || value > 4) return 'Between 0 and 4';
                           return null;
                         },
                       ),
@@ -304,16 +304,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 14),
                 _field(
                   ctrl: _academicTermCtrl,
-                  label: 'Dönem',
+                  label: 'Term',
                   icon: Icons.event_note_outlined,
                   palette: p,
                   validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Dönem girin' : null,
+                      v == null || v.trim().isEmpty ? 'Term girin' : null,
                 ),
                 const SizedBox(height: 14),
                 _field(
                   ctrl: _passCtrl,
-                  label: 'Şifre',
+                  label: 'Password',
                   icon: Icons.lock_outline,
                   palette: p,
                   obscure: _passObscure,
@@ -331,7 +331,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 14),
                 _field(
                   ctrl: _confirmCtrl,
-                  label: 'Şifre Tekrar',
+                  label: 'Confirm Password',
                   icon: Icons.lock_clock_outlined,
                   palette: p,
                   obscure: _confirmObscure,
@@ -344,7 +344,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         setState(() => _confirmObscure = !_confirmObscure),
                   ),
                   validator: (v) =>
-                      v != _passCtrl.text ? 'Şifreler eşleşmiyor' : null,
+                      v != _passCtrl.text ? 'Passwords do not match' : null,
                 ),
                 const SizedBox(height: 28),
                 FilledButton(
@@ -465,7 +465,7 @@ class _BackButton extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              'Geri',
+              'Back',
               style: TextStyle(
                 color: palette.text,
                 fontWeight: FontWeight.w700,

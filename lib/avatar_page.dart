@@ -154,7 +154,7 @@ class _AvatarDbSaveButtonState extends State<_AvatarDbSaveButton> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Avatar kaydedildi.')));
+      ).showSnackBar(const SnackBar(content: Text('Avatar saved.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -168,7 +168,7 @@ class _AvatarDbSaveButtonState extends State<_AvatarDbSaveButton> {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: 'Avatarı kaydet',
+      tooltip: 'Save avatar',
       onPressed: _saving ? null : _save,
       icon: _saving
           ? const SizedBox(
@@ -207,37 +207,37 @@ class _AvatarTopTabsCustomizerState extends State<_AvatarTopTabsCustomizer> {
   static const _tabs = [
     _AvatarCustomizerTab(
       genderTab: true,
-      label: 'Cinsiyet',
+      label: 'Gender',
       icon: Icons.wc_rounded,
     ),
     _AvatarCustomizerTab(
       id: PropertyCategoryIds.SkinColor,
-      label: 'Cilt Rengi',
+      label: 'Skin Color',
       icon: Icons.face_retouching_natural_outlined,
     ),
     _AvatarCustomizerTab(
       id: PropertyCategoryIds.HairStyle,
-      label: 'Saç',
+      label: 'Hair',
       icon: Icons.content_cut_rounded,
     ),
     _AvatarCustomizerTab(
       id: PropertyCategoryIds.HairColor,
-      label: 'Saç Rengi',
+      label: 'Hair Color',
       icon: Icons.palette_outlined,
     ),
     _AvatarCustomizerTab(
       expressionTab: true,
-      label: 'İfade',
+      label: 'Expression',
       icon: Icons.face_6_outlined,
     ),
     _AvatarCustomizerTab(
       id: PropertyCategoryIds.FacialHairType,
-      label: 'Sakal',
+      label: 'Beard',
       icon: Icons.mood_outlined,
     ),
     _AvatarCustomizerTab(
       id: PropertyCategoryIds.OutfitType,
-      label: 'Kıyafet',
+      label: 'Outfit',
       icon: Icons.checkroom_outlined,
     ),
   ];
@@ -476,21 +476,21 @@ class _GenderSelector extends StatelessWidget {
     final options = [
       (
         _AvatarGender.feminine,
-        'Kadın',
+        'Feminine',
         Icons.female_rounded,
-        'Uzun saç, sakalsız görünüm',
+        'Long hair, no facial hair',
       ),
       (
         _AvatarGender.masculine,
         'Erkek',
         Icons.male_rounded,
-        'Kısa saç ve sakal görünümü',
+        'Short hair and beard',
       ),
       (
         _AvatarGender.neutral,
-        'Nötr',
+        'Neutral',
         Icons.person_outline_rounded,
-        'Sade, sakalsız görünüm',
+        'Clean, no facial hair',
       ),
     ];
 
@@ -576,19 +576,19 @@ class _ExpressionSelector extends StatelessWidget {
         AvatarExpression.normal,
         'Normal',
         Icons.sentiment_satisfied_alt_rounded,
-        'Varsayılan yüz ifadesi',
+        'Default expression',
       ),
       (
         AvatarExpression.sleepy,
-        'Uykulu',
+        'Sleepy',
         Icons.bedtime_rounded,
-        'Kapalı gözlü, yorgun görünüm',
+        'Closed eyes, tired look',
       ),
       (
         AvatarExpression.stressed,
-        'Stresli',
+        'Stressed',
         Icons.sentiment_very_dissatisfied_rounded,
-        'Gergin kaş ve ağız ifadesi',
+        'Tense eyebrows and mouth',
       ),
     ];
 

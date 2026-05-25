@@ -26,7 +26,7 @@ class ScheduledBlock {
     id: j['id'] as int,
     lessonId: j['lessonId'] as int,
     lessonName:
-        (j['lesson'] as Map<String, dynamic>?)?['name']?.toString() ?? 'Ders',
+        (j['lesson'] as Map<String, dynamic>?)?['name']?.toString() ?? 'Lesson',
     date: DateTime.parse(
       j['date'] as String,
     ).toLocal().toIso8601String().substring(0, 10),
@@ -60,7 +60,7 @@ class WeeklyPlan {
         ..sort((a, b) => a.startTime.compareTo(b.startTime));
 }
 
-/// Günlük checklist'teki tek bir ders kalemi.
+/// Günlük checklist'teki tek bir lesson kalemi.
 class ChecklistItem {
   final int id;
   final int lessonId;

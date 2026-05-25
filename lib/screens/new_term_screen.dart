@@ -14,6 +14,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
   List<Map<String, dynamic>> _lessons = [];
   bool _loading = true;
   bool _termStarted = false;
+  bool _showAddForm = false;
 
   @override
   void initState() {
@@ -54,16 +55,11 @@ class _NewTermScreenState extends State<NewTermScreen> {
     }
   }
 
-  void _openAddSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: kSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _AddLessonSheet(onSaved: _loadLessons),
-    );
+  void _openAddForm() => setState(() => _showAddForm = true);
+
+  Future<void> _handleLessonSaved() async {
+    setState(() => _showAddForm = false);
+    await _loadLessons();
   }
 
   void _done() => Navigator.of(context).pop();
@@ -80,7 +76,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
           onPressed: _done,
         ),
         title: Text(
-          'Yeni Dönem',
+          'New Term',
           style: TextStyle(
             color: kText1,
             fontSize: 18,
@@ -102,7 +98,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'YENİ DÖNEM',
+                        'NEW TERM',
                         style: TextStyle(
                           color: kText2,
                           fontSize: 11,
@@ -112,7 +108,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Derslerini Ekle',
+                        'Add Lessons',
                         style: TextStyle(
                           color: kText1,
                           fontSize: 26,
@@ -121,7 +117,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Bu dönemde alacağın dersleri tek tek ekle.',
+                        'Add the lessons you will take this term one by one.',
                         style: TextStyle(color: kText2, fontSize: 14),
                       ),
                     ],
@@ -130,13 +126,34 @@ class _NewTermScreenState extends State<NewTermScreen> {
                 Expanded(
                   child: _loading
                       ? Center(child: CircularProgressIndicator(color: kAccent))
-                      : _lessons.isEmpty
-                      ? _buildEmpty()
-                      : ListView.builder(
+                      : ListView(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                          itemCount: _lessons.length,
-                          itemBuilder: (ctx, i) =>
-                              _LessonRow(lesson: _lessons[i]),
+                          children: [
+                            if (_showAddForm)
+                              _AddLessonForm(
+                                onSaved: _handleLessonSaved,
+                                onCancel: () =>
+                                    setState(() => _showAddForm = false),
+                              )
+                            else if (_lessons.isEmpty)
+                              _buildEmpty(),
+                            if (_showAddForm && _lessons.isNotEmpty)
+                              const SizedBox(height: 18),
+                            if (_lessons.isNotEmpty) ...[
+                              Text(
+                                'Lessons',
+                                style: TextStyle(
+                                  color: kText2,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ..._lessons.map((lesson) {
+                                return _LessonRow(lesson: lesson);
+                              }),
+                            ],
+                          ],
                         ),
                 ),
               ],
@@ -146,7 +163,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
       ),
       floatingActionButton: _termStarted
           ? FloatingActionButton(
-              onPressed: _openAddSheet,
+              onPressed: _showAddForm ? null : _openAddForm,
               backgroundColor: kAccent,
               child: Icon(Icons.add, color: kBg),
             )
@@ -166,7 +183,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
                 ),
               ),
               child: Text(
-                _lessons.isEmpty ? 'Daha sonra ekle' : 'Tamamlandı',
+                _lessons.isEmpty ? 'Add later' : 'Completed',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -184,7 +201,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
           Icon(Icons.book_outlined, color: kText2, size: 52),
           const SizedBox(height: 14),
           Text(
-            'Henüz ders eklenmedi',
+            'No lessons added yet',
             style: TextStyle(
               color: kText1,
               fontSize: 18,
@@ -193,7 +210,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Sağ alttaki + butonuna bas.',
+            'Tap + to add your first lesson.',
             style: TextStyle(color: kText2, fontSize: 14),
           ),
         ],
@@ -202,7 +219,7 @@ class _NewTermScreenState extends State<NewTermScreen> {
   }
 }
 
-// ── Ders satırı ────────────────────────────────────────────────────────────────
+// ── Lesson satırı ────────────────────────────────────────────────────────────────
 
 class _LessonRow extends StatelessWidget {
   const _LessonRow({required this.lesson});
@@ -283,8 +300,8 @@ class _LessonRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     firstImportantDate == null
-                        ? '$importantCount önemli tarih'
-                        : '$importantCount önemli tarih · $firstImportantDate',
+                        ? '$importantCount important date'
+                        : '$importantCount important date · $firstImportantDate',
                     style: TextStyle(color: kText2, fontSize: 12),
                   ),
                 ],
@@ -329,7 +346,7 @@ class _LessonRow extends StatelessWidget {
   }
 }
 
-// ── Ders ekleme sayfası ────────────────────────────────────────────────────────
+// ── Add lessonme sayfası ────────────────────────────────────────────────────────
 
 enum _ImportantDateType { exam, deadline }
 
@@ -344,16 +361,17 @@ class _ImportantDateDraft {
   void dispose() => titleCtrl.dispose();
 }
 
-class _AddLessonSheet extends StatefulWidget {
-  const _AddLessonSheet({required this.onSaved});
+class _AddLessonForm extends StatefulWidget {
+  const _AddLessonForm({required this.onSaved, required this.onCancel});
 
-  final VoidCallback onSaved;
+  final Future<void> Function() onSaved;
+  final VoidCallback onCancel;
 
   @override
-  State<_AddLessonSheet> createState() => _AddLessonSheetState();
+  State<_AddLessonForm> createState() => _AddLessonFormState();
 }
 
-class _AddLessonSheetState extends State<_AddLessonSheet> {
+class _AddLessonFormState extends State<_AddLessonForm> {
   final _nameCtrl = TextEditingController();
   int _difficulty = 3;
   final List<_ImportantDateDraft> _importantDates = [
@@ -376,7 +394,7 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      _showError('Ders adi bos olamaz.');
+      _showError('Lesson name cannot be empty.');
       return;
     }
     setState(() => _saving = true);
@@ -396,8 +414,7 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
         }
       }
       if (!mounted) return;
-      Navigator.pop(context);
-      widget.onSaved();
+      await widget.onSaved();
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -424,6 +441,8 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
     });
   }
 
+  void _addDefaultImportantDate() => _addImportantDate(_ImportantDateType.exam);
+
   void _removeImportantDate(int index) {
     final removed = _importantDates.removeAt(index);
     removed.dispose();
@@ -432,186 +451,197 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: kBorder,
-                  borderRadius: BorderRadius.circular(2),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Add lesson',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Text(
-                  'Ders Ekle',
-                  style: TextStyle(
-                    color: kText1,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const Spacer(),
+              IconButton(
+                onPressed: _saving ? null : widget.onCancel,
+                icon: Icon(Icons.close_rounded, color: kText2, size: 18),
+                style: IconButton.styleFrom(
+                  backgroundColor: kBorder.withAlpha(80),
+                  minimumSize: const Size(34, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 32,
-                    height: 32,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _nameCtrl,
+            autofocus: true,
+            style: TextStyle(color: kText1),
+            decoration: InputDecoration(
+              labelText: 'Lesson name',
+              hintText: 'e.g. Linear Algebra',
+              filled: true,
+              fillColor: kBg.withAlpha(120),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: kBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: kBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: kAccent),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Difficulty', style: TextStyle(color: kText2, fontSize: 13)),
+          const SizedBox(height: 8),
+          Row(
+            children: List.generate(5, (i) {
+              final n = i + 1;
+              final selected = n == _difficulty;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _difficulty = n),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    height: 38,
+                    margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
                     decoration: BoxDecoration(
-                      color: kBorder,
-                      shape: BoxShape.circle,
+                      color: selected
+                          ? kAccent.withAlpha(34)
+                          : kBg.withAlpha(120),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected ? kAccent : kBorder,
+                        width: 0.8,
+                      ),
                     ),
-                    child: Icon(Icons.close, size: 16, color: kText2),
+                    child: Center(
+                      child: Text(
+                        '$n',
+                        style: TextStyle(
+                          color: selected ? kAccent : kText2,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text('Ders adı', style: TextStyle(color: kText2, fontSize: 13)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nameCtrl,
-              autofocus: true,
-              style: TextStyle(color: kText1),
-              decoration: InputDecoration(
-                hintText: 'örn. Lineer Cebir',
-                hintStyle: TextStyle(color: kText2),
-                filled: true,
-                fillColor: kBorder,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+              );
+            }),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Text(
+                'Important dates',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _saving ? null : _addDefaultImportantDate,
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Add date'),
+                style: TextButton.styleFrom(
+                  foregroundColor: kAccent,
+                  visualDensity: VisualDensity.compact,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Zorluk · 1 kolay – 5 çok zor',
-              style: TextStyle(color: kText2, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: List.generate(5, (i) {
-                final n = i + 1;
-                final selected = n == _difficulty;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _difficulty = n),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      height: 46,
-                      margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
-                      decoration: BoxDecoration(
-                        color: selected ? kAccent.withAlpha(46) : kBorder,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected ? kAccent : Colors.transparent,
-                          width: 0.5,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$n',
-                          style: TextStyle(
-                            color: selected ? kAccent : kText2,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Önemli tarihler',
-              style: TextStyle(color: kText2, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _DateAddButton(
-                  icon: Icons.school_outlined,
-                  label: 'Sınav',
-                  onTap: () => _addImportantDate(_ImportantDateType.exam),
-                ),
-                const SizedBox(width: 8),
-                _DateAddButton(
-                  icon: Icons.assignment_outlined,
-                  label: 'Deadline',
-                  onTap: () => _addImportantDate(_ImportantDateType.deadline),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            if (_importantDates.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: kBorder.withAlpha(80),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Sınav, ödev teslimi veya proje tarihi ekleyebilirsin.',
-                  style: TextStyle(color: kText2, fontSize: 13),
-                ),
-              )
-            else
-              ...List.generate(_importantDates.length, (index) {
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: index == _importantDates.length - 1 ? 0 : 8,
-                  ),
-                  child: _ImportantDateRow(
-                    item: _importantDates[index],
-                    onChanged: () => setState(() {}),
-                    onPickDate: () => _pickDate(index),
-                    onRemove: () => _removeImportantDate(index),
-                  ),
-                );
-              }),
-            const SizedBox(height: 24),
-            SizedBox(
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (_importantDates.isEmpty)
+            Container(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: kAccent,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Kaydet',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kBg.withAlpha(90),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kBorder),
               ),
-            ),
-          ],
-        ),
+              child: Text(
+                'No important dates yet.',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
+            )
+          else
+            ...List.generate(_importantDates.length, (index) {
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: index == _importantDates.length - 1 ? 0 : 8,
+                ),
+                child: _ImportantDateRow(
+                  item: _importantDates[index],
+                  onChanged: () => setState(() {}),
+                  onPickDate: () => _pickDate(index),
+                  onRemove: () => _removeImportantDate(index),
+                ),
+              );
+            }),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : widget.onCancel,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kText2,
+                    side: BorderSide(color: kBorder),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Save',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -632,37 +662,6 @@ class _AddLessonSheetState extends State<_AddLessonSheet> {
     if (d != null) {
       setState(() => _importantDates[index].date = d);
     }
-  }
-}
-
-class _DateAddButton extends StatelessWidget {
-  const _DateAddButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: kAccent,
-          side: BorderSide(color: kBorder),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -700,7 +699,7 @@ class _ImportantDateRow extends StatelessWidget {
                     ButtonSegment(
                       value: _ImportantDateType.exam,
                       icon: Icon(Icons.school_outlined, size: 16),
-                      label: Text('Sınav'),
+                      label: Text('Exam'),
                     ),
                     ButtonSegment(
                       value: _ImportantDateType.deadline,
@@ -777,7 +776,7 @@ class _ImportantDateRow extends StatelessWidget {
                     controller: item.titleCtrl,
                     style: TextStyle(color: kText1, fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: 'örn. Proje teslimi',
+                      hintText: 'e.g. Project deadline',
                       hintStyle: TextStyle(color: kText2, fontSize: 12),
                       filled: true,
                       fillColor: kSurface,

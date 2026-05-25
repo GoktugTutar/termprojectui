@@ -59,9 +59,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   /// API'den dönen ham checklist verisini [DailyChecklist] modeline dönüştürür.
-  /// Ders adlarını haftalık plan bloklarından tamamlar.
+  /// Lesson adlarını haftalık plan bloklarından tamamlar.
   DailyChecklist _parseChecklist(Map<String, dynamic> data, WeeklyPlan? plan) {
-    // Ders adı haritası: lessonId → lessonName
+    // Lesson adı haritası: lessonId → lessonName
     final lessonNames = <int, String>{};
     if (plan != null) {
       for (final b in plan.blocks) {
@@ -76,7 +76,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return ChecklistItem(
         id: (r['id'] as num).toInt(),
         lessonId: lessonId,
-        lessonName: lessonNames[lessonId] ?? 'Ders',
+        lessonName: lessonNames[lessonId] ?? 'Lesson',
         plannedBlocks: (r['plannedBlocks'] as num).toInt(),
         completedBlocks: (r['completedBlocks'] as num? ?? 0).toInt(),
         delayed: r['delayed'] as bool? ?? false,
@@ -97,14 +97,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   /// Checklist gönderme dialogunu açar.
   Future<void> _openSubmitChecklist() async {
     if (_plan == null) {
-      _showErr('Once haftalik plan olusturun.');
+      _showErr('Create a weekly plan first.');
       return;
     }
 
     final today = _todayString();
     final todayBlocks = _plan!.blocksForDate(today);
     if (todayBlocks.isEmpty) {
-      _showErr('Bugun icin planlanmis ders blogu yok.');
+      _showErr('There is no planned lesson block for today.');
       return;
     }
 
@@ -135,7 +135,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       delayedMap.putIfAbsent(b.lessonId, () => false);
     }
 
-    // Dersleri tekil listele (aynı ders birden fazla blokta olabilir)
+    // Lessonleri tekil listele (aynı lesson birden fazla blokta olabilir)
     final uniqueBlocks = <int, ScheduledBlock>{};
     for (final b in todayBlocks) {
       uniqueBlocks.putIfAbsent(b.lessonId, () => b);
@@ -148,7 +148,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: Text('Gunluk Kontrol Listesi'),
+          title: Text('Daily Checklist'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -157,7 +157,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 // Stres seviyesi
                 Row(
                   children: [
-                    Text('Stres: '),
+                    Text('Stress: '),
                     Expanded(
                       child: Slider(
                         value: stressLevel.toDouble(),
@@ -171,10 +171,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     Text('$stressLevel/5'),
                   ],
                 ),
-                // Yorgunluk seviyesi
+                // Fatigue seviyesi
                 Row(
                   children: [
-                    Text('Yorgunluk: '),
+                    Text('Fatigue: '),
                     Expanded(
                       child: Slider(
                         value: fatigueLevel.toDouble(),
@@ -189,9 +189,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ],
                 ),
                 Divider(),
-                // Her ders için tamamlanan blok sayısı
+                // Her lesson için tamamlanan blok sayısı
                 ...uniqueBlocks.values.map((block) {
-                  // Bu derse ait toplam planlanan blok
+                  // Bu lessone ait toplam planlanan blok
                   final totalPlanned = todayBlocks
                       .where((b) => b.lessonId == block.lessonId)
                       .fold(0, (sum, b) => sum + b.blockCount);
@@ -210,12 +210,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          'Planlanan: $totalPlanned blok (${totalPlanned * 30} dk)',
+                          'Planned: $totalPlanned blocks (${totalPlanned * 30} min)',
                           style: TextStyle(fontSize: 12),
                         ),
                         Row(
                           children: [
-                            Text('Tamamlanan blok: '),
+                            Text('Completed blocks: '),
                             Expanded(
                               child: Slider(
                                 value: completed.toDouble(),
@@ -254,14 +254,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Iptal'),
+              child: Text('Cancel'),
             ),
             FilledButton(
               onPressed: () async {
                 Navigator.pop(ctx);
                 setState(() => _loading = true);
                 try {
-                  // Her ders için item oluştur
+                  // Her lesson için item oluştur
                   final items = uniqueBlocks.values.map((block) {
                     final totalPlanned = todayBlocks
                         .where((b) => b.lessonId == block.lessonId)
@@ -282,7 +282,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   );
                   await _loadData();
                   if (!mounted) return;
-                  _showMsg('Kontrol listesi kaydedildi!');
+                  _showMsg('Checklist saved!');
                 } catch (e) {
                   if (!mounted) return;
                   _showErr(e.toString().replaceAll('Exception: ', ''));
@@ -290,7 +290,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 if (!mounted) return;
                 setState(() => _loading = false);
               },
-              child: Text('Kaydet'),
+              child: Text('Save'),
             ),
           ],
         ),
@@ -315,7 +315,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           pinned: true,
           backgroundColor: _appBarBgColor,
           flexibleSpace: FlexibleSpaceBar(
-            title: Text('Program', style: TextStyle(color: cs.onPrimary)),
+            title: Text('Schedule', style: TextStyle(color: cs.onPrimary)),
             background: Container(color: _appBarBgColor),
           ),
         ),
@@ -325,13 +325,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
         // Bugünün checklist özeti
         if (_todayChecklist != null) ...[
-          _sectionHeader('Bugunku Kontrol Listesi — $today'),
+          _sectionHeader("Today's Checklist - $today"),
           SliverToBoxAdapter(child: _buildChecklistSummary(cs)),
         ],
 
         // Haftalık plan
         if (_plan != null) ...[
-          _sectionHeader('Haftalik Plan — ${_plan!.weekStart}'),
+          _sectionHeader('Weekly Plan — ${_plan!.weekStart}'),
           SliverToBoxAdapter(child: _buildWeeklyPlan(cs, today)),
         ],
 
@@ -350,14 +350,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ),
                   SizedBox(height: 16),
                   Text(
-                    'Henuz plan yok',
+                    'No schedule yet',
                     style: TextStyle(fontSize: 18, color: cs.outline),
                   ),
                   SizedBox(height: 8),
                   Text(
                     wideLayout
-                        ? 'Ustteki hizli islemlerden plan olusturabilirsin'
-                        : 'Asagidaki butona basarak plan olusturun',
+                        ? 'You can create a schedule from the quick actions above'
+                        : 'Create a schedule using the button below',
                     style: TextStyle(color: cs.outline),
                   ),
                 ],
@@ -417,7 +417,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     ),
                     SizedBox(height: 6),
                     Text(
-                      'Gunluk kontrol listesi kaydet.',
+                      'Save daily checklist.',
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   ],
@@ -426,7 +426,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               OutlinedButton.icon(
                 onPressed: _openSubmitChecklist,
                 icon: Icon(Icons.checklist_rounded),
-                label: Text('Kontrol Listesi Kaydet'),
+                label: Text('Save Checklist'),
               ),
             ],
           ),
@@ -474,7 +474,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   Icon(Icons.mood_outlined, color: cs.primary),
                   SizedBox(width: 8),
                   Text(
-                    'Stres: ${cl.stressLevel}/5  •  Yorgunluk: ${cl.fatigueLevel}/5',
+                    'Stress: ${cl.stressLevel}/5  •  Fatigue: ${cl.fatigueLevel}/5',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -498,7 +498,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ),
                   title: Text(item.lessonName),
                   subtitle: Text(
-                    '${item.completedBlocks}/${item.plannedBlocks} blok tamamlandi'
+                    '${item.completedBlocks}/${item.plannedBlocks} blocks completed'
                     '${item.delayed ? ' • Ertelendi' : ''}',
                   ),
                 ),
@@ -555,16 +555,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
               ),
               subtitle: blocks.isEmpty
-                  ? Text('Ders yok')
+                  ? Text('No lessons')
                   : Text(
-                      '${blocks.length} blok  •  '
-                      '${blocks.fold(0, (sum, b) => sum + b.blockCount) * 30} dk',
+                      '${blocks.length} blocks  •  '
+                      '${blocks.fold(0, (sum, b) => sum + b.blockCount) * 30} min',
                     ),
               children: blocks.isEmpty
                   ? [
                       Padding(
                         padding: EdgeInsets.all(16),
-                        child: Text('Bu gun icin planlanmis ders yok.'),
+                        child: Text('No planned lessons for this day.'),
                       ),
                     ]
                   : blocks.map((b) => _blockTile(b, cs)).toList(),
@@ -597,18 +597,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         block.isReview ? '${block.lessonName} (Tekrar)' : block.lessonName,
         style: TextStyle(fontWeight: FontWeight.w600),
       ),
-      subtitle: Text('${block.startTime} – ${block.endTime}  •  $minutes dk'),
+      subtitle: Text('${block.startTime} – ${block.endTime}  •  $minutes min'),
       trailing: block.completed
           ? Icon(Icons.check, color: Colors.green, size: 18)
           : null,
     );
   }
 
-  /// Tarih stringinden kısa gün adı üretir (orn: "Pzt").
+  /// Tarih stringinden kısa gün adı üretir (orn: "Mon").
   String _shortDay(String date) {
     try {
       final dt = DateTime.parse(date);
-      const labels = ['Pzt', 'Sal', 'Car', 'Per', 'Cum', 'Cmt', 'Paz'];
+      const labels = ['Mon', 'Tue', 'Car', 'Thu', 'Fri', 'Sat', 'Sun'];
       return labels[(dt.weekday - 1) % 7];
     } catch (_) {
       return '?';

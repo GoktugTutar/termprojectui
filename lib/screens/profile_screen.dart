@@ -12,13 +12,13 @@ const _kDanger = Color(0xFFFF5C7A);
 const _kWarning = Color(0xFFF2B14A);
 
 const _dayFullLabels = [
-  'Pazartesi',
-  'Salı',
-  'Çarşamba',
-  'Perşembe',
-  'Cuma',
-  'Cumartesi',
-  'Pazar',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
 ];
 
 String? _busyDateKey(dynamic value) {
@@ -202,20 +202,20 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: kSurface,
-        title: Text('Dönemi Bitir', style: TextStyle(color: kText1)),
+        title: Text('End Term', style: TextStyle(color: kText1)),
         content: Text(
-          'Aktif dönem sonlandırılacak. Dersler ve veriler silinmez, yalnızca dönem kapatılır.',
+          'The active term will be ended. Lessons and data will not be deleted; only the term will be closed.',
           style: TextStyle(color: kText2),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('İptal', style: TextStyle(color: kText2)),
+            child: Text('Cancel', style: TextStyle(color: kText2)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: _kDanger),
-            child: Text('Bitir'),
+            child: Text('End'),
           ),
         ],
       ),
@@ -225,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       await ApiClient.endTerm();
       if (!mounted) return;
-      _snack('Dönem sonlandırıldı.');
+      _snack('Term ended.');
     } catch (e) {
       if (!mounted) return;
       _snack(e.toString().replaceAll('Exception: ', ''), error: true);
@@ -367,7 +367,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                   Row(
                     children: [
-                      Expanded(child: _SectionLabel('Dersler')),
+                      Expanded(child: _SectionLabel('Lessons')),
                       _MiniAddButton(onTap: _openAddLesson),
                     ],
                   ),
@@ -479,15 +479,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                   ),
                   SizedBox(height: 24),
-                  // Checklist geçmişi ısı haritası
+                  // Checklist history ısı haritası
                   if (_isTestMode && _checklistHistory.isNotEmpty) ...[
-                    _SectionLabel('Checklist geçmişi'),
+                    _SectionLabel('Checklist history'),
                     SizedBox(height: 10),
                     _ChecklistHeatmap(history: _checklistHistory),
                     SizedBox(height: 24),
                   ],
-                  // Dönem yönetimi
-                  _SectionLabel('Dönem'),
+                  // Term yönetimi
+                  _SectionLabel('Term'),
                   SizedBox(height: 8),
                   Row(
                     children: [
@@ -500,7 +500,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             color: _kDanger,
                           ),
                           label: Text(
-                            'Dönemi Bitir',
+                            'End Term',
                             style: TextStyle(color: _kDanger),
                           ),
                           style: OutlinedButton.styleFrom(
@@ -517,7 +517,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: FilledButton.icon(
                           onPressed: _saving ? null : _startNewTerm,
                           icon: Icon(Icons.add_circle_outline, size: 16),
-                          label: Text('Yeni Dönem'),
+                          label: Text('New Term'),
                           style: FilledButton.styleFrom(
                             backgroundColor: kAccent,
                             padding: EdgeInsets.symmetric(vertical: 13),
@@ -635,7 +635,7 @@ class _MiniAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Ders ekle',
+      message: 'Add lesson',
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
@@ -810,7 +810,7 @@ class _ProfileBusySlotsPanel extends StatelessWidget {
       child: slots.isEmpty
           ? Center(
               child: Text(
-                'Henüz busy time eklenmemiş.',
+                'No busy time added yet.',
                 style: TextStyle(color: kText2, fontSize: 13),
               ),
             )
@@ -855,7 +855,7 @@ class _ProfileBusySlotRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final day = _dayFullLabels[(slot.dayOfWeek - 1).clamp(0, 6)];
-    final scope = slot.isRoutine ? 'Her hafta' : 'Bu hafta';
+    final scope = slot.isRoutine ? 'Her hafta' : 'This week';
     final when = slot.isRoutine ? day : '${slot.date ?? day} · $day';
 
     return Container(
@@ -1015,7 +1015,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
           final message = coach['message']?.toString().trim() ?? '';
           aiComment = message.isNotEmpty
               ? message
-              : 'Bu sebebi kaydettim. Sınav öncesi çalışma ve stres verilerine göre sonraki plan yorumlarında bunu dikkate alacağım.';
+              : "I saved this reason. I'll take it into account in future plan insights using your pre-exam study and stress data.";
           aiLoading = false;
         });
       } catch (e) {
@@ -1071,7 +1071,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                           fontWeight: FontWeight.w800,
                         ),
                         decoration: InputDecoration(
-                          labelText: 'Aldığın not',
+                          labelText: 'Your grade',
                           hintText: '92',
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(
@@ -1085,7 +1085,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                         children: [
                           Expanded(
                             child: _GradeMoodButton(
-                              label: 'Evet',
+                              label: 'Yes',
                               icon: Icons.sentiment_satisfied_alt_rounded,
                               selected: happy == true,
                               onTap: () => setDialogState(() {
@@ -1099,7 +1099,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                           SizedBox(width: 8),
                           Expanded(
                             child: _GradeMoodButton(
-                              label: 'Hayır',
+                              label: 'No',
                               icon: Icons.sentiment_dissatisfied_rounded,
                               selected: happy == false,
                               onTap: () => setDialogState(() => happy = false),
@@ -1110,7 +1110,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                       if (happy == false) ...[
                         SizedBox(height: 14),
                         Text(
-                          'Sence neden kötü geçti?',
+                          'Why do you think it went poorly?',
                           style: TextStyle(
                             color: kText1,
                             fontSize: 13,
@@ -1192,7 +1192,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          child: Text('Kaydet'),
+                          child: Text('Save'),
                         ),
                       ),
                     ],
@@ -1291,7 +1291,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
       child: widget.lessons.isEmpty
           ? Center(
               child: Text(
-                'Henüz ders eklenmemiş.',
+                'No lessons added yet.',
                 style: TextStyle(color: kText2, fontSize: 13),
               ),
             )
@@ -1345,22 +1345,28 @@ class _ExamFailReasonOption {
 }
 
 const _examFailReasonOptions = [
-  _ExamFailReasonOption('insufficient_preparation', 'Yeterince hazırlanamadım'),
   _ExamFailReasonOption(
-    'poor_understanding',
-    'Çalıştım ama konuyu tam anlayamadım',
+    'insufficient_preparation',
+    'I could not prepare enough',
+  ),
+  _ExamFailReasonOption(
+    'poor_unlessontanding',
+    'I studied, but I did not fully understand the topic',
   ),
   _ExamFailReasonOption(
     'exam_anxiety',
-    'Konuyu biliyordum ama sınav kaygısı yaşadım',
+    'I knew the material, but I felt exam anxiety',
   ),
   _ExamFailReasonOption(
     'time_management_in_exam',
-    'Sınavda zamanı yetiştiremedim',
+    'I ran out of time during the exam',
   ),
-  _ExamFailReasonOption('poor_sleep_before', 'Sınavdan önce kötü uyudum'),
-  _ExamFailReasonOption('overwhelmed_by_workload', 'Genel iş yükü fazla geldi'),
-  _ExamFailReasonOption('lack_of_focus', 'Çalıştım ama odaklanamadım'),
+  _ExamFailReasonOption('poor_sleep_before', 'I slept poorly before the exam'),
+  _ExamFailReasonOption(
+    'overwhelmed_by_workload',
+    'The overall workload felt too heavy',
+  ),
+  _ExamFailReasonOption('lack_of_focus', 'I studied, but I could not focus'),
 ];
 
 class _FailReasonButton extends StatelessWidget {
@@ -1586,7 +1592,7 @@ class _GradeBadge extends StatelessWidget {
     final hasGrade = grade != null && !grade!.isEmpty;
     final tone = grade?.happy == false ? _kWarning : kAccent;
     return Tooltip(
-      message: 'Not ve memnuniyet bilgisini gir',
+      message: 'Enter grade and satisfaction',
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
@@ -1766,10 +1772,10 @@ class _BusyIconChoice {
 }
 
 const _busyIconChoices = [
-  _BusyIconChoice('energy', Icons.bolt_outlined, 'Enerji'),
-  _BusyIconChoice('work', Icons.work_outline_rounded, 'İş'),
+  _BusyIconChoice('energy', Icons.bolt_outlined, 'Energy'),
+  _BusyIconChoice('work', Icons.work_outline_rounded, 'Work'),
   _BusyIconChoice('commute', Icons.directions_bus_outlined, 'Yol'),
-  _BusyIconChoice('health', Icons.local_hospital_outlined, 'Sağlık'),
+  _BusyIconChoice('health', Icons.local_hospital_outlined, 'Health'),
   _BusyIconChoice('family', Icons.home_outlined, 'Ev'),
 ];
 
@@ -1843,7 +1849,7 @@ class _ProfileAddLessonSheetState extends State<_ProfileAddLessonSheet> {
             SizedBox(height: 18),
             _SheetTitle(
               icon: Icons.school_outlined,
-              title: 'Ders ekle',
+              title: 'Add lesson',
               onClose: _saving ? null : () => Navigator.pop(context, false),
             ),
             SizedBox(height: 18),
@@ -1852,8 +1858,8 @@ class _ProfileAddLessonSheetState extends State<_ProfileAddLessonSheet> {
               autofocus: true,
               enabled: !_saving,
               decoration: InputDecoration(
-                labelText: 'Ders adı',
-                hintText: 'Lineer Cebir',
+                labelText: 'Lesson name',
+                hintText: 'Linear Algebra',
               ),
             ),
             SizedBox(height: 16),
@@ -1911,7 +1917,7 @@ class _ProfileAddLessonSheetState extends State<_ProfileAddLessonSheet> {
               contentPadding: EdgeInsets.zero,
               activeThumbColor: kAccent,
               title: Text(
-                'Sınav tarihi ekle',
+                'Add exam date',
                 style: TextStyle(color: kText1, fontWeight: FontWeight.w700),
               ),
             ),
@@ -1944,7 +1950,7 @@ class _ProfileAddLessonSheetState extends State<_ProfileAddLessonSheet> {
                       ),
                     )
                   : Icon(Icons.check_rounded, size: 18),
-              label: Text(_saving ? 'Kaydediliyor...' : 'Kaydet'),
+              label: Text(_saving ? 'Saving...' : 'Save'),
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 padding: EdgeInsets.symmetric(vertical: 14),
@@ -1993,7 +1999,7 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
 
   Future<void> _save() async {
     if (_toMinutes(_endTime) <= _toMinutes(_startTime)) {
-      setState(() => _error = 'Bitiş saati başlangıçtan sonra olmalı.');
+      setState(() => _error = 'End time must be after start time.');
       return;
     }
 
@@ -2038,12 +2044,12 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
             SizedBox(height: 18),
             _SheetTitle(
               icon: Icons.repeat_rounded,
-              title: 'Rutin busy time ekle',
+              title: 'Add routine busy time',
               onClose: _saving ? null : () => Navigator.pop(context, false),
             ),
             SizedBox(height: 6),
             Text(
-              'Her hafta tekrar eder — planlamada tüm haftaları etkiler.',
+              'Repeats every week and affects planning for all weeks.',
               style: TextStyle(color: kText2, fontSize: 12),
             ),
             SizedBox(height: 16),
@@ -2059,7 +2065,7 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
               onChanged: _saving
                   ? null
                   : (value) => setState(() => _dayOfWeek = value ?? 1),
-              decoration: InputDecoration(labelText: 'Gün'),
+              decoration: InputDecoration(labelText: 'Day'),
             ),
             SizedBox(height: 12),
             Row(
@@ -2076,7 +2082,7 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
                     onChanged: _saving
                         ? null
                         : (value) => setState(() => _startTime = value!),
-                    decoration: InputDecoration(labelText: 'Başlangıç'),
+                    decoration: InputDecoration(labelText: 'Start'),
                   ),
                 ),
                 SizedBox(width: 10),
@@ -2092,7 +2098,7 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
                     onChanged: _saving
                         ? null
                         : (value) => setState(() => _endTime = value!),
-                    decoration: InputDecoration(labelText: 'Bitiş'),
+                    decoration: InputDecoration(labelText: 'End'),
                   ),
                 ),
               ],
@@ -2131,7 +2137,7 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
             ),
             SizedBox(height: 8),
             Text(
-              'İkon',
+              'Icon',
               style: TextStyle(
                 color: kText1,
                 fontSize: 13,
@@ -2192,7 +2198,7 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
                       ),
                     )
                   : Icon(Icons.check_rounded, size: 18),
-              label: Text(_saving ? 'Kaydediliyor...' : 'Kaydet'),
+              label: Text(_saving ? 'Saving...' : 'Save'),
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 padding: EdgeInsets.symmetric(vertical: 14),
@@ -2263,7 +2269,7 @@ class _SheetTitle extends StatelessWidget {
         ),
         IconButton(
           onPressed: onClose,
-          tooltip: 'Kapat',
+          tooltip: 'Close',
           icon: Icon(Icons.close_rounded, color: kText2, size: 20),
         ),
       ],
@@ -2424,29 +2430,29 @@ class _ChecklistHeatmap extends StatelessWidget {
 
   final List<Map<String, dynamic>> history;
 
-  static const _dayLabels = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  static const _dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   static const _dayNames = [
-    'Pazartesi',
-    'Salı',
-    'Çarşamba',
-    'Perşembe',
-    'Cuma',
-    'Cumartesi',
-    'Pazar',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
   static const _monthNames = [
-    'Ocak',
-    'Şubat',
-    'Mart',
-    'Nisan',
-    'Mayıs',
-    'Haziran',
-    'Temmuz',
-    'Ağustos',
-    'Eylül',
-    'Ekim',
-    'Kasım',
-    'Aralık',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   String _formatTodayLabel(String dateStr) {
@@ -2457,7 +2463,7 @@ class _ChecklistHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // history öğelerini haftalar halinde grupla (Pazartesi başlangıçlı)
+    // history öğelerini haftalar halinde grupla (Monday başlangıçlı)
     // İlk öğenin hangi gün olduğunu bul
     final weeks = <List<Map<String, dynamic>?>>[];
     if (history.isEmpty) return const SizedBox.shrink();
@@ -2466,7 +2472,7 @@ class _ChecklistHeatmap extends StatelessWidget {
     final todayDate = DateTime.tryParse(todayStr);
     final todayWeekdayIndex = todayDate == null ? -1 : todayDate.weekday - 1;
     final firstDate = DateTime.parse(history.first['date'] as String);
-    // Pazartesi = 1, önceki günleri null ile doldur
+    // Monday = 1, önceki günleri null ile doldur
     final leadingNulls = (firstDate.weekday - 1) % 7;
     final padded = <Map<String, dynamic>?>[
       ...List.filled(leadingNulls, null),
@@ -2507,7 +2513,7 @@ class _ChecklistHeatmap extends StatelessWidget {
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Bugün: ${_formatTodayLabel(todayStr)}',
+                  'Today: ${_formatTodayLabel(todayStr)}',
                   style: TextStyle(
                     color: kText1,
                     fontSize: 13,
@@ -2531,7 +2537,7 @@ class _ChecklistHeatmap extends StatelessWidget {
             }),
           ),
           SizedBox(height: 6),
-          // Haftalar
+          // Weeklar
           ...weeks.map((week) {
             return Padding(
               padding: EdgeInsets.only(bottom: 5),
@@ -2551,15 +2557,18 @@ class _ChecklistHeatmap extends StatelessWidget {
             children: [
               _LegendDot(color: const Color(0xFF34C759)),
               SizedBox(width: 4),
-              Text('Tamamlandı', style: TextStyle(color: kText2, fontSize: 11)),
+              Text('Completed', style: TextStyle(color: kText2, fontSize: 11)),
               SizedBox(width: 14),
               _LegendDot(color: const Color(0xFFFF5C7A)),
               SizedBox(width: 4),
-              Text('Girilmedi', style: TextStyle(color: kText2, fontSize: 11)),
+              Text(
+                'Not entered',
+                style: TextStyle(color: kText2, fontSize: 11),
+              ),
               SizedBox(width: 14),
               _LegendDot(color: kBorder),
               SizedBox(width: 4),
-              Text('Boş gün', style: TextStyle(color: kText2, fontSize: 11)),
+              Text('Empty day', style: TextStyle(color: kText2, fontSize: 11)),
             ],
           ),
         ],
@@ -2605,7 +2614,7 @@ class _DayHeader extends StatelessWidget {
           SizedBox(height: 3),
           if (isToday)
             Text(
-              'Bugün',
+              'Today',
               style: TextStyle(
                 color: kAccent,
                 fontSize: 9,
@@ -2751,7 +2760,7 @@ class _HeatmapCellText extends StatelessWidget {
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    'Bugün',
+                    'Today',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 8,

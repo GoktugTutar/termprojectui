@@ -71,27 +71,27 @@ BoxDecoration _quickActionDecoration({required bool secondary}) {
 
 String _formatDateLabel(String date) {
   const months = [
-    'Ocak',
-    'Şubat',
-    'Mart',
-    'Nisan',
-    'Mayıs',
-    'Haziran',
-    'Temmuz',
-    'Ağustos',
-    'Eylül',
-    'Ekim',
-    'Kasım',
-    'Aralık',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   const days = [
-    'Pazartesi',
-    'Salı',
-    'Çarşamba',
-    'Perşembe',
-    'Cuma',
-    'Cumartesi',
-    'Pazar',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
   final parts = date.split('-').map(int.parse).toList();
   final dt = DateTime(parts[0], parts[1], parts[2]);
@@ -137,12 +137,15 @@ class _TodayScreenState extends State<TodayScreen>
   bool _noticeDismissed = false;
   String _aiMessage = ''; // ← ekle
   bool _aiMessageDismissed = false; // ← ekle
+  String _dailyCoachMessage = '';
+  bool _dailyCoachMessageDismissed = false;
+  String _dailyCoachMessageDate = '';
   String _examResultMessage = '';
   bool _examResultMessageDismissed = false;
   String _quickNote = '';
-  String _displayName = 'Öğrenci';
+  String _displayName = 'Student';
   String _gpaLabel = 'GPA -';
-  String _termLabel = 'Dönem -';
+  String _termLabel = 'Term -';
   AvatarExpression _avatarExpression = AvatarExpression.normal;
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
@@ -208,6 +211,7 @@ class _TodayScreenState extends State<TodayScreen>
         ApiClient.getMe(),
         ApiClient.getLessons().catchError((_) => <dynamic>[]),
         ApiClient.getFeedbackMessages().catchError((_) => <String, dynamic>{}),
+        ApiClient.dailyCoach().catchError((_) => <String, dynamic>{}),
         ApiClient.getSleepStatus().catchError(
           (_) => <String, dynamic>{'asked': true},
         ),
@@ -216,7 +220,9 @@ class _TodayScreenState extends State<TodayScreen>
       final userData = Map<String, dynamic>.from(parallelInit[1] as Map);
       final raw = parallelInit[2] as List<dynamic>;
       final feedbackData = parallelInit[3] as Map<String, dynamic>;
+      final dailyCoachData = parallelInit[4] as Map<String, dynamic>;
       final aiMsg = feedbackData['aiMessage'] as String? ?? '';
+      final dailyCoachMsg = dailyCoachData['message']?.toString().trim() ?? '';
       final examResultMsg = feedbackData['examResultMessage'] as String? ?? '';
       final displayName = _displayNameFromUser(userData);
       final gpaLabel = _gpaLabelFromUser(userData);
@@ -225,7 +231,7 @@ class _TodayScreenState extends State<TodayScreen>
       final hasLessons = raw.isNotEmpty;
       final hasBusySlots = ((userData['busySlots'] as List?) ?? []).isNotEmpty;
       final canCreatePlan = hasLessons && hasBusySlots;
-      final sleepStatus = parallelInit[4] as Map<String, dynamic>;
+      final sleepStatus = parallelInit[5] as Map<String, dynamic>;
       _sleepAsked = sleepStatus['asked'] as bool? ?? false;
 
       final today = AppTime.now();
@@ -265,9 +271,9 @@ class _TodayScreenState extends State<TodayScreen>
       final checklistDisabled = status['checklistDisabled'] == true;
       final onboardingNotice = checklistDisabled
           ? (!canCreatePlan
-                ? 'Lütfen derslerini ve busy time’larını gir. Bunları ekleyince bu hafta için programın hazırlanacak.'
+                ? 'Please add your lessons and busy times. Once you add them, your schedule for this week will be prepared.'
                 : (status['message']?.toString() ??
-                      'İlk hafta adaptasyon haftası. Programın hazır; bu hafta checklist sunulmayacak.'))
+                      'The first week is an adaptation week. Your schedule is ready; checklists will start next week.'))
           : null;
 
       final missingDates = checklistDisabled
@@ -366,6 +372,12 @@ class _TodayScreenState extends State<TodayScreen>
           _aiMessage = aiMsg;
           _aiMessageDismissed = false;
         }
+        if (dailyCoachMsg != _dailyCoachMessage ||
+            _dailyCoachMessageDate != _today) {
+          _dailyCoachMessageDismissed = false;
+        }
+        _dailyCoachMessage = dailyCoachMsg;
+        _dailyCoachMessageDate = _today;
         if (examResultMsg != _examResultMessage) {
           _examResultMessageDismissed = false;
         }
@@ -387,7 +399,7 @@ class _TodayScreenState extends State<TodayScreen>
     final email = (userData['email'] as String? ?? '').trim();
     final prefix = email.split('@').first.trim();
     if (prefix.isNotEmpty) return prefix;
-    return 'Öğrenci';
+    return 'Student';
   }
 
   String _gpaLabelFromUser(Map<String, dynamic> userData) {
@@ -408,7 +420,7 @@ class _TodayScreenState extends State<TodayScreen>
 
   String _termLabelFromUser(Map<String, dynamic> userData) {
     final term = userData['academicTerm']?.toString().trim();
-    if (term == null || term.isEmpty) return 'Dönem -';
+    if (term == null || term.isEmpty) return 'Term -';
     return term;
   }
 
@@ -537,7 +549,7 @@ class _TodayScreenState extends State<TodayScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         icon: Icon(Icons.rate_review_outlined, color: kAccent, size: 30),
         title: Text(
-          'Haftanı değerlendir',
+          'Review your week',
           textAlign: TextAlign.center,
           style: TextStyle(color: kText1, fontWeight: FontWeight.w900),
         ),
@@ -545,12 +557,12 @@ class _TodayScreenState extends State<TodayScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Sonra', style: TextStyle(color: kText2)),
+            child: Text('Later', style: TextStyle(color: kText2)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: kAccent),
-            child: Text('Analize git'),
+            child: Text('Go to Analysis'),
           ),
         ],
       ),
@@ -603,7 +615,7 @@ class _TodayScreenState extends State<TodayScreen>
                   children: [
                     if (uniqueBlocks.isEmpty)
                       Text(
-                        'Planlanmış ders yok',
+                        'No planned lessons',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
@@ -632,7 +644,7 @@ class _TodayScreenState extends State<TodayScreen>
                               ),
                               SizedBox(height: 2),
                               Text(
-                                '$completed / $planned blok tamamlandı',
+                                '$completed / $planned blocks completed',
                                 style: TextStyle(
                                   color: Colors.white.withAlpha(210),
                                   fontSize: 12,
@@ -724,7 +736,7 @@ class _TodayScreenState extends State<TodayScreen>
                                 ),
                               )
                             : Icon(Icons.check_rounded, size: 18),
-                        label: Text(saving ? 'Kaydediliyor...' : 'Kaydet'),
+                        label: Text(saving ? 'Saving...' : 'Save'),
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
                           textStyle: TextStyle(fontWeight: FontWeight.w900),
@@ -935,7 +947,7 @@ class _TodayScreenState extends State<TodayScreen>
               (_aiMessage.isNotEmpty && !_aiMessageDismissed))
             Positioned(
               left: 18,
-              top: 14,
+              bottom: 92,
               child: SizedBox(
                 width: math.min(
                   760,
@@ -948,6 +960,7 @@ class _TodayScreenState extends State<TodayScreen>
                         !_examResultMessageDismissed) ...[
                       _AiMessageBanner(
                         message: _examResultMessage,
+                        kind: _AiMessageBannerKind.warning,
                         onClose: () =>
                             setState(() => _examResultMessageDismissed = true),
                       ),
@@ -957,10 +970,28 @@ class _TodayScreenState extends State<TodayScreen>
                     if (_aiMessage.isNotEmpty && !_aiMessageDismissed)
                       _AiMessageBanner(
                         message: _aiMessage,
+                        kind: _AiMessageBannerKind.warning,
                         onClose: () =>
                             setState(() => _aiMessageDismissed = true),
                       ),
                   ],
+                ),
+              ),
+            ),
+          if (_dailyCoachMessage.isNotEmpty && !_dailyCoachMessageDismissed)
+            Positioned(
+              right: 18,
+              top: 14,
+              child: SizedBox(
+                width: math.min(
+                  620,
+                  math.max(280, MediaQuery.sizeOf(context).width - 36),
+                ),
+                child: _AiMessageBanner(
+                  message: _dailyCoachMessage,
+                  kind: _AiMessageBannerKind.motivation,
+                  onClose: () =>
+                      setState(() => _dailyCoachMessageDismissed = true),
                 ),
               ),
             ),
@@ -1107,7 +1138,7 @@ class _StressQuestion extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Bugünkü stresin nasıldı?',
+          'How was your stress today?',
           style: TextStyle(
             color: Colors.white,
             fontSize: 13,
@@ -1156,20 +1187,29 @@ class _StressQuestion extends StatelessWidget {
   }
 }
 
+enum _AiMessageBannerKind { motivation, warning }
+
 class _AiMessageBanner extends StatelessWidget {
-  const _AiMessageBanner({required this.message, required this.onClose});
+  const _AiMessageBanner({
+    required this.message,
+    required this.onClose,
+    this.kind = _AiMessageBannerKind.motivation,
+  });
 
   final String message;
   final VoidCallback onClose;
+  final _AiMessageBannerKind kind;
 
   @override
   Widget build(BuildContext context) {
+    final isWarning = kind == _AiMessageBannerKind.warning;
+    final accent = isWarning ? kWarning : kAccent;
     return Container(
       padding: EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: BoxDecoration(
         color: kSurface.withAlpha(245),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kAccent.withAlpha(100)),
+        border: Border.all(color: accent.withAlpha(120)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(60),
@@ -1184,10 +1224,21 @@ class _AiMessageBanner extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: kAccent.withAlpha(34),
+              color: accent.withAlpha(34),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.auto_awesome_rounded, color: kAccent, size: 15),
+            child: isWarning
+                ? Text(
+                    '!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      height: 1.5,
+                    ),
+                  )
+                : Icon(Icons.auto_awesome_rounded, color: accent, size: 15),
           ),
           SizedBox(width: 10),
           Expanded(
@@ -1246,7 +1297,7 @@ class _TopRightNotice extends StatelessWidget {
               icon: Icon(Icons.close_rounded, color: kText2, size: 16),
               padding: EdgeInsets.zero,
               constraints: BoxConstraints.tightFor(width: 28, height: 28),
-              tooltip: 'Kapat',
+              tooltip: 'Close',
             ),
           ],
         ),
@@ -1270,14 +1321,14 @@ class _FirstWeekChecklistPanel extends StatelessWidget {
         children: [
           _PanelTitle(
             icon: Icons.event_available_rounded,
-            title: 'Bu hafta checklist yok',
+            title: 'No checklist this week',
           ),
           SizedBox(height: 18),
           _EmptyPanelState(
             icon: Icons.auto_awesome_rounded,
-            title: 'Adaptasyon haftası',
+            title: 'Adaptation week',
             subtitle:
-                'Bu ilk hafta programı tanıman için. Checklist gelecek haftadan itibaren açılacak.',
+                'This first week is for getting familiar with your schedule. Checklists will open starting next week.',
           ),
         ],
       ),
@@ -1498,8 +1549,8 @@ class _QuickToolsRow extends StatelessWidget {
         Expanded(
           child: _QuickToolCard(
             icon: Icons.edit_note_rounded,
-            title: 'Notlar',
-            subtitle: noteText.trim().isEmpty ? 'Not al' : 'Notu düzenle',
+            title: 'Notes',
+            subtitle: noteText.trim().isEmpty ? 'Add note' : 'Edit note',
             onTap: () {
               showDialog(
                 context: context,
@@ -1554,7 +1605,7 @@ class _TimerToolCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Saat',
+                      'Time',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
@@ -1565,7 +1616,7 @@ class _TimerToolCard extends StatelessWidget {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Süre tut',
+                      'Start timer',
                       style: TextStyle(
                         color: Colors.white.withAlpha(190),
                         fontSize: 12,
@@ -1756,10 +1807,10 @@ class _ChecklistPanel extends StatelessWidget {
               icon: submitted
                   ? Icons.task_alt_rounded
                   : Icons.event_available_outlined,
-              title: submitted ? 'Submitted' : 'Bugün boş',
+              title: submitted ? 'Submitted' : 'Today is empty',
               subtitle: submitted
-                  ? 'Bugünün checklisti kapatıldı.'
-                  : 'Bugünü kapatmak için checklist submit edebilirsin.',
+                  ? "Today's checklist has been closed."
+                  : 'You can submit the checklist to close today.',
             )
           else
             ...List.generate(blocks.length, (i) {
@@ -1959,7 +2010,7 @@ class _MissingChecklistTabsPanelState
                           ),
                           SizedBox(width: 6),
                           Text(
-                            isToday ? 'Bugün' : _formatDateLabel(date),
+                            isToday ? 'Today' : _formatDateLabel(date),
                             style: TextStyle(
                               color: selected ? kAccent : kText2,
                               fontSize: 12,
@@ -1978,22 +2029,22 @@ class _MissingChecklistTabsPanelState
           _PanelTitle(
             icon: Icons.checklist_rounded,
             title: isTodayTab
-                ? 'Bugün kilitli'
+                ? 'Today kilitli'
                 : '${_formatDateLabel(_activeDate)} checklist',
           ),
           SizedBox(height: 8),
           Text(
             isTodayTab
-                ? 'Önce geçmiş günlerin checklistlerini doldurman gerekiyor.'
-                : 'Bu günü kapatınca sıradaki eksik gün açılır.',
+                ? 'You need to fill in the previous missing checklists first.'
+                : 'When you close this day, the next missing day will unlock.',
             style: TextStyle(color: kText2, fontSize: 12),
           ),
           Divider(height: 30, color: kBorder),
           if (blocks.isEmpty)
             _EmptyPanelState(
               icon: Icons.event_available_outlined,
-              title: 'Bu gün boş',
-              subtitle: 'Bu tarih için planlanmış çalışma bloğu yok.',
+              title: 'This day is empty',
+              subtitle: 'There are no planned study blocks for this date.',
             )
           else
             ...List.generate(uniqueBlocks.length, (i) {
@@ -2028,7 +2079,7 @@ class _MissingChecklistTabsPanelState
                       ),
                     )
                   : Icon(Icons.check_rounded, size: 18),
-              label: Text(_saving ? 'Kaydediliyor...' : 'Bu günü kaydet'),
+              label: Text(_saving ? 'Saving...' : 'Save this day'),
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 padding: EdgeInsets.symmetric(vertical: 13),
@@ -2333,7 +2384,7 @@ class _TimerDialogState extends State<_TimerDialog> {
               children: [
                 Expanded(
                   child: _TimerModeButton(
-                    label: 'Kronometre',
+                    label: 'Stopwatch',
                     icon: Icons.timer_outlined,
                     selected: _stopwatchMode,
                     onTap: () => setState(() => _stopwatchMode = true),
@@ -2342,7 +2393,7 @@ class _TimerDialogState extends State<_TimerDialog> {
                 SizedBox(width: 10),
                 Expanded(
                   child: _TimerModeButton(
-                    label: 'Saat',
+                    label: 'Time',
                     icon: Icons.schedule_rounded,
                     selected: !_stopwatchMode,
                     onTap: () => setState(() => _stopwatchMode = false),
@@ -2387,7 +2438,7 @@ class _TimerDialogState extends State<_TimerDialog> {
                             : Icons.play_arrow_rounded,
                         size: 20,
                       ),
-                      label: Text(_stopwatch.isRunning ? 'Duraklat' : 'Başlat'),
+                      label: Text(_stopwatch.isRunning ? 'Pause' : 'Start'),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white,
                         textStyle: TextStyle(fontWeight: FontWeight.w800),
@@ -2399,7 +2450,7 @@ class _TimerDialogState extends State<_TimerDialog> {
                     child: TextButton.icon(
                       onPressed: _reset,
                       icon: Icon(Icons.restart_alt_rounded, size: 18),
-                      label: Text('Sıfırla'),
+                      label: Text('Reset'),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white,
                         textStyle: TextStyle(fontWeight: FontWeight.w800),
@@ -2596,7 +2647,7 @@ class _NotesDialogState extends State<_NotesDialog> {
                         fontWeight: FontWeight.w500,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Bugün için notlarını yaz...',
+                        hintText: 'Write your notes for today...',
                         hintStyle: TextStyle(
                           color: Color(0xFF6B7568).withAlpha(150),
                         ),
@@ -2614,7 +2665,7 @@ class _NotesDialogState extends State<_NotesDialog> {
                   child: FilledButton.icon(
                     onPressed: _save,
                     icon: Icon(Icons.check_rounded, size: 18),
-                    label: Text('Kaydet'),
+                    label: Text('Save'),
                     style: FilledButton.styleFrom(
                       backgroundColor: Color(0xFF0B5A4D),
                       foregroundColor: Colors.white,
@@ -2840,7 +2891,7 @@ class _ComingUpCard extends StatelessWidget {
               child: _EmptyPanelState(
                 icon: Icons.event_available_outlined,
                 title: 'No upcoming events',
-                subtitle: 'Yakındaki deadline veya etkinlik görünmüyor.',
+                subtitle: 'No nearby deadlines or events.',
               ),
             ),
           ...events.map((d) {
@@ -2952,7 +3003,7 @@ class _SleepCard extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Dün iyi uyudun mu?',
+              'Did you sleep well last night?',
               style: TextStyle(
                 color: kText1,
                 fontSize: 14,
@@ -2962,13 +3013,13 @@ class _SleepCard extends StatelessWidget {
           ),
           SizedBox(width: 8),
           _SleepButton(
-            label: 'Evet',
+            label: 'Yes',
             positive: true,
             onTap: () => onAnswer(true),
           ),
           SizedBox(width: 8),
           _SleepButton(
-            label: 'Hayır',
+            label: 'No',
             positive: false,
             onTap: () => onAnswer(false),
           ),

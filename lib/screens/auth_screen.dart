@@ -69,8 +69,10 @@ class _AuthScreenState extends State<AuthScreen> {
         pageBuilder: (context, animation, secondaryAnimation) =>
             const RegisterScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final tween = Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
-              .chain(CurveTween(curve: Curves.easeOutCubic));
+          final tween = Tween(
+            begin: const Offset(1.0, 0.0),
+            end: Offset.zero,
+          ).chain(CurveTween(curve: Curves.easeOutCubic));
           return SlideTransition(
             position: animation.drive(tween),
             child: child,
@@ -156,15 +158,19 @@ class _AuthScreenState extends State<AuthScreen> {
                                     color: p.accent.withAlpha(30),
                                     borderRadius: BorderRadius.circular(22),
                                     border: Border.all(
-                                        color: p.accent.withAlpha(80),
-                                        width: 1.5),
+                                      color: p.accent.withAlpha(80),
+                                      width: 1.5,
+                                    ),
                                   ),
-                                  child: Icon(Icons.school_rounded,
-                                      color: p.accent, size: 38),
+                                  child: Icon(
+                                    Icons.school_rounded,
+                                    color: p.accent,
+                                    size: 38,
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Hoş Geldin',
+                                  'Welcome',
                                   style: TextStyle(
                                     fontSize: 36,
                                     fontWeight: FontWeight.w900,
@@ -175,7 +181,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Hesabına giriş yap',
+                                  'Sign in to your account',
                                   style: TextStyle(
                                     fontSize: 15,
                                     color: p.muted,
@@ -193,7 +199,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  'Hesabın yok mu?',
+                                  "Don't have an account?",
                                   style: TextStyle(
                                     color: p.muted,
                                     fontSize: 14,
@@ -262,18 +268,18 @@ class _AuthScreenState extends State<AuthScreen> {
                 const SizedBox(height: 20),
                 _field(
                   controller: _loginEmail,
-                  label: 'E-posta',
+                  label: 'Email',
                   icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) => v == null || !v.contains('@')
-                      ? 'Geçerli e-posta girin'
+                      ? 'Enter a valid email'
                       : null,
                   palette: p,
                 ),
                 const SizedBox(height: 14),
                 _field(
                   controller: _loginPass,
-                  label: 'Şifre',
+                  label: 'Password',
                   icon: Icons.lock_outline,
                   obscure: _loginObscure,
                   suffixIcon: IconButton(
@@ -293,8 +299,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   onPressed: _loading ? null : _login,
                   style: FilledButton.styleFrom(
                     backgroundColor: p.accent,
-                    foregroundColor:
-                        _darkMode ? Colors.white : p.backgroundStart,
+                    foregroundColor: _darkMode
+                        ? Colors.white
+                        : p.backgroundStart,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
@@ -310,7 +317,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         )
                       : const Text(
-                          'Giriş Yap',
+                          'Sign In',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -352,8 +359,10 @@ class _AuthScreenState extends State<AuthScreen> {
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: palette.inputFill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: palette.border),
@@ -435,8 +444,7 @@ class _ModePill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? palette.accent : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -471,32 +479,32 @@ class _AuthPalette {
   });
 
   factory _AuthPalette.dark() => const _AuthPalette(
-        backgroundStart: Color(0xFF070719),
-        backgroundMid: Color(0xFF0B0921),
-        backgroundEnd: Color(0xFF050507),
-        panel: Color(0xD00D0A24),
-        text: Color(0xFFF4F0FF),
-        muted: Color(0xFF9B8DCC),
-        accent: Color(0xFF8A6CFF),
-        border: Color(0xFF3D2D84),
-        inputFill: Color(0x8013122D),
-        shadow: Color(0xFF000000),
-        glow: Color(0xFF49E9FF),
-      );
+    backgroundStart: Color(0xFF070719),
+    backgroundMid: Color(0xFF0B0921),
+    backgroundEnd: Color(0xFF050507),
+    panel: Color(0xD00D0A24),
+    text: Color(0xFFF4F0FF),
+    muted: Color(0xFF9B8DCC),
+    accent: Color(0xFF8A6CFF),
+    border: Color(0xFF3D2D84),
+    inputFill: Color(0x8013122D),
+    shadow: Color(0xFF000000),
+    glow: Color(0xFF49E9FF),
+  );
 
   factory _AuthPalette.light() => const _AuthPalette(
-        backgroundStart: Color(0xFFC5FFB8),
-        backgroundMid: Color(0xFFE9FFE4),
-        backgroundEnd: Color(0xFFFFFDF8),
-        panel: Color(0xF8FFFDF8),
-        text: Color(0xFF073C35),
-        muted: Color(0xFF48685F),
-        accent: Color(0xFFA78BFA),
-        border: Color(0xFF8F9D93),
-        inputFill: Color(0xEEFFFDF8),
-        shadow: Color(0x66073C35),
-        glow: Color(0xBFC5FFB8),
-      );
+    backgroundStart: Color(0xFFC5FFB8),
+    backgroundMid: Color(0xFFE9FFE4),
+    backgroundEnd: Color(0xFFFFFDF8),
+    panel: Color(0xF8FFFDF8),
+    text: Color(0xFF073C35),
+    muted: Color(0xFF48685F),
+    accent: Color(0xFFA78BFA),
+    border: Color(0xFF8F9D93),
+    inputFill: Color(0xEEFFFDF8),
+    shadow: Color(0x66073C35),
+    glow: Color(0xBFC5FFB8),
+  );
 
   final Color backgroundStart;
   final Color backgroundMid;

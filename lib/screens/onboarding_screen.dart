@@ -7,7 +7,6 @@ import 'main_scaffold.dart';
 
 const _kDanger = Color(0xFFFF5C7A);
 
-
 String _dateKey(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-'
     '${d.month.toString().padLeft(2, '0')}-'
@@ -23,18 +22,18 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  // Adımlar: 0=tercihler, 1=dersler, 2=busy times
+  // Adımlar: 0=tercihler, 1=lessonler, 2=busy times
   int _step = 0;
   static const int _totalSteps = 3;
 
   bool _initLoading = true;
   bool _finishing = false;
 
-  // ── Adım 0: Tercihler ─────────────────────────────────────────────────────
+  // ── Adım 0: Preferences ─────────────────────────────────────────────────────
   String _preferredStudyTime = 'morning';
   String _studyStyle = 'normal';
 
-  // ── Adım 1: Dersler ───────────────────────────────────────────────────────
+  // ── Adım 1: Lessonler ───────────────────────────────────────────────────────
   List<Map<String, dynamic>> _lessons = [];
 
   // ── Adım 2: Busy grid ─────────────────────────────────────────────────────
@@ -42,17 +41,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   //   0 = boş (müsait)
   //   1 = orta yoğun   → fatigueLevel: 2
   //   2 = çok yoğun    → fatigueLevel: 4
-  static const int _gridStartHour = 7;   // 07:00
-  static const int _gridHourCount = 16;  // 07:00 – 23:00
-  static const List<String> _shortDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  static const int _gridStartHour = 7; // 07:00
+  static const int _gridHourCount = 16; // 07:00 – 23:00
+  static const List<String> _shortDays = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
 
-  final List<List<int>> _busyGrid =
-      List.generate(7, (_) => List.filled(_gridHourCount, 0));
+  final List<List<int>> _busyGrid = List.generate(
+    7,
+    (_) => List.filled(_gridHourCount, 0),
+  );
 
   // Sürükle ile seçim için hedef değer (-1 = sürüklenmiyor)
   int _dragSetValue = -1;
 
-  // ── Ders metotları ────────────────────────────────────────────────────────
+  // ── Lesson metotları ────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -148,10 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: error ? _kDanger : null,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: error ? _kDanger : null),
     );
   }
 
@@ -225,7 +231,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  // ── Adım 0: Tercihler ─────────────────────────────────────────────────────
+  // ── Adım 0: Preferences ─────────────────────────────────────────────────────
 
   Widget _buildPreferencesStep() {
     return Center(
@@ -236,28 +242,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('1 / $_totalSteps',
-                  style: TextStyle(
-                      color: kText2,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8)),
-              const SizedBox(height: 4),
-              Text('Çalışma tercihlerini belirle',
-                  style: TextStyle(
-                      color: kText1,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold)),
+              Text(
+                '1 / $_totalSteps',
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
-                  'Algoritma bu bilgilere göre sana özel program oluşturur.',
-                  style: TextStyle(color: kText2, fontSize: 13)),
+                'Set your study preferences',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'The algorithm creates a personalized schedule from this information.',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
               const SizedBox(height: 24),
-              Text('En verimli çalışma saatin',
-                  style: TextStyle(
-                      color: kText1,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                'Your most productive study time',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 12),
               GridView.count(
                 crossAxisCount: 2,
@@ -268,7 +284,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 childAspectRatio: 2.6,
                 children: [
                   _PrefTile(
-                    label: 'Sabah',
+                    label: 'Morning',
                     detail: '08:00 – 11:00',
                     icon: Icons.wb_sunny_outlined,
                     selected: _preferredStudyTime == 'morning',
@@ -276,7 +292,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         setState(() => _preferredStudyTime = 'morning'),
                   ),
                   _PrefTile(
-                    label: 'Öğleden Sonra',
+                    label: 'Afternoon',
                     detail: '12:00 – 15:00',
                     icon: Icons.wb_cloudy_outlined,
                     selected: _preferredStudyTime == 'afternoon',
@@ -284,7 +300,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         setState(() => _preferredStudyTime = 'afternoon'),
                   ),
                   _PrefTile(
-                    label: 'Akşam',
+                    label: 'Evening',
                     detail: '18:00 – 21:00',
                     icon: Icons.nights_stay_outlined,
                     selected: _preferredStudyTime == 'evening',
@@ -292,31 +308,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         setState(() => _preferredStudyTime = 'evening'),
                   ),
                   _PrefTile(
-                    label: 'Gece',
+                    label: 'Night',
                     detail: '21:00 – 24:00',
                     icon: Icons.bedtime_outlined,
                     selected: _preferredStudyTime == 'night',
-                    onTap: () =>
-                        setState(() => _preferredStudyTime = 'night'),
+                    onTap: () => setState(() => _preferredStudyTime = 'night'),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              Text('Çalışma stili',
-                  style: TextStyle(
-                      color: kText1,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                'Study style',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
-                  'Algoritma bunu oturum uzunluklarını belirlemek için kullanır.',
-                  style: TextStyle(color: kText2, fontSize: 12)),
+                'The algorithm uses this to choose session lengths.',
+                style: TextStyle(color: kText2, fontSize: 12),
+              ),
               const SizedBox(height: 12),
               _StyleCard(
                 value: 'deep_focus',
-                label: 'Derin Odak',
+                label: 'Deep Focus',
                 description:
-                    'Az seans, uzun çalışma blokları (3–4 blok / seans)',
+                    'Fewer sessions, longer study blocks (3-4 blocks per session)',
                 icon: Icons.center_focus_strong_outlined,
                 selectedValue: _studyStyle,
                 onChanged: (v) => setState(() => _studyStyle = v),
@@ -324,8 +343,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 10),
               _StyleCard(
                 value: 'normal',
-                label: 'Dengeli',
-                description: 'Orta uzunlukta seanslar (2–3 blok / seans)',
+                label: 'Balanced',
+                description: 'Medium-length sessions (2-3 blocks per session)',
                 icon: Icons.balance_outlined,
                 selectedValue: _studyStyle,
                 onChanged: (v) => setState(() => _studyStyle = v),
@@ -333,9 +352,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 10),
               _StyleCard(
                 value: 'distributed',
-                label: 'Dağıtılmış',
+                label: 'Distributed',
                 description:
-                    'Çok seans, kısa çalışma blokları (1–2 blok / seans)',
+                    'More sessions, shorter study blocks (1-2 blocks per session)',
                 icon: Icons.grid_view_rounded,
                 selectedValue: _studyStyle,
                 onChanged: (v) => setState(() => _studyStyle = v),
@@ -347,7 +366,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── Adım 1: Dersler ───────────────────────────────────────────────────────
+  // ── Adım 1: Lessonler ───────────────────────────────────────────────────────
 
   Widget _buildLessonsStep() {
     return Center(
@@ -361,21 +380,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('2 / $_totalSteps',
-                      style: TextStyle(
-                          color: kText2,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8)),
-                  const SizedBox(height: 4),
-                  Text('Derslerini ekle',
-                      style: TextStyle(
-                          color: kText1,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    '2 / $_totalSteps',
+                    style: TextStyle(
+                      color: kText2,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                    'Bu dönemde çalışacağın dersleri gir. Zorluk derecesi planlama algoritmasını etkiler.',
+                    'Add your lessons',
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Enter the lessons you will study this term. Difficulty affects the planning algorithm.',
                     style: TextStyle(color: kText2, fontSize: 13),
                   ),
                 ],
@@ -383,17 +408,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             Expanded(
               child: _initLoading
-                  ? Center(
-                      child: CircularProgressIndicator(color: kAccent))
+                  ? Center(child: CircularProgressIndicator(color: kAccent))
                   : _lessons.isEmpty
-                      ? _buildLessonsEmpty()
-                      : ListView.builder(
-                          padding:
-                              const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                          itemCount: _lessons.length,
-                          itemBuilder: (_, i) =>
-                              _OnboardingLessonRow(lesson: _lessons[i]),
-                        ),
+                  ? _buildLessonsEmpty()
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      itemCount: _lessons.length,
+                      itemBuilder: (_, i) =>
+                          _OnboardingLessonRow(lesson: _lessons[i]),
+                    ),
             ),
           ],
         ),
@@ -408,14 +431,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           Icon(Icons.book_outlined, color: kText2, size: 52),
           const SizedBox(height: 14),
-          Text('Henüz ders eklenmedi',
-              style: TextStyle(
-                  color: kText1,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            'No lessons added yet',
+            style: TextStyle(
+              color: kText1,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text('Aşağıdaki butona basarak ders ekle.',
-              style: TextStyle(color: kText2, fontSize: 13)),
+          Text(
+            'Add a lesson using the button below.',
+            style: TextStyle(color: kText2, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -433,21 +461,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('3 / $_totalSteps',
-                  style: TextStyle(
-                      color: kText2,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8)),
-              const SizedBox(height: 4),
-              Text('Meşgul zamanlarını işaretle',
-                  style: TextStyle(
-                      color: kText1,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold)),
+              Text(
+                '3 / $_totalSteps',
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
-                'Tıkla veya sürükle — algoritma bu saatlerin dışına ders koyar.',
+                'Mark your busy times',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Click or drag. The algorithm schedules lessons outside these hours.',
                 style: TextStyle(color: kText2, fontSize: 13),
               ),
             ],
@@ -497,20 +531,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     }
                   }),
                   icon: Icon(Icons.clear_all_rounded, size: 16, color: kText2),
-                  label: Text('Temizle',
-                      style: TextStyle(color: kText2, fontSize: 12)),
+                  label: Text(
+                    'Clear',
+                    style: TextStyle(color: kText2, fontSize: 12),
+                  ),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                   ),
                 ),
             ],
           ),
         ),
 
-        // Haftalık grid
+        // Weeklık grid
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -522,7 +560,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
           child: Text(
-            'İpucu: Tekrar tıkla → Orta → Yoğun → Temizle',
+            'Tip: Click again -> Medium -> Busy -> Clear',
             style: TextStyle(color: kText2, fontSize: 11),
           ),
         ),
@@ -530,21 +568,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // Haftalık grid widget'ı — LayoutBuilder ile hücre boyutlarını hesaplar
+  // Weeklık grid widget'ı — LayoutBuilder ile hücre boyutlarını hesaplar
   Widget _buildWeeklyGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
         const labelW = 38.0;
         const headerH = 26.0;
         final cellW = (constraints.maxWidth - labelW) / 7;
-        final cellH =
-            (constraints.maxHeight - headerH) / _gridHourCount;
+        final cellH = (constraints.maxHeight - headerH) / _gridHourCount;
 
         return Listener(
           onPointerDown: (e) => _handleGridPointer(
-              e.localPosition, cellW, cellH, headerH, labelW, true),
+            e.localPosition,
+            cellW,
+            cellH,
+            headerH,
+            labelW,
+            true,
+          ),
           onPointerMove: (e) => _handleGridPointer(
-              e.localPosition, cellW, cellH, headerH, labelW, false),
+            e.localPosition,
+            cellW,
+            cellH,
+            headerH,
+            labelW,
+            false,
+          ),
           onPointerUp: (_) => setState(() => _dragSetValue = -1),
           onPointerCancel: (_) => setState(() => _dragSetValue = -1),
           child: Column(
@@ -574,12 +623,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
 
-              // Saat satırları
+              // Time satırları
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Saat etiketleri (sol)
+                    // Time etiketleri (sol)
                     SizedBox(
                       width: labelW,
                       child: Column(
@@ -653,28 +702,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   side: BorderSide(color: kBorder),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: const Text('Geri'),
+                child: const Text('Back'),
               ),
             ),
             const SizedBox(width: 12),
           ],
 
-          // "Ders ekle" butonu — sadece ders adımında
+          // "Add lesson" butonu — sadece lesson adımında
           if (_step == 1) ...[
             Expanded(
               child: OutlinedButton.icon(
-                onPressed:
-                    _initLoading ? null : _openAddLesson,
+                onPressed: _initLoading ? null : _openAddLesson,
                 icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Ders ekle'),
+                label: const Text('Add lesson'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: kAccent,
                   side: BorderSide(color: kAccent),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -686,29 +736,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onPressed: (_initLoading || _finishing)
                   ? null
                   : isLast
-                      ? _finish
-                      : () => setState(() => _step++),
+                  ? _finish
+                  : () => setState(() => _step++),
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: _finishing
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(
                       isLast
-                          ? (_busyGridIsEmpty
-                              ? 'Atla ve Başla'
-                              : 'Başla')
-                          : (_step == 1 && _lessons.isEmpty
-                              ? 'Geç'
-                              : 'İleri'),
+                          ? (_busyGridIsEmpty ? 'Skip and Start' : 'Start')
+                          : (_step == 1 && _lessons.isEmpty ? 'Skip' : 'Next'),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
             ),
@@ -772,7 +821,6 @@ class _GridCell extends StatelessWidget {
   }
 }
 
-
 // ── Step bar ──────────────────────────────────────────────────────────────────
 
 class _StepBar extends StatelessWidget {
@@ -782,7 +830,7 @@ class _StepBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labels = ['Tercihler', 'Dersler', 'Meşgul saatler'];
+    final labels = ['Preferences', 'Lessonler', 'Busy times'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
@@ -838,20 +886,19 @@ class _StepDot extends StatelessWidget {
             border: Border.all(color: color, width: 2),
           ),
           child: done
-              ? const Icon(Icons.check_rounded,
-                  size: 13, color: Colors.white)
+              ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
               : active
-                  ? Center(
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    )
-                  : null,
+              ? Center(
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                )
+              : null,
         ),
         const SizedBox(height: 4),
         Text(
@@ -909,8 +956,11 @@ class _PrefTile extends StatelessWidget {
                 color: selected ? kAccent : kBorder.withAlpha(90),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child:
-                  Icon(icon, color: selected ? Colors.white : kText2, size: 18),
+              child: Icon(
+                icon,
+                color: selected ? Colors.white : kText2,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -918,15 +968,17 @@ class _PrefTile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: kText1,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800)),
-                  Text(detail,
-                      style: TextStyle(color: kText2, fontSize: 11)),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(detail, style: TextStyle(color: kText2, fontSize: 11)),
                 ],
               ),
             ),
@@ -983,22 +1035,30 @@ class _StyleCard extends StatelessWidget {
                 color: selected ? kAccent : kBorder.withAlpha(100),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon,
-                  color: selected ? Colors.white : kText2, size: 22),
+              child: Icon(
+                icon,
+                color: selected ? Colors.white : kText2,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: TextStyle(
-                          color: kText1,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(description,
-                      style: TextStyle(color: kText2, fontSize: 12)),
+                  Text(
+                    description,
+                    style: TextStyle(color: kText2, fontSize: 12),
+                  ),
                 ],
               ),
             ),
@@ -1016,8 +1076,11 @@ class _StyleCard extends StatelessWidget {
                 color: selected ? kAccent : Colors.transparent,
               ),
               child: selected
-                  ? const Icon(Icons.check_rounded,
-                      color: Colors.white, size: 13)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      color: Colors.white,
+                      size: 13,
+                    )
                   : null,
             ),
           ],
@@ -1027,15 +1090,19 @@ class _StyleCard extends StatelessWidget {
   }
 }
 
-// ── Ders satırı ───────────────────────────────────────────────────────────────
+// ── Lesson satırı ───────────────────────────────────────────────────────────────
 
 class _OnboardingLessonRow extends StatelessWidget {
   const _OnboardingLessonRow({required this.lesson});
   final Map<String, dynamic> lesson;
 
   static const _colors = [
-    Color(0xFF4E9FFF), Color(0xFF7C6FFF), Color(0xFFFF6B6B),
-    Color(0xFF4ECDC4), Color(0xFFFFBE0B), Color(0xFF06D6A0),
+    Color(0xFF4E9FFF),
+    Color(0xFF7C6FFF),
+    Color(0xFFFF6B6B),
+    Color(0xFF4ECDC4),
+    Color(0xFFFFBE0B),
+    Color(0xFF06D6A0),
   ];
 
   @override
@@ -1063,7 +1130,8 @@ class _OnboardingLessonRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 38, height: 38,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: color.withAlpha(38),
               borderRadius: BorderRadius.circular(10),
@@ -1073,30 +1141,37 @@ class _OnboardingLessonRow extends StatelessWidget {
               child: Text(
                 initials.isEmpty ? '?' : initials,
                 style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700),
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(name,
-                style: TextStyle(
-                    color: kText1,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              name,
+              style: TextStyle(
+                color: kText1,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           Row(
-            children: List.generate(5, (i) => Container(
-              width: 3,
-              height: 6.0 + i * 2,
-              margin: const EdgeInsets.only(right: 2),
-              decoration: BoxDecoration(
-                color: i < difficulty ? color : kBorder,
-                borderRadius: BorderRadius.circular(1),
+            children: List.generate(
+              5,
+              (i) => Container(
+                width: 3,
+                height: 6.0 + i * 2,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(
+                  color: i < difficulty ? color : kBorder,
+                  borderRadius: BorderRadius.circular(1),
+                ),
               ),
-            )),
+            ),
           ),
         ],
       ),
@@ -1104,15 +1179,14 @@ class _OnboardingLessonRow extends StatelessWidget {
   }
 }
 
-// ── Ders ekleme sheet ─────────────────────────────────────────────────────────
+// ── Add lessonme sheet ─────────────────────────────────────────────────────────
 
 class _OnboardingLessonSheet extends StatefulWidget {
   const _OnboardingLessonSheet({required this.onSaved});
   final VoidCallback onSaved;
 
   @override
-  State<_OnboardingLessonSheet> createState() =>
-      _OnboardingLessonSheetState();
+  State<_OnboardingLessonSheet> createState() => _OnboardingLessonSheetState();
 }
 
 class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
@@ -1146,18 +1220,19 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: _kDanger,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: _kDanger,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
@@ -1166,27 +1241,35 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
           children: [
             Center(
               child: Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
-                    color: kBorder,
-                    borderRadius: BorderRadius.circular(2)),
+                  color: kBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             const SizedBox(height: 20),
             Row(
               children: [
-                Text('Ders ekle',
-                    style: TextStyle(
-                        color: kText1,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold)),
+                Text(
+                  'Add lesson',
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const Spacer(),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
-                    width: 32, height: 32,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
-                        color: kBorder, shape: BoxShape.circle),
+                      color: kBorder,
+                      shape: BoxShape.circle,
+                    ),
                     child: Icon(Icons.close, size: 16, color: kText2),
                   ),
                 ),
@@ -1198,13 +1281,15 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
               autofocus: true,
               style: TextStyle(color: kText1),
               decoration: const InputDecoration(
-                labelText: 'Ders adı',
-                hintText: 'örn. Lineer Cebir',
+                labelText: 'Lesson name',
+                hintText: 'e.g. Linear Algebra',
               ),
             ),
             const SizedBox(height: 16),
-            Text('Zorluk · 1 kolay – 5 çok zor',
-                style: TextStyle(color: kText2, fontSize: 13)),
+            Text(
+              'Difficulty · 1 easy - 5 very hard',
+              style: TextStyle(color: kText2, fontSize: 13),
+            ),
             const SizedBox(height: 8),
             Row(
               children: List.generate(5, (i) {
@@ -1212,8 +1297,9 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
                 final sel = n == _difficulty;
                 return Expanded(
                   child: GestureDetector(
-                    onTap:
-                        _saving ? null : () => setState(() => _difficulty = n),
+                    onTap: _saving
+                        ? null
+                        : () => setState(() => _difficulty = n),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       height: 46,
@@ -1227,12 +1313,14 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
                         ),
                       ),
                       child: Center(
-                        child: Text('$n',
-                            style: TextStyle(
-                              color: sel ? kAccent : kText2,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            )),
+                        child: Text(
+                          '$n',
+                          style: TextStyle(
+                            color: sel ? kAccent : kText2,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1242,13 +1330,13 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
             const SizedBox(height: 16),
             SwitchListTile(
               value: _hasExam,
-              onChanged:
-                  _saving ? null : (v) => setState(() => _hasExam = v),
+              onChanged: _saving ? null : (v) => setState(() => _hasExam = v),
               contentPadding: EdgeInsets.zero,
               activeThumbColor: kAccent,
-              title: Text('Sınav tarihi ekle',
-                  style: TextStyle(
-                      color: kText1, fontWeight: FontWeight.w600)),
+              title: Text(
+                'Add exam date',
+                style: TextStyle(color: kText1, fontWeight: FontWeight.w600),
+              ),
             ),
             if (_hasExam) ...[
               OutlinedButton.icon(
@@ -1259,8 +1347,7 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: _examDate,
-                          firstDate:
-                              DateTime(now.year, now.month, now.day),
+                          firstDate: DateTime(now.year, now.month, now.day),
                           lastDate: DateTime(2100),
                         );
                         if (picked != null) {
@@ -1274,7 +1361,8 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
                   side: BorderSide(color: kBorder),
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -1284,16 +1372,21 @@ class _OnboardingLessonSheetState extends State<_OnboardingLessonSheet> {
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.check_rounded, size: 18),
-              label: Text(_saving ? 'Kaydediliyor...' : 'Kaydet'),
+              label: Text(_saving ? 'Saving...' : 'Save'),
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],

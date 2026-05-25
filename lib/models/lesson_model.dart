@@ -1,4 +1,4 @@
-/// Sınav tarihini temsil eden model.
+/// Exam tarihini temsil eden model.
 class LessonExam {
   final int id;
   final String examDate; // ISO string (orn: "2026-05-20T00:00:00.000Z")
@@ -13,7 +13,7 @@ class LessonExam {
       examDate.length >= 10 ? examDate.substring(0, 10) : examDate;
 }
 
-/// Ödev / deadline tarihini temsil eden model.
+/// Assignment / deadline tarihini temsil eden model.
 class LessonDeadline {
   final int id;
   final String deadlineDate; // ISO string (orn: "2026-05-25T00:00:00.000Z")
@@ -59,7 +59,7 @@ class LessonExamResult {
   );
 }
 
-/// Backend /lesson endpoint'inden gelen ders modeli.
+/// Backend /lesson endpoint'inden gelen lesson modeli.
 class Lesson {
   final String id;
   final String lessonName;

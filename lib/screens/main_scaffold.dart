@@ -21,10 +21,10 @@ class _MainScaffoldState extends State<MainScaffold> {
   bool _aiChatOpen = false;
 
   static const _destinations = [
-    (Icons.home_outlined, Icons.home_rounded, 'Bugün'),
-    (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Hafta'),
-    (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Analiz'),
-    (Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
+    (Icons.home_outlined, Icons.home_rounded, 'Today'),
+    (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Week'),
+    (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Insights'),
+    (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
   ];
 
   @override
@@ -264,13 +264,13 @@ class _NavDateLabel extends StatelessWidget {
   const _NavDateLabel();
 
   static const _days = [
-    'Pazartesi',
-    'Salı',
-    'Çarşamba',
-    'Perşembe',
-    'Cuma',
-    'Cumartesi',
-    'Pazar',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
 
   @override
@@ -320,38 +320,38 @@ class _WhatIfQuestion {
 
 const _kWhatIfQuestions = [
   _WhatIfQuestion(
-    label: 'Daha fazla çalışırsam ne olur?',
+    label: 'What happens if I study more?',
     scenario: 'daha_fazla_calis',
   ),
   _WhatIfQuestion(
-    label: 'Bu derste durumum nasıl?',
+    label: 'How am I doing in this lesson?',
     scenario: 'ders_durumu',
     needsLesson: true,
   ),
   _WhatIfQuestion(
-    label: 'Nasıl çalışmak bana daha uygun?',
+    label: 'What study style suits me best?',
     scenario: 'calisma_tarzi',
   ),
   _WhatIfQuestion(
-    label: 'Bir derse daha fazla odaklanırsam?',
+    label: 'What if I focus more on one lesson?',
     scenario: 'derse_odaklan',
     needsLesson: true,
   ),
   _WhatIfQuestion(
-    label: 'O gün çalışamazsam ne olur?',
+    label: 'What if I cannot study that day?',
     scenario: 'gun_bos',
     needsDay: true,
   ),
 ];
 
 const _kDayNames = [
-  'Pazartesi',
-  'Salı',
-  'Çarşamba',
-  'Perşembe',
-  'Cuma',
-  'Cumartesi',
-  'Pazar',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
 ];
 
 // ── AI Chat Popup ─────────────────────────────────────────────────────────────
@@ -368,7 +368,7 @@ class _AiChatPopup extends StatefulWidget {
 class _AiChatPopupState extends State<_AiChatPopup> {
   final List<({String text, bool fromUser})> _messages = [
     (
-      text: 'Merhaba! Çalışma planın hakkında bir senaryo seç, analiz edeyim.',
+      text: "Hi! Pick a scenario about your study plan and I'll analyze it.",
       fromUser: false,
     ),
   ];
@@ -398,7 +398,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
         _pendingQuestion = q;
         _messages.add((text: q.label, fromUser: true));
         _messages.add((
-          text: 'Hangi ders için bakmamı istersin?',
+          text: 'Which lesson should I look at?',
           fromUser: false,
         ));
       });
@@ -410,7 +410,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
       setState(() {
         _pendingQuestion = q;
         _messages.add((text: q.label, fromUser: true));
-        _messages.add((text: 'Hangi gün boş kalacak?', fromUser: false));
+        _messages.add((text: 'Which day will be empty?', fromUser: false));
       });
       _scrollToBottom();
       return;
@@ -452,7 +452,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
         focusLessonId: focusLessonId,
         emptyDayName: emptyDayName,
       );
-      final msg = res['message'] as String? ?? 'Bir yanıt alınamadı.';
+      final msg = res['message'] as String? ?? 'Could not get a response.';
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -463,7 +463,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
       setState(() {
         _loading = false;
         _messages.add((
-          text: 'Bağlantı hatası. Lütfen tekrar dene.',
+          text: 'Connection error. Please try again.',
           fromUser: false,
         ));
       });
@@ -496,7 +496,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
   void _reset() {
     setState(() {
       _messages.add((
-        text: 'Başka bir şeye bakmamı ister misin?',
+        text: 'Would you like me to check anything else?',
         fromUser: false,
       ));
       _pendingQuestion = null;
@@ -567,7 +567,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                   IconButton(
                     onPressed: widget.onClose,
                     icon: Icon(Icons.close_rounded, color: kText2, size: 18),
-                    tooltip: 'Kapat',
+                    tooltip: 'Close',
                   ),
                 ],
               ),
@@ -615,7 +615,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                   // İlk chip listesi
                   if (_chipsVisible) return _buildQuestionChips();
 
-                  // Ders seçimi
+                  // Lesson seçimi
                   if (_pendingQuestion?.needsLesson == true) {
                     return _buildLessonChips();
                   }
@@ -636,7 +636,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
                         color: kAccent,
                       ),
                       label: Text(
-                        'Başka bir soru sor',
+                        'Ask another question',
                         style: TextStyle(color: kAccent, fontSize: 12),
                       ),
                       style: TextButton.styleFrom(
@@ -716,7 +716,7 @@ class _AiChatPopupState extends State<_AiChatPopup> {
   Widget _buildLessonChips() {
     if (_lessons.isEmpty) {
       return Text(
-        'Ders bulunamadı.',
+        'No lesson found.',
         style: TextStyle(color: kText2, fontSize: 12),
       );
     }
