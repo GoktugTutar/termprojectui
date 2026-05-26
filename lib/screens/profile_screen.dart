@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -112,13 +114,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       final results = await Future.wait([
         ApiClient.getMe(),
         ApiClient.getMode(),
-        ApiClient.getChecklistHistory(),
         ApiClient.getLessons(),
       ]);
       if (!mounted) return;
       final user = results[0] as Map<String, dynamic>;
       final modeInfo = results[1] as Map<String, dynamic>;
-      final history = results[2] as List<Map<String, dynamic>>;
       final busySlots =
           ((user['busySlots'] as List?) ?? [])
               .map(
@@ -134,7 +134,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               return a.startTime.compareTo(b.startTime);
             });
       final lessons =
-          (results[3] as List)
+          (results[2] as List)
               .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
               .toList()
             ..sort((a, b) {
@@ -148,15 +148,23 @@ class _ProfileScreenState extends State<ProfileScreen>
             user['preferredStudyTime']?.toString() ?? 'morning';
         _studyStyle = user['studyStyle']?.toString() ?? 'normal';
         _isTestMode = modeInfo['mode']?.toString() == 'test';
-        _checklistHistory = history;
         _lessons = lessons;
         _busySlots = busySlots;
         _loading = false;
       });
+      if (_isTestMode) unawaited(_loadChecklistHistory());
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _loadChecklistHistory() async {
+    try {
+      final history = await ApiClient.getChecklistHistory();
+      if (!mounted) return;
+      setState(() => _checklistHistory = history);
+    } catch (_) {}
   }
 
   int? _daysToExam(Lesson lesson) {
@@ -650,42 +658,6 @@ class _SectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
       ),
-    );
-  }
-}
-
-class _SectionActionHeader extends StatelessWidget {
-  const _SectionActionHeader({
-    required this.text,
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final String text;
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _SectionLabel(text)),
-        TextButton.icon(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 16),
-          label: Text(
-            label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          style: TextButton.styleFrom(
-            foregroundColor: kAccent,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          ),
-        ),
-      ],
     );
   }
 }

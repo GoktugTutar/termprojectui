@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Base URL platforma göre otomatik seçilir (web, Android emülatör, diğer).
 class ApiClient {
   static final String _tokenKey = 'jwt_token';
+  static String? _cachedToken;
+  static bool _tokenLoaded = false;
 
   /// Platforma göre uygun base URL'yi döndürür.
   static String get _base {
@@ -21,18 +23,25 @@ class ApiClient {
   // ── Token yönetimi ──────────────────────────────────────────────────────────
 
   static Future<String?> getToken() async {
+    if (_tokenLoaded) return _cachedToken;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    _cachedToken = prefs.getString(_tokenKey);
+    _tokenLoaded = true;
+    return _cachedToken;
   }
 
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
+    _cachedToken = token;
+    _tokenLoaded = true;
   }
 
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    _cachedToken = null;
+    _tokenLoaded = true;
   }
 
   // ── Ortak yardımcılar ───────────────────────────────────────────────────────

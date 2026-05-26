@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,6 +34,7 @@ class _InsightsScreenState extends State<InsightsScreen>
   String _stressStr = '—';
   String _aiMessage = '';
   bool _weeklySubmitted = false;
+  bool _weeklyStatusLoading = true;
 
   @override
   void initState() {
@@ -41,28 +44,25 @@ class _InsightsScreenState extends State<InsightsScreen>
 
   Future<void> _load() async {
     debugPrint('_load called');
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _weeklyStatusLoading = true;
+      _profile = null;
+      _completionStr = '—';
+      _stressStr = '—';
+    });
     try {
-      final feedbackData = await ApiClient.getFeedbackMessages();
-      final rawLessons = await ApiClient.getLessons();
-
-      // Fetch student profile (single call replaces 7 checklist calls)
-      Map<String, dynamic>? profile;
-      String multiplierStr = '1.00';
-      String completionStr = '—';
-      String stressStr = '—';
-      try {
-        profile = await ApiClient.getStudentProfile();
-        final rate = (profile['completionRate7d'] as num? ?? 0).toDouble();
-        completionStr = '${(rate * 100).round()}%';
-        final stress = (profile['avgStress7d'] as num? ?? 0).toDouble();
-        stressStr = stress.toStringAsFixed(1);
-        // Multiplier from overload alert
-        final hasOverload = (feedbackData['messages'] as List? ?? []).any(
-          (m) => m['type']?.toString() == 'asiri_yuk',
-        );
-        if (hasOverload) multiplierStr = '0.85';
-      } catch (_) {}
+      final results = await Future.wait<dynamic>([
+        ApiClient.getFeedbackMessages(),
+        ApiClient.getLessons(),
+      ]);
+      final feedbackData = results[0] as Map<String, dynamic>;
+      final rawLessons = results[1] as List<dynamic>;
+      var multiplierStr = '1.00';
+      final hasOverload = (feedbackData['messages'] as List? ?? []).any(
+        (m) => m['type']?.toString() == 'asiri_yuk',
+      );
+      if (hasOverload) multiplierStr = '0.85';
 
       // Parse lessons outside setState so errors are catchable
       final lessons = <Lesson>[];
@@ -77,28 +77,49 @@ class _InsightsScreenState extends State<InsightsScreen>
         '[INSIGHTS] rawLessons=${rawLessons.length} parsed=${lessons.length}',
       );
 
-      bool weeklySubmitted = false;
-      try {
-        weeklySubmitted = await ApiClient.getWeeklyFeedbackStatus();
-      } catch (_) {}
-
       if (!mounted) return;
       setState(() {
         _messages = feedbackData['messages'] as List? ?? [];
         _lessons = lessons;
-        _profile = profile;
         _multiplierStr = multiplierStr;
-        _completionStr = completionStr;
         _aiMessage = feedbackData['aiMessage'] as String? ?? '';
-        _stressStr = stressStr;
-        _weeklySubmitted = weeklySubmitted;
         _loading = false;
       });
+      unawaited(_loadProfileMetrics());
+      unawaited(_loadWeeklyFeedbackStatus());
     } catch (e, st) {
       debugPrint('[INSIGHTS] _load error: $e');
       debugPrint('[INSIGHTS] $st');
       if (!mounted) return;
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadProfileMetrics() async {
+    try {
+      final profile = await ApiClient.getStudentProfile();
+      final rate = (profile['completionRate7d'] as num? ?? 0).toDouble();
+      final stress = (profile['avgStress7d'] as num? ?? 0).toDouble();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _completionStr = '${(rate * 100).round()}%';
+        _stressStr = stress.toStringAsFixed(1);
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadWeeklyFeedbackStatus() async {
+    try {
+      final weeklySubmitted = await ApiClient.getWeeklyFeedbackStatus();
+      if (!mounted) return;
+      setState(() {
+        _weeklySubmitted = weeklySubmitted;
+        _weeklyStatusLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _weeklyStatusLoading = false);
     }
   }
 
@@ -186,13 +207,14 @@ class _InsightsScreenState extends State<InsightsScreen>
 
   Widget _buildCta() {
     final submitted = _weeklySubmitted;
+    final checking = _weeklyStatusLoading;
     final cardColor = submitted ? _kSuccess : kAccent;
 
     return SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
         child: GestureDetector(
-          onTap: submitted ? null : _openWeeklySheet,
+          onTap: submitted || checking ? null : _openWeeklySheet,
           child: Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -214,7 +236,11 @@ class _InsightsScreenState extends State<InsightsScreen>
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    submitted ? Icons.check : Icons.auto_awesome,
+                    checking
+                        ? Icons.hourglass_empty_rounded
+                        : submitted
+                        ? Icons.check
+                        : Icons.auto_awesome,
                     color: kBg,
                     size: 20,
                   ),
@@ -234,7 +260,9 @@ class _InsightsScreenState extends State<InsightsScreen>
                       ),
                       SizedBox(height: 2),
                       Text(
-                        submitted
+                        checking
+                            ? 'Checking this week...'
+                            : submitted
                             ? 'Bu haftalık gönderdin — multiplier ayarlandı'
                             : "Tells Step 1 what next week's multiplier should be",
                         style: TextStyle(color: kText2, fontSize: 12),
@@ -242,7 +270,8 @@ class _InsightsScreenState extends State<InsightsScreen>
                     ],
                   ),
                 ),
-                if (!submitted) Icon(Icons.chevron_right, color: cardColor),
+                if (!submitted && !checking)
+                  Icon(Icons.chevron_right, color: cardColor),
               ],
             ),
           ),

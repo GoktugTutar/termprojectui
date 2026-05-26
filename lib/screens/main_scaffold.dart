@@ -19,6 +19,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _index = 0;
   int _weekReloadSignal = 0;
   bool _aiChatOpen = false;
+  late final List<Widget?> _tabScreens;
 
   static const _destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Today'),
@@ -26,6 +27,13 @@ class _MainScaffoldState extends State<MainScaffold> {
     (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Insights'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabScreens = List<Widget?>.filled(_destinations.length, null);
+    _ensureTabBuilt(0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,40 +46,20 @@ class _MainScaffoldState extends State<MainScaffold> {
           destinations: _destinations,
         );
 
-        final screens = <Widget>[
-          _FullScreenFrame(
-            navbar: navbar,
-            aiChatOpen: _aiChatOpen,
-            onToggleAiChat: _toggleAiChat,
-            onCloseAiChat: _closeAiChat,
-            child: TodayScreen(onOpenInsights: () => _selectTab(2)),
-          ),
-          _FullScreenFrame(
-            navbar: navbar,
-            aiChatOpen: _aiChatOpen,
-            onToggleAiChat: _toggleAiChat,
-            onCloseAiChat: _closeAiChat,
-            child: WeekScreen(reloadSignal: _weekReloadSignal),
-          ),
-          _FullScreenFrame(
-            navbar: navbar,
-            aiChatOpen: _aiChatOpen,
-            onToggleAiChat: _toggleAiChat,
-            onCloseAiChat: _closeAiChat,
-            child: InsightsScreen(),
-          ),
-          _FullScreenFrame(
-            navbar: navbar,
-            aiChatOpen: _aiChatOpen,
-            onToggleAiChat: _toggleAiChat,
-            onCloseAiChat: _closeAiChat,
-            child: ProfileScreen(),
-          ),
-        ];
-
         return Scaffold(
           backgroundColor: kBg,
-          body: IndexedStack(index: _index, children: screens),
+          body: IndexedStack(
+            index: _index,
+            children: List.generate(_destinations.length, (index) {
+              return _FullScreenFrame(
+                navbar: navbar,
+                aiChatOpen: _aiChatOpen,
+                onToggleAiChat: _toggleAiChat,
+                onCloseAiChat: _closeAiChat,
+                child: _tabScreens[index] ?? SizedBox.shrink(),
+              );
+            }),
+          ),
         );
       },
     );
@@ -80,8 +68,24 @@ class _MainScaffoldState extends State<MainScaffold> {
   void _selectTab(int index) {
     setState(() {
       _index = index;
-      if (index == 1) _weekReloadSignal++;
+      if (index == 1) {
+        _weekReloadSignal++;
+        _tabScreens[1] = WeekScreen(reloadSignal: _weekReloadSignal);
+      } else {
+        _ensureTabBuilt(index);
+      }
     });
+  }
+
+  void _ensureTabBuilt(int index) {
+    if (_tabScreens[index] != null) return;
+    _tabScreens[index] = switch (index) {
+      0 => TodayScreen(onOpenInsights: () => _selectTab(2)),
+      1 => WeekScreen(reloadSignal: _weekReloadSignal),
+      2 => InsightsScreen(),
+      3 => ProfileScreen(),
+      _ => SizedBox.shrink(),
+    };
   }
 
   void _toggleAiChat() => setState(() => _aiChatOpen = !_aiChatOpen);

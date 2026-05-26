@@ -140,6 +140,7 @@ class _TodayScreenState extends State<TodayScreen>
   String _dailyCoachMessage = '';
   bool _dailyCoachMessageDismissed = false;
   String _dailyCoachMessageDate = '';
+  bool _dailyCoachLoading = false;
   String _examResultMessage = '';
   bool _examResultMessageDismissed = false;
   String _quickNote = '';
@@ -150,7 +151,7 @@ class _TodayScreenState extends State<TodayScreen>
   Timer? _clockTimer;
   bool _isLastDayOfWeek = false;
   bool _weeklyFeedbackPromptOpen = false;
-  bool _sleepAsked = false;
+  bool _sleepAsked = true;
   List<
     ({
       String lessonName,
@@ -192,6 +193,7 @@ class _TodayScreenState extends State<TodayScreen>
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    final loadTimer = Stopwatch()..start();
     try {
       // Fetch week plan and lessons in parallel; lessons must be known before plan
       // creation to avoid generating an empty plan on first login (no courses yet).
@@ -199,20 +201,13 @@ class _TodayScreenState extends State<TodayScreen>
         ApiClient.getWeekPlan(),
         ApiClient.getMe(),
         ApiClient.getLessons().catchError((_) => <dynamic>[]),
-        ApiClient.getFeedbackMessages().catchError((_) => <String, dynamic>{}),
-        ApiClient.dailyCoach().catchError((_) => <String, dynamic>{}),
-        ApiClient.getSleepStatus().catchError(
-          (_) => <String, dynamic>{'asked': true},
-        ),
       ]);
+      debugPrint(
+        '[TODAY] initial data loaded in ${loadTimer.elapsedMilliseconds}ms',
+      );
       Map<String, dynamic> data = parallelInit[0] as Map<String, dynamic>;
       final userData = Map<String, dynamic>.from(parallelInit[1] as Map);
       final raw = parallelInit[2] as List<dynamic>;
-      final feedbackData = parallelInit[3] as Map<String, dynamic>;
-      final dailyCoachData = parallelInit[4] as Map<String, dynamic>;
-      final aiMsg = feedbackData['aiMessage'] as String? ?? '';
-      final dailyCoachMsg = dailyCoachData['message']?.toString().trim() ?? '';
-      final examResultMsg = feedbackData['examResultMessage'] as String? ?? '';
       final displayName = _displayNameFromUser(userData);
       final gpaLabel = _gpaLabelFromUser(userData);
       final termLabel = _termLabelFromUser(userData);
@@ -220,8 +215,6 @@ class _TodayScreenState extends State<TodayScreen>
       final hasLessons = raw.isNotEmpty;
       final hasBusySlots = ((userData['busySlots'] as List?) ?? []).isNotEmpty;
       final canCreatePlan = hasLessons && hasBusySlots;
-      final sleepStatus = parallelInit[5] as Map<String, dynamic>;
-      _sleepAsked = sleepStatus['asked'] as bool? ?? false;
 
       final today = AppTime.now();
       final todayDate = DateTime(today.year, today.month, today.day);
@@ -254,9 +247,15 @@ class _TodayScreenState extends State<TodayScreen>
 
       if (needsNewPlan) {
         data = await ApiClient.createWeeklyPlan();
+        debugPrint(
+          '[TODAY] weekly plan created in ${loadTimer.elapsedMilliseconds}ms',
+        );
         plan = WeeklyPlan.fromJson(data);
       }
       final status = await ApiClient.getChecklistStatus(_today);
+      debugPrint(
+        '[TODAY] checklist status loaded in ${loadTimer.elapsedMilliseconds}ms',
+      );
       final checklistDisabled = status['checklistDisabled'] == true;
       final onboardingNotice = checklistDisabled
           ? (!canCreatePlan
@@ -355,28 +354,75 @@ class _TodayScreenState extends State<TodayScreen>
         _avatarExpression = avatarExpression;
         _isLastDayOfWeek = isLastDayOfWeek;
         _upcomingEvents = events;
-        _sleepAsked = sleepStatus['asked'] as bool? ?? false;
-        if (aiMsg.isNotEmpty) {
-          // ← ekle
+        _loading = false;
+      });
+      debugPrint('[TODAY] screen ready in ${loadTimer.elapsedMilliseconds}ms');
+      _loadTodayExtras();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  void _loadTodayExtras() {
+    unawaited(_loadSleepStatus());
+    unawaited(_loadFeedbackMessages());
+  }
+
+  Future<void> _loadSleepStatus() async {
+    try {
+      final sleepStatus = await ApiClient.getSleepStatus();
+      if (!mounted) return;
+      setState(() => _sleepAsked = sleepStatus['asked'] as bool? ?? true);
+    } catch (_) {}
+  }
+
+  Future<void> _loadFeedbackMessages() async {
+    try {
+      final feedbackData = await ApiClient.getFeedbackMessages();
+      final aiMsg = feedbackData['aiMessage'] as String? ?? '';
+      final examResultMsg = feedbackData['examResultMessage'] as String? ?? '';
+      if (!mounted) return;
+      setState(() {
+        if (aiMsg.isNotEmpty && aiMsg != _aiMessage) {
           _aiMessage = aiMsg;
           _aiMessageDismissed = false;
         }
+        if (examResultMsg != _examResultMessage) {
+          _examResultMessage = examResultMsg;
+          _examResultMessageDismissed = false;
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadDailyCoachMessage() async {
+    final requestDate = _today;
+    try {
+      final dailyCoachData = await ApiClient.dailyCoach();
+      final dailyCoachMsg = dailyCoachData['message']?.toString().trim() ?? '';
+      if (!mounted || requestDate != _today) return;
+      setState(() {
         if (dailyCoachMsg != _dailyCoachMessage ||
             _dailyCoachMessageDate != _today) {
           _dailyCoachMessageDismissed = false;
         }
         _dailyCoachMessage = dailyCoachMsg;
         _dailyCoachMessageDate = _today;
-        if (examResultMsg != _examResultMessage) {
-          _examResultMessageDismissed = false;
-        }
-        _examResultMessage = examResultMsg;
-        _loading = false;
       });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+    } catch (_) {}
+  }
+
+  Future<void> _requestDailyCoachMessage() async {
+    if (_dailyCoachLoading) return;
+    if (_dailyCoachMessage.isNotEmpty && _dailyCoachMessageDate == _today) {
+      setState(() => _dailyCoachMessageDismissed = false);
+      return;
     }
+    setState(() => _dailyCoachLoading = true);
+    await _loadDailyCoachMessage();
+    if (!mounted) return;
+    setState(() => _dailyCoachLoading = false);
   }
 
   String _displayNameFromUser(Map<String, dynamic> userData) {
@@ -796,6 +842,9 @@ class _TodayScreenState extends State<TodayScreen>
                                 noteText: _quickNote,
                                 onNoteChanged: (value) =>
                                     setState(() => _quickNote = value),
+                                dailyCoachLoading: _dailyCoachLoading,
+                                onDailyCoachRequested:
+                                    _requestDailyCoachMessage,
                               );
                               final checklistWidget = _checklistDisabled
                                   ? _FirstWeekChecklistPanel()
@@ -1452,6 +1501,8 @@ class _TodayLeftColumn extends StatelessWidget {
     required this.events,
     required this.noteText,
     required this.onNoteChanged,
+    required this.dailyCoachLoading,
+    required this.onDailyCoachRequested,
   });
 
   final List<
@@ -1466,6 +1517,8 @@ class _TodayLeftColumn extends StatelessWidget {
   events;
   final String noteText;
   final ValueChanged<String> onNoteChanged;
+  final bool dailyCoachLoading;
+  final VoidCallback onDailyCoachRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -1474,7 +1527,12 @@ class _TodayLeftColumn extends StatelessWidget {
       children: [
         _ComingUpCard(events: events),
         SizedBox(height: 14),
-        _QuickToolsRow(noteText: noteText, onNoteChanged: onNoteChanged),
+        _QuickToolsRow(
+          noteText: noteText,
+          onNoteChanged: onNoteChanged,
+          dailyCoachLoading: dailyCoachLoading,
+          onDailyCoachRequested: onDailyCoachRequested,
+        ),
       ],
     );
   }
@@ -1503,43 +1561,78 @@ class _TodayGreetingTitle extends StatelessWidget {
 }
 
 class _QuickToolsRow extends StatelessWidget {
-  const _QuickToolsRow({required this.noteText, required this.onNoteChanged});
+  const _QuickToolsRow({
+    required this.noteText,
+    required this.onNoteChanged,
+    required this.dailyCoachLoading,
+    required this.onDailyCoachRequested,
+  });
 
   final String noteText;
   final ValueChanged<String> onNoteChanged;
+  final bool dailyCoachLoading;
+  final VoidCallback onDailyCoachRequested;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _TimerToolCard(
-            onTap: () {
-              showDialog(
-                context: context,
-                barrierColor: Colors.black.withAlpha(170),
-                builder: (_) => _TimerDialog(),
-              );
-            },
-          ),
-        ),
-        SizedBox(width: 14),
-        Expanded(
-          child: _QuickToolCard(
-            icon: Icons.edit_note_rounded,
-            title: 'Notes',
-            subtitle: noteText.trim().isEmpty ? 'Add note' : 'Edit note',
-            onTap: () {
-              showDialog(
-                context: context,
-                barrierColor: Colors.black.withAlpha(170),
-                builder: (_) =>
-                    _NotesDialog(initialText: noteText, onSaved: onNoteChanged),
-              );
-            },
-          ),
-        ),
-      ],
+    final timer = _TimerToolCard(
+      onTap: () {
+        showDialog(
+          context: context,
+          barrierColor: Colors.black.withAlpha(170),
+          builder: (_) => _TimerDialog(),
+        );
+      },
+    );
+    final notes = _QuickToolCard(
+      icon: Icons.edit_note_rounded,
+      title: 'Notes',
+      subtitle: noteText.trim().isEmpty ? 'Add note' : 'Edit note',
+      onTap: () {
+        showDialog(
+          context: context,
+          barrierColor: Colors.black.withAlpha(170),
+          builder: (_) =>
+              _NotesDialog(initialText: noteText, onSaved: onNoteChanged),
+        );
+      },
+    );
+    final aiCoach = _QuickToolCard(
+      icon: Icons.auto_awesome_rounded,
+      title: 'AI Tip',
+      subtitle: dailyCoachLoading ? 'Thinking...' : 'Get suggestion',
+      loading: dailyCoachLoading,
+      onTap: onDailyCoachRequested,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 680) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: timer),
+                  SizedBox(width: 14),
+                  Expanded(child: notes),
+                ],
+              ),
+              SizedBox(height: 14),
+              aiCoach,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: timer),
+            SizedBox(width: 14),
+            Expanded(child: notes),
+            SizedBox(width: 14),
+            Expanded(child: aiCoach),
+          ],
+        );
+      },
     );
   }
 }
@@ -1619,19 +1712,21 @@ class _QuickToolCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.loading = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: loading ? null : onTap,
         borderRadius: BorderRadius.circular(8),
         child: Ink(
           height: 136,
@@ -1643,9 +1738,19 @@ class _QuickToolCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(icon, color: Colors.white, size: 24),
+                  loading
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(icon, color: Colors.white, size: 24),
                   Spacer(),
-                  _QuickActionArrow(color: Colors.white.withAlpha(160)),
+                  if (!loading)
+                    _QuickActionArrow(color: Colors.white.withAlpha(160)),
                 ],
               ),
               Column(
