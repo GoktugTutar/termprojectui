@@ -438,6 +438,26 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Insight sorusuna verilen cevabı kaydeder (POST /system-feedback/insight-answer)
+  static Future<void> saveInsightAnswer({
+    required String questionType,
+    required String answer,
+    int? lessonId,
+  }) async {
+    final h = await _authHeaders();
+    final body = <String, dynamic>{
+      'questionType': questionType,
+      'answer': answer,
+    };
+    if (lessonId != null) body['lessonId'] = lessonId;
+    final res = await http.post(
+      Uri.parse('$_base/system-feedback/insight-answer'),
+      headers: h,
+      body: json.encode(body),
+    );
+    await _handle(res);
+  }
+
   // ── DEBUG (sadece MODE=test) ─────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> getMode() async {

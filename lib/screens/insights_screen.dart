@@ -655,6 +655,32 @@ class _MessageCardState extends State<_MessageCard> {
   Map<String, dynamic> get _sc =>
       (widget.message['suggestedConstraint'] as Map<String, dynamic>?) ?? {};
 
+  // Insight soru state'i
+  bool _insightDone = false;
+  bool _insightSaving = false;
+  String? _insightSelected;
+
+  Map<String, dynamic> get _iq =>
+      (widget.message['insightQuestion'] as Map<String, dynamic>?) ?? {};
+  bool get _hasInsightQuestion => _iq.isNotEmpty && !_hasConstraint;
+
+  Future<void> _saveInsightAnswer(String answer) async {
+    if (_insightSaving) return;
+    setState(() { _insightSaving = true; _insightSelected = answer; });
+    try {
+      await ApiClient.saveInsightAnswer(
+        questionType: _iq['questionType'] as String,
+        answer: answer,
+        lessonId: (_iq['lessonId'] as num?)?.toInt(),
+      );
+      if (!mounted) return;
+      setState(() { _insightSaving = false; _insightDone = true; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _insightSaving = false; _insightSelected = null; });
+    }
+  }
+
   String get _kind => _sc['kind']?.toString() ?? '';
   bool get _hasConstraint => _sc.isNotEmpty;
 
@@ -807,12 +833,104 @@ class _MessageCardState extends State<_MessageCard> {
                       onTimeOfDay: _applyTimeOfDay,
                     ),
                   ],
+                  // ── Insight sorusu ──────────────────────────────────────────
+                  if (_hasInsightQuestion) ...[
+                    SizedBox(height: 12),
+                    _InsightQuestionSection(
+                      question: _iq['question']?.toString() ?? '',
+                      options: (_iq['options'] as List?)?.map((e) => e.toString()).toList() ?? [],
+                      done: _insightDone,
+                      saving: _insightSaving,
+                      selected: _insightSelected,
+                      onAnswer: _saveInsightAnswer,
+                    ),
+                  ],
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Insight sorusu alt bölümü ────────────────────────────────────────────────
+class _InsightQuestionSection extends StatelessWidget {
+  const _InsightQuestionSection({
+    required this.question,
+    required this.options,
+    required this.done,
+    required this.saving,
+    required this.selected,
+    required this.onAnswer,
+  });
+
+  final String question;
+  final List<String> options;
+  final bool done;
+  final bool saving;
+  final String? selected;
+  final void Function(String) onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    if (done) {
+      return Row(
+        children: [
+          Icon(Icons.check_circle_outline, color: kSuccess, size: 14),
+          SizedBox(width: 6),
+          Text(
+            'Cevabın kaydedildi',
+            style: TextStyle(color: kSuccess, fontSize: 12),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          question,
+          style: TextStyle(
+            color: kText2,
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: options.map((opt) {
+            final isSelected = selected == opt;
+            return GestureDetector(
+              onTap: saving ? null : () => onAnswer(opt),
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 150),
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? kAccent.withAlpha(40) : kSurface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? kAccent : kBorder,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  opt,
+                  style: TextStyle(
+                    color: isSelected ? kAccent : kText2,
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
