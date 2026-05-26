@@ -180,17 +180,6 @@ class _TodayScreenState extends State<TodayScreen>
       setState(() {});
     });
     _load();
-
-    final hour = AppTime.now().hour;
-    if (hour >= 6 && hour < 12) {
-      Future.delayed(Duration(milliseconds: 380), () async {
-        if (!mounted) return;
-        final prefs = await SharedPreferences.getInstance();
-        final lastAsked = prefs.getString('sleep_modal_date') ?? '';
-        final today = AppTime.todayStr();
-        if (lastAsked != today) _showSleepModal();
-      });
-    }
   }
 
   String _todayStr() => AppTime.todayStr();
@@ -752,17 +741,6 @@ class _TodayScreenState extends State<TodayScreen>
       ),
     );
     return result == true;
-  }
-
-  void _showSleepModal() {
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setString('sleep_modal_date', AppTime.todayStr());
-    });
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withAlpha(160),
-      builder: (_) => _SleepDialog(),
-    );
   }
 
   @override
@@ -2756,84 +2734,6 @@ class _NotebookPagePainter extends CustomPainter {
 }
 
 // ── Sleep dialog ──────────────────────────────────────────────────────────────
-
-class _SleepDialog extends StatelessWidget {
-  const _SleepDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: kAccent.withAlpha(46),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.bedtime_outlined, color: kAccent, size: 28),
-            ),
-            SizedBox(height: 14),
-            Text(
-              'Did you sleep well?',
-              style: TextStyle(
-                color: kText1,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 6),
-            Text(
-              'We use this to adjust today\'s session length only.',
-              style: TextStyle(color: kText2, fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: kText1,
-                      side: BorderSide(color: kBorder),
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text('No'),
-                  ),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: kAccent,
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text('Yes'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Ring painter ──────────────────────────────────────────────────────────────
 
