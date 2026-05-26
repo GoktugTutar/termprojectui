@@ -605,38 +605,98 @@ class _TrendCard extends StatelessWidget {
   }
 }
 
-class _MessageCard extends StatelessWidget {
+class _MessageCard extends StatefulWidget {
   const _MessageCard({required this.message});
 
   final Map<String, dynamic> message;
 
   @override
+  State<_MessageCard> createState() => _MessageCardState();
+}
+
+class _MessageCardState extends State<_MessageCard> {
+  // null = henüz yanıt yok, true/false = bool kartında yanıt
+  bool? _boolAnswer;
+  // saat veya time_of_day seçimi
+  int? _selectedHour;
+  String? _selectedTime;
+  bool _saving = false;
+  bool _done = false; // kart tamamlandı → küçük onay göster
+
+  Map<String, dynamic> get _sc =>
+      (widget.message['suggestedConstraint'] as Map<String, dynamic>?) ?? {};
+
+  String get _kind => _sc['kind']?.toString() ?? '';
+  bool get _hasConstraint => _sc.isNotEmpty;
+
+  Future<void> _applyBool(bool accept) async {
+    if (_saving) return;
+    setState(() { _saving = true; _boolAnswer = accept; });
+    try {
+      if (accept) {
+        final params = _sc['params'] as Map<String, dynamic>?;
+        await ApiClient.createConstraint(
+          _sc['type'] as String,
+          params: params,
+        );
+      }
+      if (!mounted) return;
+      setState(() { _saving = false; _done = true; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _saving = false; _boolAnswer = null; });
+    }
+  }
+
+  Future<void> _applyHour(int hour) async {
+    if (_saving) return;
+    setState(() { _saving = true; _selectedHour = hour; });
+    try {
+      await ApiClient.createConstraint(
+        _sc['type'] as String,
+        params: {'hour': hour},
+      );
+      if (!mounted) return;
+      setState(() { _saving = false; _done = true; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _saving = false; _selectedHour = null; });
+    }
+  }
+
+  Future<void> _applyTimeOfDay(String preferredTime) async {
+    if (_saving) return;
+    final dow = (_sc['dayOfWeek'] as num?)?.toInt();
+    if (dow == null) return;
+    setState(() { _saving = true; _selectedTime = preferredTime; });
+    try {
+      await ApiClient.createConstraint(
+        'day_study_time',
+        params: {'dayOfWeek': dow, 'preferredTime': preferredTime},
+      );
+      if (!mounted) return;
+      setState(() { _saving = false; _done = true; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _saving = false; _selectedTime = null; });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final type = message['type']?.toString() ?? 'info';
-    final tag =
-        message['tag']?.toString() ?? type.toUpperCase().replaceAll('_', ' ');
-    final title =
-        message['title']?.toString() ?? message['message']?.toString() ?? '';
-    final body =
-        message['body']?.toString() ?? message['suggestion']?.toString();
-    final cta = message['cta']?.toString();
+    final type = widget.message['type']?.toString() ?? 'info';
+    final tag = widget.message['tag']?.toString() ??
+        type.toUpperCase().replaceAll('_', ' ');
+    final title = widget.message['title']?.toString() ??
+        widget.message['message']?.toString() ?? '';
+    final body = widget.message['body']?.toString() ??
+        widget.message['suggestion']?.toString();
+    final cta = widget.message['cta']?.toString();
 
     final (color, icon, bg) = switch (type) {
-      'critical' => (
-        _kDanger,
-        Icons.warning_amber_rounded,
-        _kDanger.withAlpha(30),
-      ),
-      'warning' => (
-        _kWarning,
-        Icons.local_fire_department_outlined,
-        _kWarning.withAlpha(30),
-      ),
-      'positive' => (
-        _kSuccess,
-        Icons.check_circle_outline,
-        _kSuccess.withAlpha(30),
-      ),
+      'critical' => (_kDanger, Icons.warning_amber_rounded, _kDanger.withAlpha(30)),
+      'warning'  => (_kWarning, Icons.local_fire_department_outlined, _kWarning.withAlpha(30)),
+      'positive' => (_kSuccess, Icons.check_circle_outline, _kSuccess.withAlpha(30)),
       _ => (kAccent, Icons.info_outline, kAccent.withAlpha(30)),
     };
 
@@ -666,6 +726,7 @@ class _MessageCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Tip etiketi
                   Text(
                     tag.toUpperCase(),
                     style: TextStyle(
@@ -676,6 +737,7 @@ class _MessageCard extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 4),
+                  // Ana mesaj
                   Text(
                     title,
                     style: TextStyle(
@@ -688,21 +750,32 @@ class _MessageCard extends StatelessWidget {
                     SizedBox(height: 4),
                     Text(
                       body,
-                      style: TextStyle(
-                        color: kText2,
-                        fontSize: 13,
-                        height: 1.45,
-                      ),
+                      style: TextStyle(color: kText2, fontSize: 13, height: 1.45),
                     ),
                   ],
-                  if (cta != null && cta.isNotEmpty) ...[
+                  // Eski CTA (suggestedConstraint yoksa)
+                  if (!_hasConstraint && cta != null && cta.isNotEmpty) ...[
                     SizedBox(height: 12),
-                    Row(
-                      children: [
-                        _PillBtn(cta, accent: true),
-                        SizedBox(width: 8),
-                        _PillBtn('Dismiss'),
-                      ],
+                    Row(children: [
+                      _PillBtn(cta, accent: true),
+                      SizedBox(width: 8),
+                      _PillBtn('Dismiss'),
+                    ]),
+                  ],
+                  // ── Constraint önerisi ─────────────────────────────────────
+                  if (_hasConstraint) ...[
+                    SizedBox(height: 12),
+                    _ConstraintSuggestionSection(
+                      sc: _sc,
+                      kind: _kind,
+                      done: _done,
+                      saving: _saving,
+                      boolAnswer: _boolAnswer,
+                      selectedHour: _selectedHour,
+                      selectedTime: _selectedTime,
+                      onBool: _applyBool,
+                      onHour: _applyHour,
+                      onTimeOfDay: _applyTimeOfDay,
                     ),
                   ],
                 ],
@@ -710,6 +783,269 @@ class _MessageCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Constraint önerisi alt bölümü ─────────────────────────────────────────────
+
+class _ConstraintSuggestionSection extends StatelessWidget {
+  const _ConstraintSuggestionSection({
+    required this.sc,
+    required this.kind,
+    required this.done,
+    required this.saving,
+    required this.boolAnswer,
+    required this.selectedHour,
+    required this.selectedTime,
+    required this.onBool,
+    required this.onHour,
+    required this.onTimeOfDay,
+  });
+
+  final Map<String, dynamic> sc;
+  final String kind;
+  final bool done;
+  final bool saving;
+  final bool? boolAnswer;
+  final int? selectedHour;
+  final String? selectedTime;
+  final ValueChanged<bool> onBool;
+  final ValueChanged<int> onHour;
+  final ValueChanged<String> onTimeOfDay;
+
+  static const _timeOptions = [
+    ('morning',   'Sabah',   '08–11'),
+    ('afternoon', 'Öğle',    '12–15'),
+    ('evening',   'Akşam',   '18–21'),
+    ('night',     'Gece',    '21–24'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final question = sc['question']?.toString() ?? '';
+
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kAccent.withAlpha(18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kAccent.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Başlık satırı
+          Row(children: [
+            Icon(Icons.lightbulb_outline_rounded, size: 14, color: kAccent),
+            SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                question,
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ]),
+          SizedBox(height: 10),
+
+          // Tamamlandı durumu
+          if (done)
+            Row(children: [
+              Icon(Icons.check_circle_rounded, size: 15, color: _kSuccess),
+              SizedBox(width: 6),
+              Text(
+                'Saved — will apply on next plan.',
+                style: TextStyle(color: _kSuccess, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ])
+          // Bool (Evet/Hayır)
+          else if (kind == 'bool')
+            Row(children: [
+              _AnswerChip(
+                label: 'Yes',
+                selected: boolAnswer == true,
+                positive: true,
+                loading: saving && boolAnswer == true,
+                onTap: () => onBool(true),
+              ),
+              SizedBox(width: 8),
+              _AnswerChip(
+                label: 'No',
+                selected: boolAnswer == false,
+                positive: false,
+                loading: saving && boolAnswer == false,
+                onTap: () => onBool(false),
+              ),
+            ])
+          // Saat seçimi (hour_end / hour_start)
+          else if (kind == 'hour_end' || kind == 'hour_start') ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ...((sc['options'] as List? ?? []).map((o) {
+                  final h = (o as num).toInt();
+                  final label = h == 24
+                      ? '24:00'
+                      : '${h.toString().padLeft(2, '0')}:00';
+                  final isSelected = selectedHour == h;
+                  return _AnswerChip(
+                    label: label,
+                    selected: isSelected,
+                    positive: true,
+                    loading: saving && isSelected,
+                    onTap: () => onHour(h),
+                  );
+                })),
+                _AnswerChip(
+                  label: 'Skip',
+                  selected: false,
+                  positive: false,
+                  loading: false,
+                  onTap: () => onBool(false), // false = kullanıcı reddetti
+                ),
+              ],
+            ),
+          ]
+          // Günlük zaman seçimi
+          else if (kind == 'time_of_day') ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ..._timeOptions.map((opt) {
+                  final (val, label, range) = opt;
+                  final isSelected = selectedTime == val;
+                  return _TimeOfDayChip(
+                    label: label,
+                    range: range,
+                    selected: isSelected,
+                    loading: saving && isSelected,
+                    onTap: () => onTimeOfDay(val),
+                  );
+                }),
+                _AnswerChip(
+                  label: 'Skip',
+                  selected: false,
+                  positive: false,
+                  loading: false,
+                  onTap: () => onBool(false),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AnswerChip extends StatelessWidget {
+  const _AnswerChip({
+    required this.label,
+    required this.selected,
+    required this.positive,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool positive;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color base = positive ? kAccent : kText2;
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 120),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? base.withAlpha(46) : kBorder.withAlpha(40),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? base : kBorder,
+            width: selected ? 1.2 : 0.8,
+          ),
+        ),
+        child: loading
+            ? SizedBox(
+                width: 14, height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: base),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  color: selected ? base : kText2,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _TimeOfDayChip extends StatelessWidget {
+  const _TimeOfDayChip({
+    required this.label,
+    required this.range,
+    required this.selected,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final String label;
+  final String range;
+  final bool selected;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 120),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? kAccent.withAlpha(46) : kBorder.withAlpha(40),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? kAccent : kBorder,
+            width: selected ? 1.2 : 0.8,
+          ),
+        ),
+        child: loading
+            ? SizedBox(
+                width: 14, height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: kAccent),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: selected ? kAccent : kText2,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    range,
+                    style: TextStyle(color: kText2, fontSize: 10),
+                  ),
+                ],
+              ),
       ),
     );
   }

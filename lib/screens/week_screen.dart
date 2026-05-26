@@ -191,6 +191,12 @@ class _WeekScreenState extends State<WeekScreen>
   DateTime? _calendarMonth;
   Timer? _clockTimer;
 
+  // DOW (day-of-week) çalışma zamanı öneri kartı
+  Map<String, dynamic>? _dowSuggestion;
+  bool _dowCardDismissed = false;
+  bool _dowCardSaving = false;
+  bool _dowCardDone = false;
+
   final _vScroll = ScrollController();
 
   static const _dowLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -280,6 +286,7 @@ class _WeekScreenState extends State<WeekScreen>
         ApiClient.getMe(),
         ApiClient.getLessons(),
         ApiClient.getChecklistStatus(AppTime.todayStr()),
+        ApiClient.getFeedbackMessages(),
       ]);
       if (!mounted) return;
       final planData = Map<String, dynamic>.from(results[0] as Map);
@@ -288,6 +295,23 @@ class _WeekScreenState extends State<WeekScreen>
           .map((l) => Lesson.fromJson(l as Map<String, dynamic>))
           .toList();
       final status = Map<String, dynamic>.from(results[3] as Map);
+
+      // DOW öneri mesajını bul
+      Map<String, dynamic>? newDowSuggestion;
+      try {
+        final feedbackData = Map<String, dynamic>.from(results[4] as Map);
+        final messages = (feedbackData['messages'] as List?) ?? [];
+        for (final msg in messages) {
+          final m = msg as Map<String, dynamic>;
+          if (m['type'] == 'dow_dusuk_completion') {
+            final sc = m['suggestedConstraint'] as Map<String, dynamic>?;
+            if (sc != null && sc['kind'] == 'time_of_day') {
+              newDowSuggestion = sc;
+              break;
+            }
+          }
+        }
+      } catch (_) {}
       final busyList = ((userData['busySlots'] as List?) ?? [])
           .map((b) => _BusySlot.fromJson(b as Map<String, dynamic>))
           .toList();
@@ -329,12 +353,46 @@ class _WeekScreenState extends State<WeekScreen>
         if (onboardingNotice == null) _noticeDismissed = false;
         _lastToday = AppTime.todayStr();
         _loading = false;
+        // DOW öneri kartını güncelle: farklı bir DOW geldiyse sıfırla
+        if (newDowSuggestion != null) {
+          final newDow = newDowSuggestion['dayOfWeek'];
+          final curDow = _dowSuggestion?['dayOfWeek'];
+          if (newDow != curDow) {
+            _dowSuggestion = newDowSuggestion;
+            _dowCardDismissed = false;
+            _dowCardDone = false;
+          }
+        }
       });
 
       if (newPlanData != null) _showNotFittedWarning(newPlanData, lessonList);
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
+    }
+  }
+
+  /// DOW çalışma zamanı kısıtını kaydeder ve kartı tamamlandı olarak işaretler.
+  Future<void> _applyDowConstraint(String preferredTime) async {
+    if (_dowSuggestion == null) return;
+    setState(() => _dowCardSaving = true);
+    try {
+      final dow = (_dowSuggestion!['dayOfWeek'] as num).toInt();
+      await ApiClient.createConstraint(
+        'day_study_time',
+        params: {'dayOfWeek': dow, 'preferredTime': preferredTime},
+      );
+      if (!mounted) return;
+      setState(() {
+        _dowCardSaving = false;
+        _dowCardDone = true;
+      });
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _dowCardDismissed = true);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _dowCardSaving = false);
     }
   }
 
@@ -498,6 +556,16 @@ class _WeekScreenState extends State<WeekScreen>
                 _buildViewSwitchBar(),
                 _buildHeader(),
                 if (_viewIndex == 0 && !wide && _plan != null) _buildDayStrip(),
+                if (_viewIndex == 0 &&
+                    _dowSuggestion != null &&
+                    !_dowCardDismissed)
+                  _DowSuggestionCard(
+                    suggestion: _dowSuggestion!,
+                    saving: _dowCardSaving,
+                    done: _dowCardDone,
+                    onSelect: _applyDowConstraint,
+                    onDismiss: () => setState(() => _dowCardDismissed = true),
+                  ),
                 Expanded(
                   child: _loading
                       ? Center(child: CircularProgressIndicator(color: kAccent))
@@ -2213,6 +2281,180 @@ class _StripedPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _StripedPainter old) => old.color != color;
+}
+
+// ── DOW Öneri Kartı ───────────────────────────────────────────────────────────
+
+/// Düşük tamamlama oranı tespit edilen gün için çalışma zamanı seçim kartı.
+class _DowSuggestionCard extends StatelessWidget {
+  const _DowSuggestionCard({
+    required this.suggestion,
+    required this.saving,
+    required this.done,
+    required this.onSelect,
+    required this.onDismiss,
+  });
+
+  final Map<String, dynamic> suggestion;
+  final bool saving;
+  final bool done;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onDismiss;
+
+  static const _periods = [
+    ('morning', 'Morning', '08–11'),
+    ('afternoon', 'Afternoon', '12–15'),
+    ('evening', 'Evening', '18–21'),
+    ('night', 'Night', '21–00'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final dayName = suggestion['dayName']?.toString() ?? 'This day';
+    final question =
+        suggestion['question']?.toString() ??
+        'When would you prefer to study on $dayName?';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 11, 8, 11),
+        decoration: BoxDecoration(
+          color: kAccent.withAlpha(18),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kAccent.withAlpha(80), width: 1.2),
+        ),
+        child: done
+            ? Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: kAccent,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Saved — will apply on next plan.',
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.tips_and_updates_outlined,
+                        color: kAccent,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          question,
+                          style: TextStyle(
+                            color: kText1,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onDismiss,
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: kText2,
+                          size: 15,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 28,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _periods
+                        .map(
+                          (p) => _DowTimeChip(
+                            label: p.$2,
+                            range: p.$3,
+                            saving: saving,
+                            onTap: () => onSelect(p.$1),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _DowTimeChip extends StatelessWidget {
+  const _DowTimeChip({
+    required this.label,
+    required this.range,
+    required this.saving,
+    required this.onTap,
+  });
+
+  final String label;
+  final String range;
+  final bool saving;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: saving ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: kBorder),
+        ),
+        child: saving
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: kAccent,
+                ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    range,
+                    style: TextStyle(color: kText2, fontSize: 10),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
 }
 
 // ── Yardımcı ─────────────────────────────────────────────────────────────────

@@ -594,6 +594,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _ChecklistHeatmap(history: _checklistHistory),
                       SizedBox(height: 18),
                     ],
+                    _PlanningOverridesCard(),
+                    SizedBox(height: 16),
                     _TestModeCard(onSave: _snack),
                     SizedBox(height: 24),
                   ],
@@ -2767,6 +2769,792 @@ class _SheetTitle extends StatelessWidget {
           tooltip: 'Close',
           icon: Icon(Icons.close_rounded, color: kText2, size: 20),
         ),
+      ],
+    );
+  }
+}
+
+// ── Planning Overrides Card ───────────────────────────────────────────────────
+
+// Kullanıcının aktif planlama tercihlerini listeleyen ve düzenleyen kart.
+// Sadece developer (MODE=test) bölümünde gösterilir.
+class _PlanningOverridesCard extends StatefulWidget {
+  const _PlanningOverridesCard();
+
+  @override
+  State<_PlanningOverridesCard> createState() => _PlanningOverridesCardState();
+}
+
+class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
+  // Aktif constraint'lerin id'leri (null = DB'de yok = default davranış)
+  bool _allowConsecutiveAgir = false;
+  int? _consecutiveAgirId;
+
+  bool _slottedModeDisabled = false;
+  int? _slottedModeId;
+
+  int? _studyStartHour; // null = default (8)
+  int? _startHourId;
+
+  int? _studyEndHour; // null = default (24)
+  int? _endHourId;
+
+  int? _yorucuPenalty; // null = default (-20)
+  int? _penaltyId;
+
+  // dow(1-7) → preferredTime
+  final Map<int, String> _dayOverrides = {};
+  // dow(1-7) → constraint id
+  final Map<int, int> _dayOverrideIds = {};
+
+  bool _loading = true;
+  // hangi toggle/değer kaydediliyor
+  final Set<String> _busy = {};
+
+  static const _startOptions = [8, 9, 10, 11, 12, 14, 16, 18, 19];
+  static const _endOptions = [20, 21, 22, 23, 24];
+  static const _penaltyOptions = [-5, -10, -15, -20, -25, -30];
+  static const _timeLabels = {
+    'morning': 'Mng',
+    'afternoon': 'Aftn',
+    'evening': 'Eve',
+    'night': 'Ngt',
+  };
+  static const _dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final list = await ApiClient.listConstraints();
+      _applyConstraints(list);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _loading = false);
+  }
+
+  void _applyConstraints(List<Map<String, dynamic>> list) {
+    _allowConsecutiveAgir = false;
+    _consecutiveAgirId = null;
+    _slottedModeDisabled = false;
+    _slottedModeId = null;
+    _studyStartHour = null;
+    _startHourId = null;
+    _studyEndHour = null;
+    _endHourId = null;
+    _yorucuPenalty = null;
+    _penaltyId = null;
+    _dayOverrides.clear();
+    _dayOverrideIds.clear();
+
+    for (final c in list) {
+      final id = (c['id'] as num).toInt();
+      final params = (c['params'] as Map?) ?? {};
+      switch (c['type'] as String) {
+        case 'allow_consecutive_agir':
+          _allowConsecutiveAgir = true;
+          _consecutiveAgirId = id;
+        case 'disable_slotted_mode':
+          _slottedModeDisabled = true;
+          _slottedModeId = id;
+        case 'study_start_hour':
+          _studyStartHour = (params['hour'] as num?)?.toInt();
+          _startHourId = id;
+        case 'study_end_hour':
+          _studyEndHour = (params['hour'] as num?)?.toInt();
+          _endHourId = id;
+        case 'reduce_yorucu_penalty':
+          _yorucuPenalty = (params['penalty'] as num?)?.toInt();
+          _penaltyId = id;
+        case 'day_study_time':
+          final dow = (params['dayOfWeek'] as num?)?.toInt();
+          final pt = params['preferredTime'] as String?;
+          if (dow != null && pt != null) {
+            _dayOverrides[dow] = pt;
+            _dayOverrideIds[dow] = id;
+          }
+      }
+    }
+  }
+
+  // ── Toggle helpers ──────────────────────────────────────────────────────────
+
+  Future<void> _toggleBool(
+    String key,
+    bool newVal,
+    String type,
+    int? existingId,
+    void Function(bool val, int? id) onDone,
+  ) async {
+    if (_busy.contains(key)) return;
+    setState(() => _busy.add(key));
+    try {
+      if (newVal) {
+        final created = await ApiClient.createConstraint(type);
+        final newId = (created['id'] as num).toInt();
+        if (!mounted) return;
+        onDone(true, newId);
+      } else if (existingId != null) {
+        await ApiClient.removeConstraint(existingId);
+        if (!mounted) return;
+        onDone(false, null);
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _busy.remove(key));
+  }
+
+  Future<void> _setHour(
+    String key,
+    String type,
+    int? existingId,
+    int? newHour,
+    void Function(int? hour, int? id) onDone,
+  ) async {
+    if (_busy.contains(key)) return;
+    setState(() => _busy.add(key));
+    try {
+      if (newHour == null) {
+        // sıfırla — constraint'i kaldır
+        if (existingId != null) {
+          await ApiClient.removeConstraint(existingId);
+          if (!mounted) return;
+          onDone(null, null);
+        }
+      } else {
+        final created = await ApiClient.createConstraint(
+          type,
+          params: {'hour': newHour},
+        );
+        final newId = (created['id'] as num).toInt();
+        if (!mounted) return;
+        onDone(newHour, newId);
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _busy.remove(key));
+  }
+
+  Future<void> _setPenalty(int? newPenalty) async {
+    const key = 'penalty';
+    if (_busy.contains(key)) return;
+    setState(() => _busy.add(key));
+    try {
+      if (newPenalty == null) {
+        if (_penaltyId != null) {
+          await ApiClient.removeConstraint(_penaltyId!);
+          if (!mounted) return;
+          setState(() {
+            _yorucuPenalty = null;
+            _penaltyId = null;
+          });
+        }
+      } else {
+        final created = await ApiClient.createConstraint(
+          'reduce_yorucu_penalty',
+          params: {'penalty': newPenalty},
+        );
+        if (!mounted) return;
+        setState(() {
+          _yorucuPenalty = newPenalty;
+          _penaltyId = (created['id'] as num).toInt();
+        });
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _busy.remove(key));
+  }
+
+  Future<void> _setDayOverride(int dow, String? preferredTime) async {
+    final key = 'day_$dow';
+    if (_busy.contains(key)) return;
+    setState(() => _busy.add(key));
+    try {
+      final existingId = _dayOverrideIds[dow];
+      if (preferredTime == null) {
+        // override kaldır → global tercihe dön
+        if (existingId != null) {
+          await ApiClient.removeConstraint(existingId);
+          if (!mounted) return;
+          setState(() {
+            _dayOverrides.remove(dow);
+            _dayOverrideIds.remove(dow);
+          });
+        }
+      } else {
+        final created = await ApiClient.createConstraint(
+          'day_study_time',
+          params: {'dayOfWeek': dow, 'preferredTime': preferredTime},
+        );
+        if (!mounted) return;
+        setState(() {
+          _dayOverrides[dow] = preferredTime;
+          _dayOverrideIds[dow] = (created['id'] as num).toInt();
+        });
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _busy.remove(key));
+  }
+
+  // ── Build ───────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Başlık satırı
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: kAccent.withAlpha(40),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  size: 15,
+                  color: kAccent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Planning Overrides',
+                  style: TextStyle(
+                    color: kText1,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (_loading)
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: kAccent,
+                  ),
+                )
+              else
+                Tooltip(
+                  message: 'Refresh',
+                  child: InkWell(
+                    onTap: _load,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Icon(
+                      Icons.refresh_rounded,
+                      size: 18,
+                      color: kText2,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          if (!_loading) ...[
+            // ── Toggle constraints ────────────────────────────────────────────
+            _OverrideToggleRow(
+              label: 'Allow consecutive heavy lessons',
+              sub: 'AGIR dersler art arda güne yerleşebilir',
+              icon: Icons.repeat_rounded,
+              value: _allowConsecutiveAgir,
+              busy: _busy.contains('consecutive'),
+              onChanged: (v) => _toggleBool(
+                'consecutive',
+                v,
+                'allow_consecutive_agir',
+                _consecutiveAgirId,
+                (val, id) => setState(() {
+                  _allowConsecutiveAgir = val;
+                  _consecutiveAgirId = id;
+                }),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _OverrideToggleRow(
+              label: 'Disable slotted mode',
+              sub: 'Ertelenen ders için 3-gün zinciri yasağı kalkar',
+              icon: Icons.block_rounded,
+              value: _slottedModeDisabled,
+              busy: _busy.contains('slotted'),
+              onChanged: (v) => _toggleBool(
+                'slotted',
+                v,
+                'disable_slotted_mode',
+                _slottedModeId,
+                (val, id) => setState(() {
+                  _slottedModeDisabled = val;
+                  _slottedModeId = id;
+                }),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+            Divider(height: 1, color: kBorder),
+            const SizedBox(height: 14),
+
+            // ── Study window ──────────────────────────────────────────────────
+            _OverrideSubLabel('Study window'),
+            const SizedBox(height: 8),
+            _OverrideHourRow(
+              label: 'Start',
+              options: _startOptions,
+              selected: _studyStartHour,
+              defaultLabel: '08:00',
+              busy: _busy.contains('startH'),
+              onSelect: (h) => _setHour(
+                'startH',
+                'study_start_hour',
+                _startHourId,
+                h,
+                (hour, id) => setState(() {
+                  _studyStartHour = hour;
+                  _startHourId = id;
+                }),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _OverrideHourRow(
+              label: 'End',
+              options: _endOptions,
+              selected: _studyEndHour,
+              defaultLabel: '24:00',
+              busy: _busy.contains('endH'),
+              onSelect: (h) => _setHour(
+                'endH',
+                'study_end_hour',
+                _endHourId,
+                h,
+                (hour, id) => setState(() {
+                  _studyEndHour = hour;
+                  _endHourId = id;
+                }),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+            Divider(height: 1, color: kBorder),
+            const SizedBox(height: 14),
+
+            // ── Yorucu penalty ────────────────────────────────────────────────
+            _OverrideSubLabel('Heavy day penalty'),
+            const SizedBox(height: 8),
+            _OverridePenaltyRow(
+              options: _penaltyOptions,
+              selected: _yorucuPenalty,
+              busy: _busy.contains('penalty'),
+              onSelect: _setPenalty,
+            ),
+
+            const SizedBox(height: 14),
+            Divider(height: 1, color: kBorder),
+            const SizedBox(height: 14),
+
+            // ── Per-day overrides ─────────────────────────────────────────────
+            _OverrideSubLabel('Per-day preferred time'),
+            const SizedBox(height: 4),
+            Text(
+              'Global default: tap same again to clear',
+              style: TextStyle(color: kText2, fontSize: 11),
+            ),
+            const SizedBox(height: 10),
+            ...List.generate(7, (i) {
+              final dow = i + 1;
+              final current = _dayOverrides[dow];
+              final busy = _busy.contains('day_$dow');
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: _DayOverrideRow(
+                  dayLabel: _dayLabels[i],
+                  current: current,
+                  timeLabels: _timeLabels,
+                  busy: busy,
+                  onSelect: (pt) => _setDayOverride(
+                    dow,
+                    // aynı seçim tekrar tıklandıysa → override sil
+                    current == pt ? null : pt,
+                  ),
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Alt bileşenler ─────────────────────────────────────────────────────────────
+
+class _OverrideSubLabel extends StatelessWidget {
+  const _OverrideSubLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        color: kText2,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.7,
+      ),
+    );
+  }
+}
+
+// Toggle satırı: switch + açıklama
+class _OverrideToggleRow extends StatelessWidget {
+  const _OverrideToggleRow({
+    required this.label,
+    required this.sub,
+    required this.icon,
+    required this.value,
+    required this.busy,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String sub;
+  final IconData icon;
+  final bool value;
+  final bool busy;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: value ? kAccent.withAlpha(30) : kBorder.withAlpha(30),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: value ? kAccent.withAlpha(120) : kBorder,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: value ? kAccent : kText2),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: value ? kText1 : kText2,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  sub,
+                  style: TextStyle(color: kText2, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          busy
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: kAccent,
+                  ),
+                )
+              : Switch(
+                  value: value,
+                  onChanged: onChanged,
+                  activeThumbColor: kAccent,
+                  activeTrackColor: kAccent.withAlpha(120),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+// Saat seçim satırı: label + chip'ler + default chip
+class _OverrideHourRow extends StatelessWidget {
+  const _OverrideHourRow({
+    required this.label,
+    required this.options,
+    required this.selected,
+    required this.defaultLabel,
+    required this.busy,
+    required this.onSelect,
+  });
+
+  final String label;
+  final List<int> options;
+  final int? selected;
+  final String defaultLabel;
+  final bool busy;
+  final ValueChanged<int?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 38,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: kText2,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // Default chip (constraint yok = sistem varsayılanı)
+                _HourChip(
+                  label: defaultLabel,
+                  selected: selected == null,
+                  isDefault: true,
+                  busy: busy && selected == null,
+                  onTap: () => onSelect(null),
+                ),
+                const SizedBox(width: 5),
+                ...options.map((h) {
+                  final label =
+                      h == 24 ? '24:00' : '${h.toString().padLeft(2, '0')}:00';
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 5),
+                    child: _HourChip(
+                      label: label,
+                      selected: selected == h,
+                      isDefault: false,
+                      busy: busy && selected == h,
+                      onTap: () => onSelect(h),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HourChip extends StatelessWidget {
+  const _HourChip({
+    required this.label,
+    required this.selected,
+    required this.isDefault,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool isDefault;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color borderColor;
+    final Color bgColor;
+    final Color textColor;
+
+    if (selected && isDefault) {
+      // default seçili: soluk border, normal renk
+      borderColor = kBorder;
+      bgColor = kBorder.withAlpha(50);
+      textColor = kText2;
+    } else if (selected) {
+      borderColor = kAccent;
+      bgColor = kAccent.withAlpha(40);
+      textColor = kAccent;
+    } else {
+      borderColor = kBorder;
+      bgColor = Colors.transparent;
+      textColor = kText2;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor, width: 0.8),
+        ),
+        child: busy
+            ? SizedBox(
+                width: 36,
+                height: 14,
+                child: Center(
+                  child: SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: kAccent,
+                    ),
+                  ),
+                ),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+// Penalty seçim satırı
+class _OverridePenaltyRow extends StatelessWidget {
+  const _OverridePenaltyRow({
+    required this.options,
+    required this.selected,
+    required this.busy,
+    required this.onSelect,
+  });
+
+  final List<int> options;
+  final int? selected;
+  final bool busy;
+  final ValueChanged<int?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          // Default chip
+          _HourChip(
+            label: 'Default (−20)',
+            selected: selected == null,
+            isDefault: true,
+            busy: busy && selected == null,
+            onTap: () => onSelect(null),
+          ),
+          const SizedBox(width: 5),
+          ...options.map((p) {
+            if (p == -20) return const SizedBox.shrink(); // default ile aynı
+            return Padding(
+              padding: const EdgeInsets.only(right: 5),
+              child: _HourChip(
+                label: '−${p.abs()}',
+                selected: selected == p,
+                isDefault: false,
+                busy: busy && selected == p,
+                onTap: () => onSelect(p),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// Gün satırı: gün adı + 4 zaman chip'i
+class _DayOverrideRow extends StatelessWidget {
+  const _DayOverrideRow({
+    required this.dayLabel,
+    required this.current,
+    required this.timeLabels,
+    required this.busy,
+    required this.onSelect,
+  });
+
+  final String dayLabel;
+  final String? current; // null = global default
+  final Map<String, String> timeLabels;
+  final bool busy;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 34,
+          child: Text(
+            dayLabel,
+            style: TextStyle(
+              color: current != null ? kText1 : kText2,
+              fontSize: 12,
+              fontWeight: current != null ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        ...timeLabels.entries.map((e) {
+          final isSelected = current == e.key;
+          return Padding(
+            padding: const EdgeInsets.only(right: 5),
+            child: busy
+                ? _HourChip(
+                    label: e.value,
+                    selected: isSelected,
+                    isDefault: false,
+                    busy: isSelected,
+                    onTap: () {},
+                  )
+                : _HourChip(
+                    label: e.value,
+                    selected: isSelected,
+                    isDefault: false,
+                    busy: false,
+                    onTap: () => onSelect(e.key),
+                  ),
+          );
+        }),
+        if (current != null) ...[
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Reset to global',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: busy ? null : () => onSelect(current!), // aynı seçim = sil
+              child: Icon(Icons.close_rounded, size: 14, color: kText2),
+            ),
+          ),
+        ],
       ],
     );
   }

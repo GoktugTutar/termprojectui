@@ -501,4 +501,36 @@ class ApiClient {
       body: json.encode({'sleptWell': sleptWell}),
     );
   }
+
+  // ── User Constraints ────────────────────────────────────────────────────────
+
+  /// Aktif constraint kayıtlarını listeler.
+  static Future<List<Map<String, dynamic>>> listConstraints() async {
+    final h = await _authHeaders();
+    final res = await http.get(Uri.parse('$_base/user-constraint'), headers: h);
+    final data = await _handle(res) as List;
+    return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Yeni constraint oluşturur; aynı tip varsa otomatik deaktive edilir.
+  static Future<Map<String, dynamic>> createConstraint(
+    String type, {
+    Map<String, dynamic>? params,
+  }) async {
+    final h = await _authHeaders();
+    final body = <String, dynamic>{'type': type};
+    if (params != null) body['params'] = params;
+    final res = await http.post(
+      Uri.parse('$_base/user-constraint'),
+      headers: h,
+      body: json.encode(body),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  /// Constraint'i deaktive eder (isActive = false).
+  static Future<void> removeConstraint(int id) async {
+    final h = await _authHeaders();
+    await http.delete(Uri.parse('$_base/user-constraint/$id'), headers: h);
+  }
 }
