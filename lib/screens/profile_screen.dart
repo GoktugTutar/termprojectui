@@ -240,6 +240,17 @@ class _ProfileScreenState extends State<ProfileScreen>
     ).push(MaterialPageRoute(builder: (_) => const NewTermScreen()));
   }
 
+  Future<void> _openBusyEditor() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _BusyTimesEditPage(existingSlots: _busySlots),
+      ),
+    );
+    if (saved == true && mounted) {
+      await _load();
+    }
+  }
+
   Future<void> _openAddLesson() async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -455,6 +466,34 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ],
                   ),
                   SizedBox(height: 18),
+                  // ── Busy times section ──────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(child: _SectionLabel('Busy times')),
+                      TextButton.icon(
+                        onPressed: _openBusyEditor,
+                        icon: Icon(Icons.edit_calendar_outlined, size: 16),
+                        label: Text(
+                          'Edit',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: kAccent,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 10),
+                  _ProfileBusySlotsPanel(slots: _busySlots),
+                  SizedBox(height: 18),
                   FilledButton(
                     onPressed: _saving ? null : _savePreferences,
                     style: FilledButton.styleFrom(
@@ -479,13 +518,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                   ),
                   SizedBox(height: 24),
-                  // Checklist history ısı haritası
-                  if (_isTestMode && _checklistHistory.isNotEmpty) ...[
-                    _SectionLabel('Checklist history'),
-                    SizedBox(height: 10),
-                    _ChecklistHeatmap(history: _checklistHistory),
-                    SizedBox(height: 24),
-                  ],
                   // Term yönetimi
                   _SectionLabel('Term'),
                   SizedBox(height: 8),
@@ -532,8 +564,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                   SizedBox(height: 24),
                   // Developer / Test mode (sadece MODE=test'te gösterilir)
                   if (_isTestMode) ...[
-                    _SectionLabel('Developer'),
+                    _SectionLabel('-- Developer --', color: Colors.black),
                     SizedBox(height: 8),
+                    if (_checklistHistory.isNotEmpty) ...[
+                      _SectionLabel('Checklist history'),
+                      SizedBox(height: 10),
+                      _ChecklistHeatmap(history: _checklistHistory),
+                      SizedBox(height: 18),
+                    ],
                     _TestModeCard(onSave: _snack),
                     SizedBox(height: 24),
                   ],
@@ -573,16 +611,17 @@ class _ProfileScreenState extends State<ProfileScreen>
 // ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+  const _SectionLabel(this.text, {this.color});
 
   final String text;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
       style: TextStyle(
-        color: kText2,
+        color: color ?? kText2,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
@@ -2214,6 +2253,440 @@ class _ProfileAddBusySlotSheetState extends State<_ProfileAddBusySlotSheet> {
   }
 }
 
+// ── Busy Times grid renkleri ──────────────────────────────────────────────────
+
+const _kBusyLevelColors = [
+  Color(0xFF000000), // 0: kullanılmaz (boş)
+  Color(0xFF64B5F6), // 1: çok az yoğun — açık mavi
+  Color(0xFF9575CD), // 2: az yoğun     — mor
+  Color(0xFFFFB300), // 3: orta          — amber
+  Color(0xFFFF6D00), // 4: yoğun         — turuncu
+  Color(0xFFE53935), // 5: çok yoğun    — kırmızı
+];
+
+Color _busyCellColor(int value) {
+  if (value <= 0 || value > 5) return const Color(0xFF000000).withAlpha(12);
+  return _kBusyLevelColors[value].withAlpha(210);
+}
+
+class _BusyGridCell extends StatelessWidget {
+  const _BusyGridCell({required this.value, required this.height});
+
+  final int value;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: Padding(
+        padding: const EdgeInsets.all(0.8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          decoration: BoxDecoration(
+            color: _busyCellColor(value),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Busy Times Edit Page ──────────────────────────────────────────────────────
+
+class _BusyTimesEditPage extends StatefulWidget {
+  const _BusyTimesEditPage({required this.existingSlots});
+
+  final List<_ProfileBusySlot> existingSlots;
+
+  @override
+  State<_BusyTimesEditPage> createState() => _BusyTimesEditPageState();
+}
+
+class _BusyTimesEditPageState extends State<_BusyTimesEditPage> {
+  static const int _gridStartHour = 8;
+  static const int _gridHourCount = 16; // 08:00 – 00:00
+  static const List<String> _shortDays = [
+    'Pzt',
+    'Sal',
+    'Çar',
+    'Per',
+    'Cum',
+    'Cmt',
+    'Paz',
+  ];
+
+  late List<List<int>> _busyGrid;
+  int _dragSetValue = -1;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _busyGrid = _initGrid();
+  }
+
+  List<List<int>> _initGrid() {
+    final grid = List.generate(7, (_) => List.filled(_gridHourCount, 0));
+    for (final slot in widget.existingSlots) {
+      if (!slot.isRoutine) continue;
+      final dayIdx = slot.dayOfWeek - 1;
+      if (dayIdx < 0 || dayIdx >= 7) continue;
+      final startParts = slot.startTime.split(':').map(int.parse).toList();
+      final endParts = slot.endTime.split(':').map(int.parse).toList();
+      int startH = startParts[0];
+      int endH = endParts[0];
+      if (endH == 0) endH = 24;
+      final level = slot.fatigueLevel.clamp(1, 5);
+      for (int h = startH; h < endH; h++) {
+        final gridIdx = h - _gridStartHour;
+        if (gridIdx >= 0 && gridIdx < _gridHourCount) {
+          grid[dayIdx][gridIdx] = level;
+        }
+      }
+    }
+    return grid;
+  }
+
+  List<Map<String, dynamic>> _buildNewSlots() {
+    // Rutin olmayan slotları koru
+    final result = widget.existingSlots
+        .where((s) => !s.isRoutine)
+        .map((s) => s.toJson())
+        .toList();
+
+    // Grid'den rutin slotları oluştur — bitişik aynı-seviye hücreleri birleştir
+    for (int d = 0; d < 7; d++) {
+      int h = 0;
+      while (h < _gridHourCount) {
+        final level = _busyGrid[d][h];
+        if (level == 0) {
+          h++;
+          continue;
+        }
+        final runStart = h;
+        final runLevel = level;
+        while (h < _gridHourCount && _busyGrid[d][h] == runLevel) {
+          h++;
+        }
+        final startH = _gridStartHour + runStart;
+        final endH = _gridStartHour + h;
+        result.add({
+          'dayOfWeek': d + 1,
+          'startTime': '${startH.toString().padLeft(2, '0')}:00',
+          'endTime': endH >= 24
+              ? '00:00'
+              : '${endH.toString().padLeft(2, '0')}:00',
+          'fatigueLevel': runLevel,
+          'isRoutine': true,
+          'iconKey': 'energy',
+        });
+      }
+    }
+    return result;
+  }
+
+  bool get _isGridEmpty => _busyGrid.every((day) => day.every((v) => v == 0));
+
+  void _handleGridPointer(
+    Offset localPos,
+    double cellW,
+    double cellH,
+    double headerH,
+    double labelW,
+    bool isDown,
+  ) {
+    final x = localPos.dx - labelW;
+    final y = localPos.dy - headerH;
+    if (x < 0 || y < 0) return;
+    final day = (x / cellW).floor().clamp(0, 6);
+    final hour = (y / cellH).floor();
+    if (hour < 0 || hour >= _gridHourCount) return;
+    setState(() {
+      if (isDown) {
+        _dragSetValue = (_busyGrid[day][hour] + 1) % 6; // 0→1→2→3→4→5→0
+      }
+      if (_dragSetValue >= 0) {
+        _busyGrid[day][hour] = _dragSetValue;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await ApiClient.updateBusySlots(_buildNewSlots());
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: _kDanger,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context, false),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: kText1),
+        ),
+        title: Text(
+          'Meşgul Zamanlar',
+          style: TextStyle(
+            color: kText1,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: kAccent,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Kaydet',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Açıklama
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+              child: Text(
+                'Tıkla veya sürükle. Algoritma ders bloklarını bu saatlerin dışına yerleştirir.',
+                style: TextStyle(color: kText2, fontSize: 13),
+              ),
+            ),
+            // Renk skalası + Temizle butonu
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+              child: Row(
+                children: [
+                  ...List.generate(5, (i) {
+                    final level = i + 1;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: _kBusyLevelColors[level].withAlpha(210),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$level',
+                            style: TextStyle(
+                              color: kText2,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const Spacer(),
+                  if (!_isGridEmpty)
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        for (final day in _busyGrid) {
+                          day.fillRange(0, day.length, 0);
+                        }
+                      }),
+                      icon: const Icon(
+                        Icons.clear_all_rounded,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                      label: Text(
+                        'Temizle',
+                        style: TextStyle(color: kText2, fontSize: 12),
+                      ),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Grid
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: _buildWeeklyGrid(),
+              ),
+            ),
+            // İpucu
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+              child: Text(
+                'İpucu: Tıkla → 1 → 2 → 3 → 4 → 5 → 0 döngüsü',
+                style: TextStyle(color: kText2, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const labelW = 38.0;
+        const headerH = 26.0;
+        final cellW = (constraints.maxWidth - labelW) / 7;
+        final cellH = (constraints.maxHeight - headerH) / _gridHourCount;
+
+        return Listener(
+          onPointerDown: (e) => _handleGridPointer(
+            e.localPosition,
+            cellW,
+            cellH,
+            headerH,
+            labelW,
+            true,
+          ),
+          onPointerMove: (e) => _handleGridPointer(
+            e.localPosition,
+            cellW,
+            cellH,
+            headerH,
+            labelW,
+            false,
+          ),
+          onPointerUp: (_) => setState(() => _dragSetValue = -1),
+          onPointerCancel: (_) => setState(() => _dragSetValue = -1),
+          child: Column(
+            children: [
+              // Gün başlıkları
+              SizedBox(
+                height: headerH,
+                child: Row(
+                  children: [
+                    SizedBox(width: labelW),
+                    ..._shortDays.map(
+                      (d) => SizedBox(
+                        width: cellW,
+                        child: Center(
+                          child: Text(
+                            d,
+                            style: TextStyle(
+                              color: kText2,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Saat satırları
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Sol: saat etiketleri
+                    SizedBox(
+                      width: labelW,
+                      child: Column(
+                        children: List.generate(_gridHourCount, (h) {
+                          final hour = _gridStartHour + h;
+                          return SizedBox(
+                            height: cellH,
+                            child: h % 2 == 0
+                                ? Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '${hour.toString().padLeft(2, '0')}:00',
+                                      style: TextStyle(
+                                        color: kText2,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          );
+                        }),
+                      ),
+                    ),
+                    // Gün sütunları
+                    ...List.generate(
+                      7,
+                      (d) => SizedBox(
+                        width: cellW,
+                        child: Column(
+                          children: List.generate(
+                            _gridHourCount,
+                            (h) => _BusyGridCell(
+                              value: _busyGrid[d][h],
+                              height: cellH,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _SheetHandle extends StatelessWidget {
   const _SheetHandle();
 
@@ -2737,28 +3210,28 @@ class _HeatmapCellText extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$dayNum',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: textColor,
-              ),
-            ),
-            if (showTodayLabel) ...[
-              SizedBox(height: 3),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: kAccent,
-                  borderRadius: BorderRadius.circular(999),
+        padding: EdgeInsets.all(3),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$dayNum',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: textColor,
                 ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
+              ),
+              if (showTodayLabel) ...[
+                SizedBox(height: 2),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: kAccent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                   child: Text(
                     'Today',
                     style: TextStyle(
@@ -2768,9 +3241,9 @@ class _HeatmapCellText extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
