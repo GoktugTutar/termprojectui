@@ -234,7 +234,29 @@ class _ProfileScreenState extends State<ProfileScreen>
     setState(() => _saving = false);
   }
 
-  void _startNewTerm() {
+  Future<void> _startNewTerm() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: kSurface,
+        title: Text('Yeni Dönem Başlat', style: TextStyle(color: kText1)),
+        content: Text(
+          'Yeni dönem başlatmak istediğinizden emin misiniz?\n\nMevcut dersleriniz yeni döneme taşınmayacak. Yeni dönemi daha iyi planlayabilmek için eski döneminizdeki ders ve program bilgileriniz kayıt altında tutulmaya devam edecek.',
+          style: TextStyle(color: kText2),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('İptal', style: TextStyle(color: kText2)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Başlat'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const NewTermScreen()));
@@ -3009,7 +3031,7 @@ class _ChecklistHeatmap extends StatelessWidget {
               );
             }),
           ),
-          SizedBox(height: 6),
+          SizedBox(height: 4),
           // Weeklar
           ...weeks.map((week) {
             return Padding(
@@ -3059,7 +3081,7 @@ class _DayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 36,
+      height: 42,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
