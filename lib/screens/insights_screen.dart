@@ -878,11 +878,11 @@ class _InsightQuestionSection extends StatelessWidget {
     if (done) {
       return Row(
         children: [
-          Icon(Icons.check_circle_outline, color: kSuccess, size: 14),
+          Icon(Icons.check_circle_outline, color: _kSuccess, size: 14),
           SizedBox(width: 6),
           Text(
             'Cevabın kaydedildi',
-            style: TextStyle(color: kSuccess, fontSize: 12),
+            style: TextStyle(color: _kSuccess, fontSize: 12),
           ),
         ],
       );
