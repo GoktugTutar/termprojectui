@@ -107,6 +107,9 @@ class _TopNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 700;
+    final itemSize = compact ? 34.0 : 42.0;
+    final iconSize = compact ? 18.0 : 21.0;
     final items = <Widget>[];
     for (var i = 0; i < destinations.length; i++) {
       final (unsel, sel, label) = destinations[i];
@@ -119,8 +122,8 @@ class _TopNav extends StatelessWidget {
               onTap: () => onTap(i),
               child: AnimatedContainer(
                 duration: Duration(milliseconds: 180),
-                width: 42,
-                height: 42,
+                width: itemSize,
+                height: itemSize,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selected ? kAccent.withAlpha(20) : Colors.transparent,
@@ -129,7 +132,7 @@ class _TopNav extends StatelessWidget {
                 child: Icon(
                   selected ? sel : unsel,
                   color: selected ? kAccent : kText2,
-                  size: 21,
+                  size: iconSize,
                 ),
               ),
             ),
@@ -151,10 +154,11 @@ class _NavSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return Container(
       width: 1,
-      height: 22,
-      margin: EdgeInsets.symmetric(horizontal: 18),
+      height: compact ? 18 : 22,
+      margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 18),
       color: kBorder.withAlpha(appTheme.isLight ? 150 : 120),
     );
   }
@@ -167,6 +171,7 @@ class _ThemeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return AnimatedBuilder(
       animation: appTheme,
       builder: (context, _) {
@@ -179,8 +184,8 @@ class _ThemeToggle extends StatelessWidget {
           onTap: appTheme.toggle,
           child: AnimatedContainer(
             duration: Duration(milliseconds: 180),
-            width: expanded ? double.infinity : 42,
-            height: expanded ? null : 42,
+            width: expanded ? double.infinity : (compact ? 34 : 42),
+            height: expanded ? null : (compact ? 34 : 42),
             padding: EdgeInsets.symmetric(
               horizontal: expanded ? 14 : 0,
               vertical: expanded ? 12 : 0,
@@ -209,7 +214,13 @@ class _ThemeToggle extends StatelessWidget {
                   )
                 : Tooltip(
                     message: label,
-                    child: Center(child: Icon(icon, color: kAccent, size: 22)),
+                    child: Center(
+                      child: Icon(
+                        icon,
+                        color: kAccent,
+                        size: compact ? 18 : 22,
+                      ),
+                    ),
                   ),
           ),
         );
@@ -841,18 +852,24 @@ class _FullScreenFrame extends StatelessWidget {
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final compact = constraints.maxWidth < 700;
+          final outerMargin = compact
+              ? EdgeInsets.fromLTRB(8, 0, 8, 10)
+              : _outerMargin;
+          final panelGap = compact ? 12.0 : _panelGap;
+          final navPadding = compact ? 12.0 : 34.0;
           final navRect = Rect.fromLTWH(
-            _outerMargin.left,
-            _outerMargin.top,
-            constraints.maxWidth - _outerMargin.horizontal,
+            outerMargin.left,
+            outerMargin.top,
+            constraints.maxWidth - outerMargin.horizontal,
             _navHeight,
           );
-          final contentTop = navRect.bottom + _panelGap;
+          final contentTop = navRect.bottom + panelGap;
           final contentRect = Rect.fromLTRB(
-            _outerMargin.left,
+            outerMargin.left,
             contentTop,
-            constraints.maxWidth - _outerMargin.right,
-            constraints.maxHeight - _outerMargin.bottom,
+            constraints.maxWidth - outerMargin.right,
+            constraints.maxHeight - outerMargin.bottom,
           );
 
           return Stack(
@@ -863,22 +880,24 @@ class _FullScreenFrame extends StatelessWidget {
                   radius: _frameRadius,
                   clipTop: false,
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 34),
+                    padding: EdgeInsets.symmetric(horizontal: navPadding),
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _NavDateLabel(),
-                        ),
-                        Align(alignment: Alignment.center, child: navbar),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: _TalkWithAiButton(
-                            active: aiChatOpen,
-                            onTap: onToggleAiChat,
+                        if (!compact)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: _NavDateLabel(),
                           ),
-                        ),
+                        Align(alignment: Alignment.center, child: navbar),
+                        if (!compact)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: _TalkWithAiButton(
+                              active: aiChatOpen,
+                              onTap: onToggleAiChat,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -891,12 +910,70 @@ class _FullScreenFrame extends StatelessWidget {
               if (aiChatOpen)
                 Positioned(
                   top: navRect.bottom + 12,
-                  right: _outerMargin.right + 18,
+                  right: compact
+                      ? outerMargin.right + 4
+                      : outerMargin.right + 18,
                   child: _AiChatPopup(onClose: onCloseAiChat),
+                ),
+              if (compact)
+                AnimatedPositioned(
+                  duration: Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  top: navRect.top + (navRect.height - 48) / 2,
+                  right: aiChatOpen ? outerMargin.right : -36,
+                  child: _AiEdgeTab(active: aiChatOpen, onTap: onToggleAiChat),
                 ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _AiEdgeTab extends StatelessWidget {
+  const _AiEdgeTab({required this.active, required this.onTap});
+
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Talk with AI',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            width: 54,
+            height: 48,
+            decoration: BoxDecoration(
+              color: active ? kAccent : kAccent.withAlpha(34),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kAccent.withAlpha(active ? 180 : 95)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(appTheme.isLight ? 18 : 85),
+                  blurRadius: 14,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: EdgeInsets.only(left: 10),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: active ? Colors.white : kAccent,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

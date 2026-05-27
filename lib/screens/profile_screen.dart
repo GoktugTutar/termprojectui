@@ -270,6 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     ).push(MaterialPageRoute(builder: (_) => const NewTermScreen()));
   }
 
+  // ignore: unused_element
   Future<void> _openBusyEditor() async {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -427,7 +428,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                     physics: NeverScrollableScrollPhysics(),
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
-                    childAspectRatio: 2.8,
+                    childAspectRatio: MediaQuery.sizeOf(context).width < 700
+                        ? 2.65
+                        : 2.8,
                     children: [
                       _TimeChip(
                         v: 'morning',
@@ -495,34 +498,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                     ],
                   ),
-                  SizedBox(height: 18),
-                  // ── Busy times section ──────────────────────────────────
-                  Row(
-                    children: [
-                      Expanded(child: _SectionLabel('Busy times')),
-                      TextButton.icon(
-                        onPressed: _openBusyEditor,
-                        icon: Icon(Icons.edit_calendar_outlined, size: 16),
-                        label: Text(
-                          'Edit',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          foregroundColor: kAccent,
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                  _ProfileBusySlotsPanel(slots: _busySlots),
                   SizedBox(height: 18),
                   FilledButton(
                     onPressed: _saving ? null : _savePreferences,
@@ -712,42 +687,59 @@ class _TimeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final on = pref == v;
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: Duration(milliseconds: 150),
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 14,
+          vertical: compact ? 8 : 12,
+        ),
         decoration: BoxDecoration(
           color: on ? kAccent.withAlpha(46) : kSurface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(compact ? 9 : 12),
           border: Border.all(color: on ? kAccent : kBorder, width: 0.5),
         ),
         child: Row(
           children: [
             Container(
-              width: 30,
-              height: 30,
+              width: compact ? 24 : 30,
+              height: compact ? 24 : 30,
               decoration: BoxDecoration(
                 color: on ? kAccent : kBorder,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(compact ? 7 : 8),
               ),
-              child: Icon(icon, color: on ? kBg : kText2, size: 15),
+              child: Icon(
+                icon,
+                color: on ? kBg : kText2,
+                size: compact ? 13 : 15,
+              ),
             ),
-            SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: on ? kText1 : kText2,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+            SizedBox(width: compact ? 6 : 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: on ? kText1 : kText2,
+                      fontSize: compact ? 11 : 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                Text(range, style: TextStyle(color: kText2, fontSize: 11)),
-              ],
+                  Text(
+                    range,
+                    style: TextStyle(color: kText2, fontSize: compact ? 9 : 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -827,6 +819,7 @@ class _StyleCard extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ProfileBusySlotsPanel extends StatelessWidget {
   const _ProfileBusySlotsPanel({required this.slots});
 
@@ -989,9 +982,7 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     final prefs = await SharedPreferences.getInstance();
     final loaded = <String, _LessonGradeEntry>{};
     for (final lesson in widget.lessons) {
-      final backendResult = lesson.examResults.isNotEmpty
-          ? lesson.examResults.first
-          : null;
+      final backendResult = _gradeResultForLesson(lesson);
       final grade =
           backendResult?.grade ?? prefs.getString(_gradeValueKey(lesson.id));
       final happy =
@@ -1294,6 +1285,22 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
     }
     if (!mounted) return;
     setState(() => _grades[lesson.id] = result);
+  }
+
+  LessonExamResult? _gradeResultForLesson(Lesson lesson) {
+    if (lesson.examResults.isEmpty) return null;
+    final exam = _resultExamForLesson(lesson);
+    if (exam != null) {
+      for (final result in lesson.examResults) {
+        if (result.examId == exam.id) return result;
+      }
+    }
+    for (final result in lesson.examResults) {
+      if (result.grade.trim().isNotEmpty || result.satisfied != null) {
+        return result;
+      }
+    }
+    return lesson.examResults.first;
   }
 
   LessonExam? _resultExamForLesson(Lesson lesson) {
@@ -2998,11 +3005,7 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
                   color: kAccent.withAlpha(40),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  Icons.tune_rounded,
-                  size: 15,
-                  color: kAccent,
-                ),
+                child: Icon(Icons.tune_rounded, size: 15, color: kAccent),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -3030,11 +3033,7 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
                   child: InkWell(
                     onTap: _load,
                     borderRadius: BorderRadius.circular(6),
-                    child: Icon(
-                      Icons.refresh_rounded,
-                      size: 18,
-                      color: kText2,
-                    ),
+                    child: Icon(Icons.refresh_rounded, size: 18, color: kText2),
                   ),
                 ),
             ],
@@ -3241,10 +3240,7 @@ class _OverrideToggleRow extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                Text(
-                  sub,
-                  style: TextStyle(color: kText2, fontSize: 11),
-                ),
+                Text(sub, style: TextStyle(color: kText2, fontSize: 11)),
               ],
             ),
           ),
@@ -3319,8 +3315,9 @@ class _OverrideHourRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 5),
                 ...options.map((h) {
-                  final label =
-                      h == 24 ? '24:00' : '${h.toString().padLeft(2, '0')}:00';
+                  final label = h == 24
+                      ? '24:00'
+                      : '${h.toString().padLeft(2, '0')}:00';
                   return Padding(
                     padding: const EdgeInsets.only(right: 5),
                     child: _HourChip(

@@ -108,6 +108,15 @@ class _BusySlot {
     if (isRoutine || date == null) return dayOfWeek == _dateToDow(dateKey);
     return date == dateKey;
   }
+
+  bool sameAs(_BusySlot other) =>
+      dayOfWeek == other.dayOfWeek &&
+      startTime == other.startTime &&
+      endTime == other.endTime &&
+      fatigueLevel == other.fatigueLevel &&
+      iconKey == other.iconKey &&
+      isRoutine == other.isRoutine &&
+      date == other.date;
 }
 
 class _TopRightWeekNotice extends StatelessWidget {
@@ -792,9 +801,43 @@ class _WeekScreenState extends State<WeekScreen>
   Widget _buildMonthCalendar() {
     final days = _calendarDaysFor(_visibleMonth);
     final today = AppTime.todayStr();
+    final compact = MediaQuery.sizeOf(context).width < 720;
+
+    Widget calendarGrid({required bool compactLayout}) {
+      return GridView.builder(
+        padding: EdgeInsets.zero,
+        physics: BouncingScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 7,
+          mainAxisSpacing: compactLayout ? 4 : 6,
+          crossAxisSpacing: compactLayout ? 4 : 6,
+          childAspectRatio: compactLayout ? 0.92 : 1.35,
+        ),
+        itemCount: days.length,
+        itemBuilder: (context, index) {
+          final date = days[index];
+          final dateKey = _dateKey(date);
+          final inMonth = date.month == _visibleMonth.month;
+          final events = _calendarEventsForDate(date);
+          return _MonthDayTile(
+            date: date,
+            inMonth: inMonth,
+            isToday: dateKey == today,
+            events: events,
+            onAdd: () => _showAddCalendarEntry(date),
+            onTap: events.isEmpty ? null : () => _showDayEvents(date, events),
+          );
+        },
+      );
+    }
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(10, 0, 10, 16),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 4 : 10,
+        0,
+        compact ? 4 : 10,
+        compact ? 8 : 16,
+      ),
       child: Column(
         children: [
           _MonthControls(
@@ -814,57 +857,70 @@ class _WeekScreenState extends State<WeekScreen>
               ),
             ),
           ),
-          SizedBox(height: 8),
-          Row(
-            children: _dowFullLabels
-                .map(
-                  (label) => Expanded(
-                    child: Center(
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: kText2,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
+          SizedBox(height: compact ? 5 : 8),
+          if (compact)
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final dayWidth = constraints.maxWidth / 5;
+                  final calendarWidth = dayWidth * 7;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: BouncingScrollPhysics(),
+                    child: SizedBox(
+                      width: calendarWidth,
+                      child: Column(
+                        children: [
+                          Row(
+                            children: _dowFullLabels
+                                .map(
+                                  (label) => SizedBox(
+                                    width: dayWidth,
+                                    child: Center(
+                                      child: Text(
+                                        label,
+                                        style: TextStyle(
+                                          color: kText2,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                          SizedBox(height: 5),
+                          Expanded(child: calendarGrid(compactLayout: true)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else ...[
+            Row(
+              children: _dowFullLabels
+                  .map(
+                    (label) => Expanded(
+                      child: Center(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: kText2,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                )
-                .toList(),
-          ),
-          SizedBox(height: 6),
-          Expanded(
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              physics: BouncingScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
-                childAspectRatio: MediaQuery.sizeOf(context).width >= 720
-                    ? 1.35
-                    : 0.78,
-              ),
-              itemCount: days.length,
-              itemBuilder: (context, index) {
-                final date = days[index];
-                final dateKey = _dateKey(date);
-                final inMonth = date.month == _visibleMonth.month;
-                final events = _calendarEventsForDate(date);
-                return _MonthDayTile(
-                  date: date,
-                  inMonth: inMonth,
-                  isToday: dateKey == today,
-                  events: events,
-                  onAdd: () => _showAddCalendarEntry(date),
-                  onTap: events.isEmpty
-                      ? null
-                      : () => _showDayEvents(date, events),
-                );
-              },
+                  )
+                  .toList(),
             ),
-          ),
+            SizedBox(height: 6),
+            Expanded(child: calendarGrid(compactLayout: false)),
+          ],
         ],
       ),
     );
@@ -894,6 +950,7 @@ class _WeekScreenState extends State<WeekScreen>
           color: color,
           icon: _busyIconForKey(slot.iconKey),
           faded: slot.isRoutine,
+          busySlot: slot,
         ),
       );
     }
@@ -944,8 +1001,64 @@ class _WeekScreenState extends State<WeekScreen>
       builder: (_) => _DayEventsSheet(
         dateLabel: '${date.day} ${_monthNames[date.month - 1]}',
         events: events,
+        onEditBusy: (slot) async {
+          Navigator.pop(context);
+          await _showEditBusySlot(date, slot);
+        },
+        onDeleteBusy: (slot) async {
+          Navigator.pop(context);
+          await _deleteBusySlot(date, slot);
+        },
       ),
     );
+  }
+
+  Future<void> _deleteBusySlot(DateTime date, _BusySlot slot) async {
+    final dateKey = _dateKey(date);
+    final slots = _busySlots
+        .where((existing) => !existing.sameAs(slot))
+        .map((existing) => existing.toJson())
+        .toList();
+
+    try {
+      await ApiClient.updateBusySlots(slots);
+      if (!mounted) return;
+      if (slot.isRoutine) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Routine busy time deleted. Recalculating...'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        await _recalculate(fromDate: dateKey);
+      } else {
+        await _load();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: _kDanger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showEditBusySlot(DateTime date, _BusySlot slot) async {
+    final result = await showDialog<Object?>(
+      context: context,
+      barrierColor: Colors.black.withAlpha(170),
+      builder: (_) => _CalendarEntryDialog(
+        date: date,
+        existingSlots: _busySlots,
+        editingSlot: slot,
+      ),
+    );
+
+    if (result is Map<String, dynamic>) {
+      await _handleBusySlotResult(result, updated: true);
+    }
   }
 
   Future<void> _showAddCalendarEntry(DateTime date) async {
@@ -956,49 +1069,61 @@ class _WeekScreenState extends State<WeekScreen>
           _CalendarEntryDialog(date: date, existingSlots: _busySlots),
     );
 
-    if (result is Map<String, dynamic> && result['type'] == 'nonRoutineBusy') {
-      // Weeklık busy slot eklendi — mevcut planla çakışıyor mu?
-      final slotDate = result['date'] as String;
-      final slotStart = _parseTimeToMin(result['startTime'] as String);
-      final slotEnd = _parseTimeToMin(result['endTime'] as String);
+    if (result is Map<String, dynamic> &&
+        (result['type'] == 'nonRoutineBusy' ||
+            result['type'] == 'routineBusy')) {
+      await _handleBusySlotResult(result);
+    } else if (result == true) {
+      await _load();
+    }
+  }
 
-      final hasConflict =
-          _plan?.blocks.any((b) {
-            if (b.date != slotDate) return false;
-            final bStart = _parseTimeToMin(b.startTime);
-            final bEnd = _parseTimeToMin(b.endTime);
-            return slotStart < bEnd && slotEnd > bStart;
-          }) ??
-          false;
+  Future<void> _handleBusySlotResult(
+    Map<String, dynamic> result, {
+    bool updated = false,
+  }) async {
+    final slotDate = result['date'] as String;
+    final isRoutine = result['type'] == 'routineBusy';
 
-      if (hasConflict && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Conflict with a lesson block detected. Recalculating the schedule...',
-            ),
-            duration: Duration(seconds: 3),
-          ),
-        );
-        await _recalculate(fromDate: slotDate);
-      } else {
-        await _load();
-      }
-    } else if (result is Map<String, dynamic> &&
-        result['type'] == 'routineBusy') {
-      final slotDate = result['date'] as String;
+    if (isRoutine) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Routine busy time added. Recalculating the schedule...',
+              updated
+                  ? 'Routine busy time updated. Recalculating the schedule...'
+                  : 'Routine busy time added. Recalculating the schedule...',
             ),
             duration: Duration(seconds: 3),
           ),
         );
       }
       await _recalculate(fromDate: slotDate);
-    } else if (result == true) {
+      return;
+    }
+
+    final slotStart = _parseTimeToMin(result['startTime'] as String);
+    final slotEnd = _parseTimeToMin(result['endTime'] as String);
+    final hasConflict =
+        _plan?.blocks.any((b) {
+          if (b.date != slotDate) return false;
+          final bStart = _parseTimeToMin(b.startTime);
+          final bEnd = _parseTimeToMin(b.endTime);
+          return slotStart < bEnd && slotEnd > bStart;
+        }) ??
+        false;
+
+    if (hasConflict && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Conflict with a lesson block detected. Recalculating the schedule...',
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      await _recalculate(fromDate: slotDate);
+    } else {
       await _load();
     }
   }
@@ -1155,17 +1280,18 @@ class _MonthControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 720;
     return Row(
       children: [
         _IconControl(icon: Icons.chevron_left_rounded, onTap: onPrevious),
-        SizedBox(width: 6),
+        SizedBox(width: compact ? 3 : 6),
         Expanded(
           child: Center(
             child: Text(
               label,
               style: TextStyle(
                 color: kText1,
-                fontSize: 15,
+                fontSize: compact ? 13 : 15,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1175,16 +1301,22 @@ class _MonthControls extends StatelessWidget {
           onPressed: onToday,
           style: TextButton.styleFrom(
             foregroundColor: kAccent,
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            minimumSize: Size(0, 30),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 6 : 10,
+              vertical: compact ? 4 : 6,
+            ),
+            minimumSize: Size(0, compact ? 26 : 30),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(
             'Today',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              fontSize: compact ? 10 : 12,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
-        SizedBox(width: 6),
+        SizedBox(width: compact ? 3 : 6),
         _IconControl(icon: Icons.chevron_right_rounded, onTap: onNext),
       ],
     );
@@ -1199,6 +1331,7 @@ class _IconControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 720;
     return Tooltip(
       message: icon == Icons.chevron_left_rounded
           ? 'Previous month'
@@ -1206,14 +1339,14 @@ class _IconControl extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 30,
-          height: 30,
+          width: compact ? 26 : 30,
+          height: compact ? 26 : 30,
           decoration: BoxDecoration(
             color: kSurface,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: kBorder.withAlpha(150)),
           ),
-          child: Icon(icon, color: kText1, size: 18),
+          child: Icon(icon, color: kText1, size: compact ? 16 : 18),
         ),
       ),
     );
@@ -1230,6 +1363,7 @@ class _CalendarEvent {
     required this.color,
     required this.icon,
     this.faded = false,
+    this.busySlot,
   });
 
   final _CalendarEntryType type;
@@ -1238,6 +1372,7 @@ class _CalendarEvent {
   final Color color;
   final IconData icon;
   final bool faded;
+  final _BusySlot? busySlot;
 }
 
 class _MonthDayTile extends StatelessWidget {
@@ -1259,14 +1394,15 @@ class _MonthDayTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleEvents = events.take(2).toList();
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final visibleEvents = events.take(compact ? 1 : 2).toList();
     final extraCount = events.length - visibleEvents.length;
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: Duration(milliseconds: 160),
-        padding: EdgeInsets.all(7),
+        padding: EdgeInsets.all(compact ? 4 : 7),
         decoration: BoxDecoration(
           color: isToday
               ? kAccent.withAlpha(24)
@@ -1292,7 +1428,7 @@ class _MonthDayTile extends StatelessWidget {
                   '${date.day}',
                   style: TextStyle(
                     color: inMonth ? kText1 : kText2.withAlpha(150),
-                    fontSize: 13,
+                    fontSize: compact ? 11 : 13,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -1312,29 +1448,36 @@ class _MonthDayTile extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: onAdd,
                   child: Container(
-                    width: 20,
-                    height: 20,
+                    width: compact ? 16 : 20,
+                    height: compact ? 16 : 20,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: kAccent.withAlpha(appTheme.isLight ? 24 : 34),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: kAccent.withAlpha(80)),
                     ),
-                    child: Icon(Icons.add_rounded, color: kAccent, size: 14),
+                    child: Icon(
+                      Icons.add_rounded,
+                      color: kAccent,
+                      size: compact ? 12 : 14,
+                    ),
                   ),
                 ),
               ],
             ),
-            SizedBox(height: 6),
+            SizedBox(height: compact ? 3 : 6),
             ...visibleEvents.map((event) {
               final eventOpacity = event.faded ? 0.48 : 1.0;
               return Padding(
-                padding: EdgeInsets.only(bottom: 4),
+                padding: EdgeInsets.only(bottom: compact ? 2 : 4),
                 child: Opacity(
                   opacity: eventOpacity,
                   child: Container(
-                    constraints: BoxConstraints(minHeight: 17),
-                    padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    constraints: BoxConstraints(minHeight: compact ? 14 : 17),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 3 : 5,
+                      vertical: compact ? 1 : 2,
+                    ),
                     decoration: BoxDecoration(
                       color: event.color.withAlpha(appTheme.isLight ? 34 : 45),
                       borderRadius: BorderRadius.circular(5),
@@ -1347,16 +1490,16 @@ class _MonthDayTile extends StatelessWidget {
                       children: [
                         Icon(
                           event.icon,
-                          size: 9,
+                          size: compact ? 8 : 9,
                           color: inMonth ? event.color : kText2,
                         ),
-                        SizedBox(width: 3),
+                        SizedBox(width: compact ? 2 : 3),
                         Expanded(
                           child: Text(
                             event.label,
                             style: TextStyle(
                               color: inMonth ? kText1 : kText2,
-                              fontSize: 9,
+                              fontSize: compact ? 8 : 9,
                               fontWeight: FontWeight.w800,
                               height: 1.1,
                             ),
@@ -1375,7 +1518,7 @@ class _MonthDayTile extends StatelessWidget {
                 '+$extraCount daha',
                 style: TextStyle(
                   color: kText2,
-                  fontSize: 9,
+                  fontSize: compact ? 8 : 9,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1387,10 +1530,17 @@ class _MonthDayTile extends StatelessWidget {
 }
 
 class _DayEventsSheet extends StatelessWidget {
-  const _DayEventsSheet({required this.dateLabel, required this.events});
+  const _DayEventsSheet({
+    required this.dateLabel,
+    required this.events,
+    required this.onEditBusy,
+    required this.onDeleteBusy,
+  });
 
   final String dateLabel;
   final List<_CalendarEvent> events;
+  final ValueChanged<_BusySlot> onEditBusy;
+  final ValueChanged<_BusySlot> onDeleteBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -1411,6 +1561,7 @@ class _DayEventsSheet extends StatelessWidget {
           SizedBox(height: 12),
           ...events.map((event) {
             final eventOpacity = event.faded ? 0.52 : 1.0;
+            final busySlot = event.busySlot;
             return Padding(
               padding: EdgeInsets.only(bottom: 8),
               child: Opacity(
@@ -1458,6 +1609,29 @@ class _DayEventsSheet extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (busySlot != null) ...[
+                        SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Edit',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => onEditBusy(busySlot),
+                          icon: Icon(
+                            Icons.edit_calendar_rounded,
+                            color: kAccent,
+                            size: 20,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => onDeleteBusy(busySlot),
+                          icon: Icon(
+                            Icons.delete_outline_rounded,
+                            color: _kDanger,
+                            size: 20,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1471,10 +1645,15 @@ class _DayEventsSheet extends StatelessWidget {
 }
 
 class _CalendarEntryDialog extends StatefulWidget {
-  const _CalendarEntryDialog({required this.date, required this.existingSlots});
+  const _CalendarEntryDialog({
+    required this.date,
+    required this.existingSlots,
+    this.editingSlot,
+  });
 
   final DateTime date;
   final List<_BusySlot> existingSlots;
+  final _BusySlot? editingSlot;
 
   @override
   State<_CalendarEntryDialog> createState() => _CalendarEntryDialogState();
@@ -1505,6 +1684,13 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
   @override
   void initState() {
     super.initState();
+    final editingSlot = widget.editingSlot;
+    if (editingSlot != null) {
+      _startTime = editingSlot.startTime;
+      _endTime = editingSlot.endTime;
+      _fatigueLevel = editingSlot.fatigueLevel;
+      _isRoutineBusy = editingSlot.isRoutine;
+    }
     _loadLessons();
   }
 
@@ -1574,7 +1760,14 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
           isRoutine: _isRoutineBusy,
           date: _isRoutineBusy ? null : _dateKey,
         );
-        final slots = widget.existingSlots.map((s) => s.toJson()).toList();
+        final slots = widget.existingSlots
+            .where(
+              (existing) =>
+                  widget.editingSlot == null ||
+                  !existing.sameAs(widget.editingSlot!),
+            )
+            .map((s) => s.toJson())
+            .toList();
         slots.add(slot.toJson());
         await ApiClient.updateBusySlots(slots);
         if (!mounted) return;
@@ -1641,7 +1834,7 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                 ),
               ],
               selected: {_type},
-              onSelectionChanged: _saving
+              onSelectionChanged: _saving || widget.editingSlot != null
                   ? null
                   : (value) => setState(() => _type = value.first),
               style: ButtonStyle(
@@ -1833,7 +2026,13 @@ class _CalendarEntryDialogState extends State<_CalendarEntryDialog> {
                             ),
                           )
                         : Icon(Icons.check_rounded, size: 18),
-                    label: Text(_saving ? 'Saving...' : 'Save'),
+                    label: Text(
+                      _saving
+                          ? 'Saving...'
+                          : widget.editingSlot == null
+                          ? 'Save'
+                          : 'Update',
+                    ),
                     style: FilledButton.styleFrom(
                       backgroundColor: kAccent,
                       padding: EdgeInsets.symmetric(vertical: 13),
@@ -2327,11 +2526,7 @@ class _DowSuggestionCard extends StatelessWidget {
         child: done
             ? Row(
                 children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: kAccent,
-                    size: 17,
-                  ),
+                  Icon(Icons.check_circle_rounded, color: kAccent, size: 17),
                   const SizedBox(width: 8),
                   Text(
                     'Saved — will apply on next plan.',
@@ -2446,10 +2641,7 @@ class _DowTimeChip extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Text(
-                    range,
-                    style: TextStyle(color: kText2, fontSize: 10),
-                  ),
+                  Text(range, style: TextStyle(color: kText2, fontSize: 10)),
                 ],
               ),
       ),

@@ -140,6 +140,28 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
+  static Future<Map<String, dynamic>> getDailyNote(String date) async {
+    final h = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$_base/user/daily-note/$date'),
+      headers: h,
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
+  static Future<Map<String, dynamic>> saveDailyNote(
+    String date,
+    String content,
+  ) async {
+    final h = await _authHeaders();
+    final res = await http.put(
+      Uri.parse('$_base/user/daily-note/$date'),
+      headers: h,
+      body: json.encode({'content': content}),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
   static Future<Map<String, dynamic>> saveAvatar({
     required String avatarSvg,
     required String avatarOptions,

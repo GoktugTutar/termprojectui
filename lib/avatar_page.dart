@@ -5,9 +5,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'core/api_client.dart';
 
 class AvatarHeader extends StatefulWidget {
-  const AvatarHeader({super.key, this.expression = AvatarExpression.normal});
+  const AvatarHeader({
+    super.key,
+    this.expression = AvatarExpression.normal,
+    this.radius = 70,
+  });
 
   final AvatarExpression expression;
+  final double radius;
 
   @override
   State<AvatarHeader> createState() => _AvatarHeaderState();
@@ -67,7 +72,7 @@ class _AvatarHeaderState extends State<AvatarHeader> {
         cursor: SystemMouseCursors.click,
         child: AvatarMakerAvatar(
           controller: _avatarController,
-          radius: 70,
+          radius: widget.radius,
           backgroundColor: Colors.grey.shade200,
         ),
       ),

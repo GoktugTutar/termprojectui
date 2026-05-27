@@ -367,6 +367,33 @@ class _TodayScreenState extends State<TodayScreen>
   void _loadTodayExtras() {
     unawaited(_loadSleepStatus());
     unawaited(_loadFeedbackMessages());
+    unawaited(_loadDailyNote());
+  }
+
+  Future<void> _loadDailyNote() async {
+    final requestDate = _today;
+    try {
+      final note = await ApiClient.getDailyNote(requestDate);
+      final content = note['content']?.toString() ?? '';
+      if (!mounted || requestDate != _today) return;
+      setState(() => _quickNote = content);
+    } catch (_) {}
+  }
+
+  Future<void> _saveQuickNote(String content) async {
+    final noteDate = _today;
+    setState(() => _quickNote = content);
+    try {
+      await ApiClient.saveDailyNote(noteDate, content);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: kDanger,
+        ),
+      );
+    }
   }
 
   Future<void> _loadSleepStatus() async {
@@ -836,15 +863,14 @@ class _TodayScreenState extends State<TodayScreen>
                                 gpaLabel: _gpaLabel,
                                 termLabel: _termLabel,
                                 avatarExpression: _avatarExpression,
+                                dailyCoachLoading: _dailyCoachLoading,
+                                onDailyCoachRequested:
+                                    _requestDailyCoachMessage,
                               );
                               final left = _TodayLeftColumn(
                                 events: _upcomingEvents,
                                 noteText: _quickNote,
-                                onNoteChanged: (value) =>
-                                    setState(() => _quickNote = value),
-                                dailyCoachLoading: _dailyCoachLoading,
-                                onDailyCoachRequested:
-                                    _requestDailyCoachMessage,
+                                onNoteChanged: _saveQuickNote,
                               );
                               final checklistWidget = _checklistDisabled
                                   ? _FirstWeekChecklistPanel()
@@ -1371,17 +1397,24 @@ class _TodayTopControls extends StatelessWidget {
     required this.gpaLabel,
     required this.termLabel,
     required this.avatarExpression,
+    required this.dailyCoachLoading,
+    required this.onDailyCoachRequested,
   });
 
   final String displayName;
   final String gpaLabel;
   final String termLabel;
   final AvatarExpression avatarExpression;
+  final bool dailyCoachLoading;
+  final VoidCallback onDailyCoachRequested;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: 80, top: 18),
+      padding: EdgeInsets.only(
+        left: MediaQuery.sizeOf(context).width < 700 ? 12 : 80,
+        top: 18,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 520;
@@ -1390,29 +1423,50 @@ class _TodayTopControls extends StatelessWidget {
             gpaLabel: gpaLabel,
             termLabel: termLabel,
           );
+          final coachButton = _DailyCoachIconButton(
+            loading: dailyCoachLoading,
+            onTap: onDailyCoachRequested,
+          );
 
           if (compact) {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AvatarHeader(expression: avatarExpression),
-                  SizedBox(width: 42),
-                  Padding(
-                    padding: EdgeInsets.only(top: 44),
-                    child: SizedBox(width: 220, child: identity),
-                  ),
-                ],
-              ),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _MobileTodayDateLabel(),
+                SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        AvatarHeader(expression: avatarExpression, radius: 54),
+                        Positioned(left: -4, top: 4, child: coachButton),
+                      ],
+                    ),
+                    SizedBox(width: 14),
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 20),
+                        child: identity,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             );
           }
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AvatarHeader(expression: avatarExpression),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AvatarHeader(expression: avatarExpression),
+                  Positioned(left: -10, top: 8, child: coachButton),
+                ],
+              ),
               SizedBox(width: 58),
               Padding(
                 padding: EdgeInsets.only(top: 48),
@@ -1421,6 +1475,103 @@ class _TodayTopControls extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _MobileTodayDateLabel extends StatelessWidget {
+  const _MobileTodayDateLabel();
+
+  static const _days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final now = AppTime.now();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _days[now.weekday - 1],
+          style: TextStyle(
+            color: kText1,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        SizedBox(height: 2),
+        Text(
+          DateFormat('dd.MM.yyyy').format(now),
+          style: TextStyle(
+            color: kText2,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DailyCoachIconButton extends StatelessWidget {
+  const _DailyCoachIconButton({required this.loading, required this.onTap});
+
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'AI tip',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: loading ? null : onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Ink(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: kAccent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.white.withAlpha(120),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: kAccent.withAlpha(appTheme.isLight ? 55 : 95),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: loading
+                  ? SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1501,8 +1652,6 @@ class _TodayLeftColumn extends StatelessWidget {
     required this.events,
     required this.noteText,
     required this.onNoteChanged,
-    required this.dailyCoachLoading,
-    required this.onDailyCoachRequested,
   });
 
   final List<
@@ -1517,8 +1666,6 @@ class _TodayLeftColumn extends StatelessWidget {
   events;
   final String noteText;
   final ValueChanged<String> onNoteChanged;
-  final bool dailyCoachLoading;
-  final VoidCallback onDailyCoachRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -1527,12 +1674,7 @@ class _TodayLeftColumn extends StatelessWidget {
       children: [
         _ComingUpCard(events: events),
         SizedBox(height: 14),
-        _QuickToolsRow(
-          noteText: noteText,
-          onNoteChanged: onNoteChanged,
-          dailyCoachLoading: dailyCoachLoading,
-          onDailyCoachRequested: onDailyCoachRequested,
-        ),
+        _QuickToolsRow(noteText: noteText, onNoteChanged: onNoteChanged),
       ],
     );
   }
@@ -1561,17 +1703,10 @@ class _TodayGreetingTitle extends StatelessWidget {
 }
 
 class _QuickToolsRow extends StatelessWidget {
-  const _QuickToolsRow({
-    required this.noteText,
-    required this.onNoteChanged,
-    required this.dailyCoachLoading,
-    required this.onDailyCoachRequested,
-  });
+  const _QuickToolsRow({required this.noteText, required this.onNoteChanged});
 
   final String noteText;
   final ValueChanged<String> onNoteChanged;
-  final bool dailyCoachLoading;
-  final VoidCallback onDailyCoachRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -1597,28 +1732,14 @@ class _QuickToolsRow extends StatelessWidget {
         );
       },
     );
-    final aiCoach = _QuickToolCard(
-      icon: Icons.auto_awesome_rounded,
-      title: 'AI Tip',
-      subtitle: dailyCoachLoading ? 'Thinking...' : 'Get suggestion',
-      loading: dailyCoachLoading,
-      onTap: onDailyCoachRequested,
-    );
-
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 680) {
-          return Column(
+          return Row(
             children: [
-              Row(
-                children: [
-                  Expanded(child: timer),
-                  SizedBox(width: 14),
-                  Expanded(child: notes),
-                ],
-              ),
-              SizedBox(height: 14),
-              aiCoach,
+              Expanded(child: timer),
+              SizedBox(width: 14),
+              Expanded(child: notes),
             ],
           );
         }
@@ -1628,8 +1749,6 @@ class _QuickToolsRow extends StatelessWidget {
             Expanded(child: timer),
             SizedBox(width: 14),
             Expanded(child: notes),
-            SizedBox(width: 14),
-            Expanded(child: aiCoach),
           ],
         );
       },
@@ -1712,21 +1831,19 @@ class _QuickToolCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.loading = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: loading ? null : onTap,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Ink(
           height: 136,
@@ -1738,19 +1855,9 @@ class _QuickToolCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  loading
-                      ? SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Icon(icon, color: Colors.white, size: 24),
+                  Icon(icon, color: Colors.white, size: 24),
                   Spacer(),
-                  if (!loading)
-                    _QuickActionArrow(color: Colors.white.withAlpha(160)),
+                  _QuickActionArrow(color: Colors.white.withAlpha(160)),
                 ],
               ),
               Column(
