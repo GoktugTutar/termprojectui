@@ -2778,9 +2778,6 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
   int? _studyEndHour; // null = default (24)
   int? _endHourId;
 
-  int? _yorucuPenalty; // null = default (-20)
-  int? _penaltyId;
-
   // dow(1-7) → preferredTime
   final Map<int, String> _dayOverrides = {};
   // dow(1-7) → constraint id
@@ -2792,7 +2789,6 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
 
   static const _startOptions = [8, 9, 10, 11, 12, 14, 16, 18, 19];
   static const _endOptions = [20, 21, 22, 23, 24];
-  static const _penaltyOptions = [-5, -10, -15, -20, -25, -30];
   static const _timeLabels = {
     'morning': 'Mng',
     'afternoon': 'Aftn',
@@ -2826,8 +2822,6 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
     _startHourId = null;
     _studyEndHour = null;
     _endHourId = null;
-    _yorucuPenalty = null;
-    _penaltyId = null;
     _dayOverrides.clear();
     _dayOverrideIds.clear();
 
@@ -2847,9 +2841,6 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
         case 'study_end_hour':
           _studyEndHour = (params['hour'] as num?)?.toInt();
           _endHourId = id;
-        case 'reduce_yorucu_penalty':
-          _yorucuPenalty = (params['penalty'] as num?)?.toInt();
-          _penaltyId = id;
         case 'day_study_time':
           final dow = (params['dayOfWeek'] as num?)?.toInt();
           final pt = params['preferredTime'] as String?;
@@ -2913,36 +2904,6 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
         final newId = (created['id'] as num).toInt();
         if (!mounted) return;
         onDone(newHour, newId);
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    setState(() => _busy.remove(key));
-  }
-
-  Future<void> _setPenalty(int? newPenalty) async {
-    const key = 'penalty';
-    if (_busy.contains(key)) return;
-    setState(() => _busy.add(key));
-    try {
-      if (newPenalty == null) {
-        if (_penaltyId != null) {
-          await ApiClient.removeConstraint(_penaltyId!);
-          if (!mounted) return;
-          setState(() {
-            _yorucuPenalty = null;
-            _penaltyId = null;
-          });
-        }
-      } else {
-        final created = await ApiClient.createConstraint(
-          'reduce_yorucu_penalty',
-          params: {'penalty': newPenalty},
-        );
-        if (!mounted) return;
-        setState(() {
-          _yorucuPenalty = newPenalty;
-          _penaltyId = (created['id'] as num).toInt();
-        });
       }
     } catch (_) {}
     if (!mounted) return;
@@ -3119,20 +3080,6 @@ class _PlanningOverridesCardState extends State<_PlanningOverridesCard> {
                   _endHourId = id;
                 }),
               ),
-            ),
-
-            const SizedBox(height: 14),
-            Divider(height: 1, color: kBorder),
-            const SizedBox(height: 14),
-
-            // ── Yorucu penalty ────────────────────────────────────────────────
-            _OverrideSubLabel('Heavy day penalty'),
-            const SizedBox(height: 8),
-            _OverridePenaltyRow(
-              options: _penaltyOptions,
-              selected: _yorucuPenalty,
-              busy: _busy.contains('penalty'),
-              onSelect: _setPenalty,
             ),
 
             const SizedBox(height: 14),
@@ -3413,53 +3360,6 @@ class _HourChip extends StatelessWidget {
 }
 
 // Penalty seçim satırı
-class _OverridePenaltyRow extends StatelessWidget {
-  const _OverridePenaltyRow({
-    required this.options,
-    required this.selected,
-    required this.busy,
-    required this.onSelect,
-  });
-
-  final List<int> options;
-  final int? selected;
-  final bool busy;
-  final ValueChanged<int?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          // Default chip
-          _HourChip(
-            label: 'Default (−20)',
-            selected: selected == null,
-            isDefault: true,
-            busy: busy && selected == null,
-            onTap: () => onSelect(null),
-          ),
-          const SizedBox(width: 5),
-          ...options.map((p) {
-            if (p == -20) return const SizedBox.shrink(); // default ile aynı
-            return Padding(
-              padding: const EdgeInsets.only(right: 5),
-              child: _HourChip(
-                label: '−${p.abs()}',
-                selected: selected == p,
-                isDefault: false,
-                busy: busy && selected == p,
-                onTap: () => onSelect(p),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
 // Gün satırı: gün adı + 4 zaman chip'i
 class _DayOverrideRow extends StatelessWidget {
   const _DayOverrideRow({
