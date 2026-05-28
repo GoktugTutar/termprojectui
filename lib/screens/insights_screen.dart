@@ -662,7 +662,7 @@ class _MessageCardState extends State<_MessageCard> {
 
   Map<String, dynamic> get _iq =>
       (widget.message['insightQuestion'] as Map<String, dynamic>?) ?? {};
-  bool get _hasInsightQuestion => _iq.isNotEmpty && !_hasConstraint;
+  bool get _hasInsightQuestion => _iq.isNotEmpty && (!_hasConstraint || _done);
 
   Future<void> _saveInsightAnswer(String answer) async {
     if (_insightSaving) return;

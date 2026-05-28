@@ -1064,8 +1064,8 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: 300),
-                child: Padding(
+                constraints: BoxConstraints(maxWidth: 300, maxHeight: 560),
+                child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(18, 16, 18, 16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
