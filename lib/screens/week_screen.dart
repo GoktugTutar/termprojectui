@@ -374,7 +374,10 @@ class _WeekScreenState extends State<WeekScreen>
         }
       });
 
-      if (newPlanData != null) _showNotFittedWarning(newPlanData, lessonList);
+      if (newPlanData != null) {
+        _showNotFittedWarning(newPlanData, lessonList);
+        _showPlanFeedback(newPlanData);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -432,6 +435,7 @@ class _WeekScreenState extends State<WeekScreen>
         _loading = false;
       });
       _showNotFittedWarning(data, _lessons);
+      _showPlanFeedback(data);
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -464,6 +468,7 @@ class _WeekScreenState extends State<WeekScreen>
         _loading = false;
       });
       _showNotFittedWarning(data, _lessons);
+      _showPlanFeedback(data);
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -476,6 +481,44 @@ class _WeekScreenState extends State<WeekScreen>
         );
       }
     }
+  }
+
+  /// planFeedback varsa type'a göre renkli floating snackbar gösterir.
+  void _showPlanFeedback(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final fb = data['planFeedback'] as Map<String, dynamic>?;
+    if (fb == null) return;
+    final type    = fb['type']?.toString() ?? 'info';
+    final message = fb['message']?.toString() ?? '';
+    if (message.isEmpty) return;
+
+    final (color, icon) = switch (type) {
+      'warning'  => (const Color(0xFFF2B14A), Icons.warning_amber_rounded),
+      'positive' => (const Color(0xFF4CAF50), Icons.check_circle_outline_rounded),
+      _          => (kAccent,                 Icons.info_outline_rounded),
+    };
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 6),
+      ));
   }
 
   /// unplacedLessonIds varsa hangi derslerin sığmadığını snackbar ile bildirir.
