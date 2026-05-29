@@ -398,10 +398,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            Text(
-                              '12 weeks · 314 blocks completed',
-                              style: TextStyle(color: kText2, fontSize: 13),
-                            ),
                           ],
                         ),
                       ],
