@@ -8,11 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Base URL platforma göre otomatik seçilir (web, Android emülatör, diğer).
 class ApiClient {
   static final String _tokenKey = 'jwt_token';
+  static const String _apiBaseFromEnv = String.fromEnvironment('API_BASE_URL');
   static String? _cachedToken;
   static bool _tokenLoaded = false;
 
   /// Platforma göre uygun base URL'yi döndürür.
   static String get _base {
+    if (_apiBaseFromEnv.isNotEmpty) return _apiBaseFromEnv;
     if (kIsWeb) return 'http://localhost:3000';
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:3000';
