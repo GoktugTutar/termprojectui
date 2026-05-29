@@ -546,13 +546,14 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
-  static Future<void> submitSleep(bool sleptWell) async {
+  static Future<Map<String, dynamic>> submitSleep(bool sleptWell) async {
     final h = await _authHeaders();
-    await http.post(
+    final res = await http.post(
       Uri.parse('$_base/checklist/sleep'),
       headers: h,
       body: json.encode({'sleptWell': sleptWell}),
     );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
   // ── User Constraints ────────────────────────────────────────────────────────

@@ -1510,48 +1510,48 @@ class _MonthDayTile extends StatelessWidget {
             ),
             SizedBox(height: compact ? 3 : 6),
             ...visibleEvents.map((event) {
-              final eventOpacity = event.faded ? 0.48 : 1.0;
+              final bgAlpha = event.faded
+                  ? (appTheme.isLight ? 54 : 70)
+                  : (appTheme.isLight ? 34 : 45);
+              final borderAlpha = event.faded ? 145 : 95;
               return Padding(
                 padding: EdgeInsets.only(bottom: compact ? 2 : 4),
-                child: Opacity(
-                  opacity: eventOpacity,
-                  child: Container(
-                    constraints: BoxConstraints(minHeight: compact ? 14 : 17),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 3 : 5,
-                      vertical: compact ? 1 : 2,
+                child: Container(
+                  constraints: BoxConstraints(minHeight: compact ? 14 : 17),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 3 : 5,
+                    vertical: compact ? 1 : 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: event.color.withAlpha(bgAlpha),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: event.color.withAlpha(borderAlpha),
+                      width: event.faded ? 0.8 : 0.6,
                     ),
-                    decoration: BoxDecoration(
-                      color: event.color.withAlpha(appTheme.isLight ? 34 : 45),
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(
-                        color: event.color.withAlpha(95),
-                        width: 0.6,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        event.icon,
+                        size: compact ? 8 : 9,
+                        color: inMonth ? event.color : kText2,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          event.icon,
-                          size: compact ? 8 : 9,
-                          color: inMonth ? event.color : kText2,
-                        ),
-                        SizedBox(width: compact ? 2 : 3),
-                        Expanded(
-                          child: Text(
-                            event.label,
-                            style: TextStyle(
-                              color: inMonth ? kText1 : kText2,
-                              fontSize: compact ? 8 : 9,
-                              fontWeight: FontWeight.w800,
-                              height: 1.1,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                      SizedBox(width: compact ? 2 : 3),
+                      Expanded(
+                        child: Text(
+                          event.label,
+                          style: TextStyle(
+                            color: inMonth ? kText1 : kText2,
+                            fontSize: compact ? 8 : 9,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -1603,80 +1603,83 @@ class _DayEventsSheet extends StatelessWidget {
           ),
           SizedBox(height: 12),
           ...events.map((event) {
-            final eventOpacity = event.faded ? 0.52 : 1.0;
+            final bgAlpha = event.faded
+                ? (appTheme.isLight ? 52 : 68)
+                : (appTheme.isLight ? 28 : 42);
+            final borderAlpha = event.faded ? 155 : 115;
             final busySlot = event.busySlot;
             return Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: Opacity(
-                opacity: eventOpacity,
-                child: Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: event.color.withAlpha(appTheme.isLight ? 28 : 42),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: event.color.withAlpha(115)),
+              child: Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: event.color.withAlpha(bgAlpha),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: event.color.withAlpha(borderAlpha),
+                    width: event.faded ? 1.1 : 1,
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: event.color.withAlpha(42),
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                        child: Icon(event.icon, color: event.color, size: 18),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: event.color.withAlpha(event.faded ? 64 : 42),
+                        borderRadius: BorderRadius.circular(9),
                       ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.label,
-                              style: TextStyle(
-                                color: kText1,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                      child: Icon(event.icon, color: event.color, size: 18),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.label,
+                            style: TextStyle(
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
-                            SizedBox(height: 3),
-                            Text(
-                              event.subtitle,
-                              style: TextStyle(color: kText2, fontSize: 12),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            event.subtitle,
+                            style: TextStyle(color: kText2, fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (busySlot != null) ...[
+                      SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Edit',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => onEditBusy(busySlot),
+                        icon: Icon(
+                          Icons.edit_calendar_rounded,
+                          color: kAccent,
+                          size: 20,
                         ),
                       ),
-                      if (busySlot != null) ...[
-                        SizedBox(width: 8),
-                        IconButton(
-                          tooltip: 'Edit',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => onEditBusy(busySlot),
-                          icon: Icon(
-                            Icons.edit_calendar_rounded,
-                            color: kAccent,
-                            size: 20,
-                          ),
+                      IconButton(
+                        tooltip: 'Delete',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => onDeleteBusy(busySlot),
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: _kDanger,
+                          size: 20,
                         ),
-                        IconButton(
-                          tooltip: 'Delete',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => onDeleteBusy(busySlot),
-                          icon: Icon(
-                            Icons.delete_outline_rounded,
-                            color: _kDanger,
-                            size: 20,
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             );
@@ -2318,56 +2321,60 @@ class _DayColumn extends StatelessWidget {
             final top = _minToTop(sm);
             final height = _minToHeight(sm, em);
             final dotColor = _fatigueColor(b.fatigueLevel);
-            final opacity = b.isRoutine ? 0.42 : 1.0;
+            final bgAlpha = b.isRoutine
+                ? (appTheme.isLight ? 58 : 72)
+                : (appTheme.isLight ? 28 : 42);
+            final borderAlpha = b.isRoutine ? 210 : 160;
+            final stripeAlpha = b.isRoutine ? 58 : 26;
+            final labelColor = b.isRoutine ? kText1 : kText2;
             return Positioned(
               top: top,
               left: 1,
               right: 1,
               height: height,
-              child: Opacity(
-                opacity: opacity,
-                child: Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: kBorder.withAlpha(160),
-                      width: 0.5,
-                    ),
-                    color: Colors.white.withAlpha(10),
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: b.isRoutine
+                        ? dotColor.withAlpha(borderAlpha)
+                        : kBorder.withAlpha(borderAlpha),
+                    width: b.isRoutine ? 0.9 : 0.5,
                   ),
-                  child: CustomPaint(
-                    painter: _StripedPainter(Colors.white.withAlpha(18)),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(4, 3, 4, 3),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: dotColor,
-                                ),
+                  color: dotColor.withAlpha(bgAlpha),
+                ),
+                child: CustomPaint(
+                  painter: _StripedPainter(dotColor.withAlpha(stripeAlpha)),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(4, 3, 4, 3),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: dotColor,
                               ),
-                              SizedBox(width: 3),
-                              Text(
-                                b.isRoutine ? 'ROUTINE' : 'BUSY',
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w600,
-                                  color: kText2,
-                                  letterSpacing: 0.04,
-                                ),
+                            ),
+                            SizedBox(width: 3),
+                            Text(
+                              b.isRoutine ? 'ROUTINE' : 'BUSY',
+                              style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800,
+                                color: labelColor,
+                                letterSpacing: 0.04,
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),

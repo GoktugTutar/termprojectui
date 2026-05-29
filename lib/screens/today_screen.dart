@@ -397,11 +397,28 @@ class _TodayScreenState extends State<TodayScreen>
   }
 
   Future<void> _loadSleepStatus() async {
+    final requestDate = _today;
     try {
       final sleepStatus = await ApiClient.getSleepStatus();
-      if (!mounted) return;
-      setState(() => _sleepAsked = sleepStatus['asked'] as bool? ?? true);
+      if (!mounted || requestDate != _today) return;
+
+      final statusDate = sleepStatus['date']?.toString() ?? requestDate;
+      final asked =
+          statusDate == requestDate && (sleepStatus['asked'] as bool? ?? false);
+      if (asked) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_sleepPromptKey(requestDate), true);
+      }
+      if (!mounted || requestDate != _today) return;
+      setState(() => _sleepAsked = asked);
     } catch (_) {}
+  }
+
+  String _sleepPromptKey(String date) => 'sleep_prompt_answered_$date';
+
+  Future<void> _markSleepAnswered(String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_sleepPromptKey(date), true);
   }
 
   Future<void> _loadFeedbackMessages() async {
@@ -982,16 +999,38 @@ class _TodayScreenState extends State<TodayScreen>
                 ),
                 child: _SleepCard(
                   onAnswer: (sleptWell) async {
-                    await ApiClient.submitSleep(sleptWell);
-                    setState(() {
-                      _sleepAsked = true;
-                      if (!sleptWell &&
-                          _avatarExpression != AvatarExpression.stressed) {
-                        _avatarExpression = AvatarExpression.sleepy;
-                      } else if (sleptWell) {
-                        _avatarExpression = AvatarExpression.normal;
+                    final answerDate = _today;
+                    try {
+                      final saved = await ApiClient.submitSleep(sleptWell);
+                      final savedDate = saved['date']?.toString() ?? answerDate;
+                      final savedAsked = saved['asked'] as bool? ?? false;
+                      if (savedDate != answerDate || !savedAsked) return;
+                      await _markSleepAnswered(answerDate);
+                      if (!mounted || answerDate != _today) return;
+                      setState(() {
+                        _sleepAsked = true;
+                        if (!sleptWell &&
+                            _avatarExpression != AvatarExpression.stressed) {
+                          _avatarExpression = AvatarExpression.sleepy;
+                        } else if (sleptWell) {
+                          _avatarExpression = AvatarExpression.normal;
+                        }
+                      });
+                    } catch (e) {
+                      if (!mounted ||
+                          !context.mounted ||
+                          answerDate != _today) {
+                        return;
                       }
-                    });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e.toString().replaceAll('Exception: ', ''),
+                          ),
+                          backgroundColor: kDanger,
+                        ),
+                      );
+                    }
                   },
                 ),
               ),
@@ -3169,7 +3208,7 @@ class _SleepButton extends StatefulWidget {
   });
   final String label;
   final bool positive;
-  final VoidCallback onTap;
+  final Future<void> Function() onTap;
 
   @override
   State<_SleepButton> createState() => _SleepButtonState();
@@ -3186,7 +3225,11 @@ class _SleepButtonState extends State<_SleepButton> {
           ? null
           : () async {
               setState(() => _loading = true);
-              widget.onTap();
+              try {
+                await widget.onTap();
+              } finally {
+                if (mounted) setState(() => _loading = false);
+              }
             },
       child: AnimatedContainer(
         duration: Duration(milliseconds: 150),
