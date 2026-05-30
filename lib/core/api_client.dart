@@ -84,28 +84,8 @@ class ApiClient {
     return data['access_token'] as String;
   }
 
-  static Future<String> register(
-    String email,
-    String password, {
-    int? gradeLevel,
-    double? gpa,
-    String? academicTerm,
-    int weeklyStudyHours = 14,
-  }) async {
-    final body = <String, dynamic>{
-      'email': email,
-      'password': password,
-      'weeklyStudyHours': weeklyStudyHours,
-    };
-    if (gradeLevel != null) {
-      body['gradeLevel'] = gradeLevel;
-    }
-    if (gpa != null) {
-      body['gpa'] = gpa;
-    }
-    if (academicTerm != null && academicTerm.trim().isNotEmpty) {
-      body['academicTerm'] = academicTerm.trim();
-    }
+  static Future<String> register(String email, String password) async {
+    final body = <String, dynamic>{'email': email, 'password': password};
     final res = await http.post(
       Uri.parse('$_base/auth/register'),
       headers: {'Content-Type': 'application/json'},

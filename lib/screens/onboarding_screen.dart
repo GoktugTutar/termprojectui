@@ -37,6 +37,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ── Adım 1: Tercihler ────────────────────────────────────────────────────────
   String _preferredStudyTime = 'morning';
   String _studyStyle = 'normal';
+  final _weeklyHoursCtrl = TextEditingController(text: '14');
 
   // ── Adım 2: Dersler ──────────────────────────────────────────────────────────
   List<Map<String, dynamic>> _lessons = [];
@@ -70,6 +71,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _gpaCtrl.dispose();
     _termCtrl.dispose();
+    _weeklyHoursCtrl.dispose();
     super.dispose();
   }
 
@@ -139,9 +141,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _finish() async {
     setState(() => _finishing = true);
     try {
+      final weeklyHours = int.tryParse(_weeklyHoursCtrl.text.trim()) ?? 14;
       await ApiClient.setupUser({
         'preferredStudyTime': _preferredStudyTime,
         'studyStyle': _studyStyle,
+        'weeklyStudyHours': weeklyHours.clamp(1, 70),
         'gradeLevel': _gradeLevel,
         if (_gpaCtrl.text.trim().isNotEmpty)
           'gpa': double.tryParse(_gpaCtrl.text.trim().replaceAll(',', '.')) ?? 0.0,
@@ -507,6 +511,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 icon: Icons.grid_view_rounded,
                 selectedValue: _studyStyle,
                 onChanged: (v) => setState(() => _studyStyle = v),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Haftalık çalışma hedefi',
+                style: TextStyle(
+                  color: kText1,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Haftada kaç saat çalışmak istiyorsun? Varsayılan: 14 saat.',
+                style: TextStyle(color: kText2, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _weeklyHoursCtrl,
+                keyboardType: TextInputType.number,
+                style: TextStyle(color: kText1),
+                decoration: const InputDecoration(
+                  hintText: '14',
+                  prefixIcon: Icon(Icons.schedule_outlined),
+                  suffixText: 'saat',
+                ),
               ),
             ],
           ),

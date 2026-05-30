@@ -17,7 +17,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-  final _weeklyHoursCtrl = TextEditingController(text: '14');
 
   bool _loading = false;
   bool _passObscure = true;
@@ -31,7 +30,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
-    _weeklyHoursCtrl.dispose();
     super.dispose();
   }
 
@@ -39,11 +37,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final hours = int.tryParse(_weeklyHoursCtrl.text.trim()) ?? 14;
       final token = await ApiClient.register(
         _emailCtrl.text.trim(),
         _passCtrl.text.trim(),
-        weeklyStudyHours: hours.clamp(1, 70),
       );
       await ApiClient.saveToken(token);
       if (!mounted) return;
@@ -292,22 +288,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   validator: (v) =>
                       v != _passCtrl.text ? 'Şifreler eşleşmiyor' : null,
-                ),
-                const SizedBox(height: 14),
-                _field(
-                  ctrl: _weeklyHoursCtrl,
-                  label: 'Haftalık çalışma saati',
-                  icon: Icons.schedule_outlined,
-                  type: TextInputType.number,
-                  palette: p,
-                  hint: 'Varsayılan: 14 saat',
-                  validator: (v) {
-                    final n = int.tryParse(v ?? '');
-                    if (n == null || n < 1 || n > 70) {
-                      return '1 ile 70 arasında bir değer girin';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 28),
                 FilledButton(
