@@ -57,6 +57,8 @@ class _InsightsScreenState extends State<InsightsScreen>
         ApiClient.getLessons(),
       ]);
       final feedbackData = results[0] as Map<String, dynamic>;
+debugPrint('[INSIGHTS] aiMessage=${feedbackData['aiMessage']}');
+debugPrint('[INSIGHTS] keys=${feedbackData.keys.toList()}');
       final rawLessons = results[1] as List<dynamic>;
       var multiplierStr = '1.00';
       final hasOverload = (feedbackData['messages'] as List? ?? []).any(
@@ -285,7 +287,8 @@ class _InsightsScreenState extends State<InsightsScreen>
     final consistency = (p['consistencyScore'] as num? ?? 0).toDouble();
     final sweet = (p['sweetSpotBlocks'] as num? ?? 2).toDouble();
     final stressExam = (p['stressNearExam'] as num? ?? 3).toDouble();
-    final fatigue = (p['avgFatigue7d'] as num? ?? 3).toDouble();
+    final goodSleepComp = (p['goodSleepCompletionRate'] as num?)?.toDouble();
+    final badSleepComp = (p['badSleepCompletionRate'] as num?)?.toDouble();
     final submissions = (p['totalSubmissions'] as num? ?? 0).toInt();
 
     // Parse day-of-week rates
@@ -414,9 +417,11 @@ class _InsightsScreenState extends State<InsightsScreen>
                   ),
                   Expanded(
                     child: _ProfileStat(
-                      label: 'Fatigue avg',
-                      value: fatigue.toStringAsFixed(1),
-                      sub: 'this week',
+                      label: 'Sleep impact',
+                      value: (goodSleepComp != null && badSleepComp != null)
+                          ? '+${((goodSleepComp - badSleepComp) * 100).round()}%'
+                          : '—',
+                      sub: 'on good sleep',
                       icon: Icons.bedtime_outlined,
                     ),
                   ),
@@ -430,39 +435,56 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Widget _buildTrends() {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
-        child: Row(
-          children: [
-            Expanded(
-              child: _TrendCard(
-                label: 'Multiplier',
-                value: _multiplierStr,
-                sub: 'last week',
-              ),
+  // Completion rengi
+  final compRate = double.tryParse(_completionStr.replaceAll('%', '')) ?? 0;
+  final compColor = compRate >= 80 ? _kSuccess
+      : compRate >= 55 ? _kWarning
+      : _completionStr == '—' ? null
+      : _kDanger;
+
+  // Stress rengi (ters skala — yüksek stres kötü)
+  final stressVal = double.tryParse(_stressStr) ?? 0;
+  final stressColor = stressVal <= 2.5 ? _kSuccess
+      : stressVal <= 3.5 ? _kWarning
+      : _stressStr == '—' ? null
+      : _kDanger;
+
+  return SliverToBoxAdapter(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TrendCard(
+              label: 'Multiplier',
+              value: _multiplierStr,
+              sub: 'last week',
+              valueColor: _multiplierStr == '0.85' ? _kWarning : null,
             ),
-            SizedBox(width: 8),
-            Expanded(
-              child: _TrendCard(
-                label: 'Completion',
-                value: _completionStr,
-                sub: 'last 7 days',
-              ),
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: _TrendCard(
+              label: 'Completion',
+              value: _completionStr,
+              sub: 'last 7 days',
+              valueColor: compColor,
             ),
-            SizedBox(width: 8),
-            Expanded(
-              child: _TrendCard(
-                label: 'Stress avg',
-                value: _stressStr,
-                sub: 'this week',
-              ),
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: _TrendCard(
+              label: 'Stress avg',
+              value: _stressStr,
+              sub: 'this week',
+              valueColor: stressColor,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAiMessage() {
     return SliverToBoxAdapter(
@@ -510,7 +532,7 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Widget _buildMessages() {
-    if (_messages.isEmpty) {
+    if (_messages.isEmpty && _aiMessage.isEmpty) {
       return SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.all(40),
@@ -531,11 +553,11 @@ class _InsightsScreenState extends State<InsightsScreen>
 
     final today = AppTime.now().toIso8601String().substring(0, 10);
     final todayMsgs = _messages.where((m) {
-      final ts = m['createdAt']?.toString() ?? m['ts']?.toString() ?? '';
+      final ts = m['triggeredAt']?.toString() ?? m['createdAt']?.toString() ?? m['ts']?.toString() ?? '';
       return ts.startsWith(today);
     }).toList();
     final earlierMsgs = _messages.where((m) {
-      final ts = m['createdAt']?.toString() ?? m['ts']?.toString() ?? '';
+      final ts = m['triggeredAt']?.toString() ?? m['createdAt']?.toString() ?? m['ts']?.toString() ?? '';
       return !ts.startsWith(today);
     }).toList();
 
@@ -596,11 +618,13 @@ class _TrendCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.sub,
+    this.valueColor,
   });
 
   final String label;
   final String value;
   final String sub;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -619,7 +643,7 @@ class _TrendCard extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: kText1,
+              color: valueColor ?? kText1,
               fontSize: 20,
               fontWeight: FontWeight.w700,
             ),
@@ -669,7 +693,7 @@ class _MessageCardState extends State<_MessageCard> {
     setState(() { _insightSaving = true; _insightSelected = answer; });
     try {
       await ApiClient.saveInsightAnswer(
-        questionType: _iq['questionType'] as String,
+        questionType: _iq['type'] as String,
         answer: answer,
         lessonId: (_iq['lessonId'] as num?)?.toInt(),
       );
@@ -748,11 +772,13 @@ class _MessageCardState extends State<_MessageCard> {
         widget.message['suggestion']?.toString();
     final cta = widget.message['cta']?.toString();
 
-    final (color, icon, bg) = switch (type) {
-      'critical' => (_kDanger, Icons.warning_amber_rounded, _kDanger.withAlpha(30)),
-      'warning'  => (_kWarning, Icons.local_fire_department_outlined, _kWarning.withAlpha(30)),
-      'positive' => (_kSuccess, Icons.check_circle_outline, _kSuccess.withAlpha(30)),
-      _ => (kAccent, Icons.info_outline, kAccent.withAlpha(30)),
+    final category = widget.message['category']?.toString() ?? 'daily';
+
+    final (color, icon, bg) = switch (category) {
+      'critical'      => (_kDanger,  Icons.warning_amber_rounded,         _kDanger.withAlpha(30)),
+      'semi_frequent' => (_kWarning, Icons.local_fire_department_outlined, _kWarning.withAlpha(30)),
+      'weekly'        => (kAccent,   Icons.info_outline,                   kAccent.withAlpha(30)),
+      _               => (kText2,    Icons.info_outline,                   kBorder.withAlpha(60)),
     };
 
     return Padding(
