@@ -12,6 +12,17 @@ class ApiClient {
   static String? _cachedToken;
   static bool _tokenLoaded = false;
 
+  // feedback messages için kısa süreli cache (aynı oturumda TodayScreen + InsightsScreen
+  // aynı endpoint'i çağırır; ikinci çağrı cooldown'a çarpar ve boş döner)
+  static Map<String, dynamic>? _feedbackCache;
+  static DateTime? _feedbackCacheAt;
+  static const _feedbackCacheTtl = Duration(minutes: 5);
+
+  static void invalidateFeedbackCache() {
+    _feedbackCache = null;
+    _feedbackCacheAt = null;
+  }
+
   /// Platforma göre uygun base URL'yi döndürür.
   static String get _base {
     if (_apiBaseFromEnv.isNotEmpty) return _apiBaseFromEnv;
@@ -44,6 +55,7 @@ class ApiClient {
     await prefs.remove(_tokenKey);
     _cachedToken = null;
     _tokenLoaded = true;
+    invalidateFeedbackCache();
   }
 
   // ── Ortak yardımcılar ───────────────────────────────────────────────────────
@@ -422,7 +434,9 @@ class ApiClient {
         'lessonFeedbacks': lessonFeedbacks,
       }),
     );
-    return Map<String, dynamic>.from(await _handle(res) as Map);
+    final result = Map<String, dynamic>.from(await _handle(res) as Map);
+    invalidateFeedbackCache();
+    return result;
   }
 
   static Future<bool> getWeeklyFeedbackStatus() async {
@@ -437,7 +451,15 @@ class ApiClient {
 
   /// Sistem feedback mesajlarını ve AI mesajını getirir (GET /system-feedback/message).
   /// Yanıt: { messages: [...], aiMessage: "..." }
+  /// 5 dakikalık cache: TodayScreen ve InsightsScreen aynı endpoint'i çağırır;
+  /// ikinci çağrı backend cooldown'una çarpmadan cache'den döner.
   static Future<Map<String, dynamic>> getFeedbackMessages() async {
+    final now = DateTime.now();
+    if (_feedbackCache != null &&
+        _feedbackCacheAt != null &&
+        now.difference(_feedbackCacheAt!) < _feedbackCacheTtl) {
+      return _feedbackCache!;
+    }
     final h = await _authHeaders();
     final res = await http.get(
       Uri.parse('$_base/system-feedback/message'),
@@ -445,8 +467,12 @@ class ApiClient {
     );
     final data = await _handle(res);
     // Backend düz liste dönerse (eski format) uyumlu hale getir
-    if (data is List) return {'messages': data, 'aiMessage': ''};
-    return Map<String, dynamic>.from(data as Map);
+    final result = data is List
+        ? {'messages': data, 'aiMessage': ''}
+        : Map<String, dynamic>.from(data as Map);
+    _feedbackCache = result;
+    _feedbackCacheAt = now;
+    return result;
   }
 
   /// Insight sorusuna verilen cevabı kaydeder (POST /system-feedback/insight-answer)

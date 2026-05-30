@@ -28,6 +28,7 @@ class _InsightsScreenState extends State<InsightsScreen>
   List<dynamic> _messages = [];
   List<Lesson> _lessons = [];
   bool _loading = true;
+  bool _loadInFlight = false;
   String _multiplierStr = '—';
   String _completionStr = '—';
   Map<String, dynamic>? _profile;
@@ -42,8 +43,10 @@ class _InsightsScreenState extends State<InsightsScreen>
     _load();
   }
 
-  Future<void> _load() async {
-    debugPrint('_load called');
+  Future<void> _load({bool force = false}) async {
+    if (_loadInFlight) return;
+    _loadInFlight = true;
+    if (force) ApiClient.invalidateFeedbackCache();
     setState(() {
       _loading = true;
       _weeklyStatusLoading = true;
@@ -94,6 +97,8 @@ debugPrint('[INSIGHTS] keys=${feedbackData.keys.toList()}');
       debugPrint('[INSIGHTS] $st');
       if (!mounted) return;
       setState(() => _loading = false);
+    } finally {
+      _loadInFlight = false;
     }
   }
 
@@ -147,7 +152,7 @@ debugPrint('[INSIGHTS] keys=${feedbackData.keys.toList()}');
         child: _loading
             ? Center(child: CircularProgressIndicator(color: kAccent))
             : RefreshIndicator(
-                onRefresh: _load,
+                onRefresh: () => _load(force: true),
                 color: kAccent,
                 backgroundColor: kSurface,
                 child: Center(
