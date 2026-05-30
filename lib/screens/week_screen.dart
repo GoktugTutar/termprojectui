@@ -488,37 +488,48 @@ class _WeekScreenState extends State<WeekScreen>
     if (!mounted) return;
     final fb = data['planFeedback'] as Map<String, dynamic>?;
     if (fb == null) return;
-    final type    = fb['type']?.toString() ?? 'info';
+    final type = fb['type']?.toString() ?? 'info';
     final message = fb['message']?.toString() ?? '';
     if (message.isEmpty) return;
 
     final (color, icon) = switch (type) {
-      'warning'  => (const Color(0xFFF2B14A), Icons.warning_amber_rounded),
-      'positive' => (const Color(0xFF4CAF50), Icons.check_circle_outline_rounded),
-      _          => (kAccent,                 Icons.info_outline_rounded),
+      'warning' => (const Color(0xFFF2B14A), Icons.warning_amber_rounded),
+      'positive' => (
+        const Color(0xFF4CAF50),
+        Icons.check_circle_outline_rounded,
+      ),
+      _ => (kAccent, Icons.info_outline_rounded),
     };
 
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white,
+                    height: 1.4,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 6),
         ),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 6),
-      ));
+      );
   }
 
   /// unplacedLessonIds varsa hangi derslerin sığmadığını snackbar ile bildirir.
@@ -545,12 +556,6 @@ class _WeekScreenState extends State<WeekScreen>
         duration: const Duration(seconds: 5),
       ),
     );
-  }
-
-  /// "HH:MM" formatını dakikaya çevirir (çakışma kontrolü için).
-  int _parseTimeToMin(String t) {
-    final parts = t.split(':').map(int.parse).toList();
-    return parts[0] * 60 + parts[1];
   }
 
   List<String> get _weekDates {
@@ -1127,44 +1132,32 @@ class _WeekScreenState extends State<WeekScreen>
   }) async {
     final slotDate = result['date'] as String;
     final isRoutine = result['type'] == 'routineBusy';
-
-    if (isRoutine) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              updated
-                  ? 'Routine busy time updated. Recalculating the schedule...'
-                  : 'Routine busy time added. Recalculating the schedule...',
-            ),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-      await _recalculate(fromDate: slotDate);
-      return;
-    }
-
-    final slotStart = _parseTimeToMin(result['startTime'] as String);
-    final slotEnd = _parseTimeToMin(result['endTime'] as String);
-    final hasConflict =
-        _plan?.blocks.any((b) {
-          if (b.date != slotDate) return false;
-          final bStart = _parseTimeToMin(b.startTime);
-          final bEnd = _parseTimeToMin(b.endTime);
-          return slotStart < bEnd && slotEnd > bStart;
+    final slotStart = _timeToMin(result['startTime'] as String);
+    final slotEnd = _timeToMin(result['endTime'] as String);
+    final hasLessonConflict =
+        _plan?.blocksForDate(slotDate).any((block) {
+          final blockStart = _timeToMin(block.startTime);
+          final blockEnd = _timeToMin(block.endTime);
+          return slotStart < blockEnd && slotEnd > blockStart;
         }) ??
         false;
 
-    if (hasConflict && mounted) {
+    if (mounted) {
+      final kind = isRoutine ? 'Routine busy time' : 'Busy time';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Conflict with a lesson block detected. Recalculating the schedule...',
+            hasLessonConflict
+                ? (updated
+                      ? '$kind updated. Recalculating the schedule...'
+                      : '$kind added. Recalculating the schedule...')
+                : (updated ? '$kind updated.' : '$kind added.'),
           ),
           duration: Duration(seconds: 3),
         ),
       );
+    }
+    if (hasLessonConflict) {
       await _recalculate(fromDate: slotDate);
     } else {
       await _load();
@@ -2214,6 +2207,104 @@ class _DayColumn extends StatelessWidget {
   /// İki zaman arasındaki piksel yüksekliği.
   double _minToHeight(int sm, int em) => (em - sm) * _slotH / 30;
 
+  bool _busyOverlapsAnyBlock(_BusySlot busy) {
+    final busyStart = _timeToMin(busy.startTime);
+    final busyEnd = _timeToMin(busy.endTime);
+    return blocks.any((block) {
+      final blockStart = _timeToMin(block.startTime);
+      final blockEnd = _timeToMin(block.endTime);
+      return busyStart < blockEnd && busyEnd > blockStart;
+    });
+  }
+
+  Widget _busySlotLayer(_BusySlot busy, {bool overlay = false}) {
+    final sm = _timeToMin(busy.startTime);
+    final em = _timeToMin(busy.endTime);
+    if (sm < _startHour * 60 || em > _endHour * 60 || sm >= em) {
+      return SizedBox.shrink();
+    }
+
+    final top = _minToTop(sm);
+    final height = _minToHeight(sm, em);
+    final slotColor = busy.isRoutine
+        ? _fatigueColor(busy.fatigueLevel)
+        : _kWarning;
+    final bgAlpha = overlay
+        ? (appTheme.isLight ? 82 : 96)
+        : busy.isRoutine
+        ? (appTheme.isLight ? 58 : 72)
+        : (appTheme.isLight ? 28 : 42);
+    final borderAlpha = overlay
+        ? 235
+        : busy.isRoutine
+        ? 210
+        : 160;
+    final stripeAlpha = overlay
+        ? 84
+        : busy.isRoutine
+        ? 58
+        : 26;
+    final labelColor = overlay || busy.isRoutine ? kText1 : kText2;
+
+    return Positioned(
+      top: top,
+      left: 1,
+      right: 1,
+      height: height,
+      child: IgnorePointer(
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: slotColor.withAlpha(borderAlpha),
+              width: overlay
+                  ? 1.1
+                  : busy.isRoutine
+                  ? 0.9
+                  : 0.5,
+            ),
+            color: slotColor.withAlpha(bgAlpha),
+          ),
+          child: CustomPaint(
+            painter: _StripedPainter(slotColor.withAlpha(stripeAlpha)),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(4, 3, 4, 3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: slotColor,
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      Text(
+                        busy.isRoutine ? 'ROUTINE' : 'BUSY',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                          color: labelColor,
+                          letterSpacing: 0.04,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _blockNameOverlay(ScheduledBlock block) {
     final sm = _timeToMin(block.startTime);
     final em = _timeToMin(block.endTime);
@@ -2312,75 +2403,7 @@ class _DayColumn extends StatelessWidget {
             ),
           ),
           // Busy slotlar: çapraz çizgili + kesikli border + yorgunluk noktası
-          ...busySlots.map((b) {
-            final sm = _timeToMin(b.startTime);
-            final em = _timeToMin(b.endTime);
-            if (sm < _startHour * 60 || em > _endHour * 60 || sm >= em) {
-              return SizedBox.shrink();
-            }
-            final top = _minToTop(sm);
-            final height = _minToHeight(sm, em);
-            final dotColor = _fatigueColor(b.fatigueLevel);
-            final bgAlpha = b.isRoutine
-                ? (appTheme.isLight ? 58 : 72)
-                : (appTheme.isLight ? 28 : 42);
-            final borderAlpha = b.isRoutine ? 210 : 160;
-            final stripeAlpha = b.isRoutine ? 58 : 26;
-            final labelColor = b.isRoutine ? kText1 : kText2;
-            return Positioned(
-              top: top,
-              left: 1,
-              right: 1,
-              height: height,
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: b.isRoutine
-                        ? dotColor.withAlpha(borderAlpha)
-                        : kBorder.withAlpha(borderAlpha),
-                    width: b.isRoutine ? 0.9 : 0.5,
-                  ),
-                  color: dotColor.withAlpha(bgAlpha),
-                ),
-                child: CustomPaint(
-                  painter: _StripedPainter(dotColor.withAlpha(stripeAlpha)),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(4, 3, 4, 3),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: dotColor,
-                              ),
-                            ),
-                            SizedBox(width: 3),
-                            Text(
-                              b.isRoutine ? 'ROUTINE' : 'BUSY',
-                              style: TextStyle(
-                                fontSize: 8,
-                                fontWeight: FontWeight.w800,
-                                color: labelColor,
-                                letterSpacing: 0.04,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
+          ...busySlots.map(_busySlotLayer),
           // Planlanmış çalışma blokları
           ...blocks.map((b) {
             final sm = _timeToMin(b.startTime);
@@ -2434,6 +2457,10 @@ class _DayColumn extends StatelessWidget {
               ),
             );
           }),
+          // Dersle çakışan busy slotlar üst katmanda da görünür kalır.
+          ...busySlots
+              .where(_busyOverlapsAnyBlock)
+              .map((busy) => _busySlotLayer(busy, overlay: true)),
           // Lesson adları her çalışma slotunun en üstünde ayrı katman olarak görünür.
           ...blocks.map(_blockNameOverlay),
           // Now çizgisi (sadece bugün)

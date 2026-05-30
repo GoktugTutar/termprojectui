@@ -152,6 +152,9 @@ class _TodayScreenState extends State<TodayScreen>
   bool _isLastDayOfWeek = false;
   bool _weeklyFeedbackPromptOpen = false;
   bool _sleepAsked = true;
+  bool _checklistSubmitting = false;
+  int _checklistStressLevel = 3;
+  int _checklistSleepLevel = 3;
   List<
     ({
       String lessonName,
@@ -521,11 +524,6 @@ class _TodayScreenState extends State<TodayScreen>
     return _todayBlocks.where((b) => seen.add(b.lessonId)).toList();
   }
 
-  List<ScheduledBlock> _primaryBlocksForDate(String date) {
-    final seen = <int>{};
-    return _blocksForDate(date).where((b) => seen.add(b.lessonId)).toList();
-  }
-
   List<ScheduledBlock> _blocksForDate(String date) =>
       _plan?.blocksForDate(date) ?? [];
 
@@ -567,14 +565,134 @@ class _TodayScreenState extends State<TodayScreen>
       30;
 
   Future<void> _saveTodayChecklist() async {
-    final saved = await _showChecklistSubmitDialog(
-      date: _today,
-      blocks: _todayBlocks,
-      initialStudiedMinutes: _studiedMinutes,
+    if (_checklistSubmitting || _todayChecklistSubmitted) return;
+
+    final wellbeing = await _showChecklistWellbeingDialog();
+    if (wellbeing == null || !mounted) return;
+
+    final uniqueBlocks = _primaryTodayBlocks;
+    final items = uniqueBlocks.map((block) {
+      final planned = (_plannedMinutesForLesson(block.lessonId) / 30).round();
+      final completed = ((_studiedMinutes[block.lessonId] ?? 0) / 30)
+          .round()
+          .clamp(0, planned)
+          .toInt();
+      return {
+        'lessonId': block.lessonId,
+        'plannedBlocks': planned,
+        'completedBlocks': completed,
+        'delayed': completed < planned,
+      };
+    }).toList();
+
+    setState(() => _checklistSubmitting = true);
+    try {
+      await ApiClient.submitChecklist(
+        date: _today,
+        stressLevel: wellbeing.stress,
+        fatigueLevel: 3,
+        sleptWell: wellbeing.sleep >= 3,
+        items: items,
+      );
+      if (!mounted) return;
+      setState(() {
+        _checklistStressLevel = wellbeing.stress;
+        _checklistSleepLevel = wellbeing.sleep;
+        _todayChecklistSubmitted = true;
+        _sleepAsked = true;
+        _checklistSubmitting = false;
+      });
+      await _markSleepAnswered(_today);
+      if (_isLastDayOfWeek) _maybeShowWeeklyFeedbackPrompt();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _checklistSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: kDanger,
+        ),
+      );
+    }
+  }
+
+  Future<({int stress, int sleep})?> _showChecklistWellbeingDialog() {
+    var stress = _checklistStressLevel;
+    var sleep = _checklistSleepLevel;
+
+    return showDialog<({int stress, int sleep})>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 460),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(18, 16, 18, 18),
+              decoration: _keycapDecoration(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _PanelTitle(
+                        icon: Icons.psychology_alt_rounded,
+                        title: 'Daily check-in',
+                      ),
+                      Spacer(),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: Icon(Icons.close_rounded, color: kText2),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 14),
+                  _ChecklistInlineMeter(
+                    label: 'How was your stress today?',
+                    value: stress,
+                    lowLabel: 'Calm',
+                    highLabel: 'High',
+                    color: kAccent,
+                    onChanged: (value) => setDialogState(() => stress = value),
+                  ),
+                  SizedBox(height: 16),
+                  _ChecklistInlineMeter(
+                    label: 'How was your sleep last night?',
+                    value: sleep,
+                    lowLabel: 'Poor',
+                    highLabel: 'Great',
+                    color: kWarning,
+                    onChanged: (value) => setDialogState(() => sleep = value),
+                  ),
+                  SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(ctx, (stress: stress, sleep: sleep)),
+                      icon: Icon(Icons.check_rounded, size: 18),
+                      label: Text('Continue'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kAccent,
+                        padding: EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
-    if (!saved || !mounted) return;
-    setState(() => _todayChecklistSubmitted = true);
-    if (_isLastDayOfWeek) _maybeShowWeeklyFeedbackPrompt();
   }
 
   String _weeklyFeedbackPromptKey() {
@@ -654,185 +772,6 @@ class _TodayScreenState extends State<TodayScreen>
     _maybeShowWeeklyFeedbackPrompt();
   }
 
-  Future<bool> _showChecklistSubmitDialog({
-    required String date,
-    required List<ScheduledBlock> blocks,
-    Map<int, int>? initialStudiedMinutes,
-  }) async {
-    final uniqueBlocks = _primaryBlocksForDate(date);
-    final completedMap = <int, int>{};
-    for (final block in uniqueBlocks) {
-      final planned = blocks
-          .where((b) => b.lessonId == block.lessonId)
-          .fold(0, (sum, b) => sum + b.blockCount);
-      final minutes = initialStudiedMinutes?[block.lessonId] ?? 0;
-      completedMap[block.lessonId] = (minutes / 30)
-          .round()
-          .clamp(0, planned)
-          .toInt();
-    }
-
-    var saving = false;
-    String? errorMsg;
-    var stressLevel = 3;
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          insetPadding: EdgeInsets.symmetric(horizontal: 32, vertical: 40),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: EdgeInsets.zero,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (uniqueBlocks.isEmpty)
-                      Text(
-                        'No planned lessons',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      )
-                    else
-                      ...uniqueBlocks.map((block) {
-                        final planned = blocks
-                            .where((b) => b.lessonId == block.lessonId)
-                            .fold(0, (sum, b) => sum + b.blockCount);
-                        final completed = completedMap[block.lessonId] ?? 0;
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: 14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                block.lessonName,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                '$completed / $planned blocks completed',
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(210),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              SizedBox(height: 10),
-                              _BatteryBlockSlider(
-                                completed: completed,
-                                planned: planned,
-                                onChanged: (value) => setDialogState(
-                                  () => completedMap[block.lessonId] = value,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    SizedBox(height: 10),
-                    _StressQuestion(
-                      value: stressLevel,
-                      onChanged: (value) =>
-                          setDialogState(() => stressLevel = value),
-                    ),
-                    SizedBox(height: 14),
-                    if (errorMsg != null)
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 10),
-                        child: Text(
-                          errorMsg!,
-                          style: TextStyle(
-                            color: Color(0xFFFF8A8A),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                setDialogState(() {
-                                  saving = true;
-                                  errorMsg = null;
-                                });
-                                final items = uniqueBlocks.map((block) {
-                                  final planned = blocks
-                                      .where(
-                                        (b) => b.lessonId == block.lessonId,
-                                      )
-                                      .fold(0, (sum, b) => sum + b.blockCount);
-                                  final completed =
-                                      completedMap[block.lessonId] ?? 0;
-                                  return {
-                                    'lessonId': block.lessonId,
-                                    'plannedBlocks': planned,
-                                    'completedBlocks': completed,
-                                    'delayed': completed < planned,
-                                  };
-                                }).toList();
-                                try {
-                                  await ApiClient.submitChecklist(
-                                    date: date,
-                                    stressLevel: stressLevel,
-                                    fatigueLevel: 3,
-                                    items: items,
-                                  );
-                                  if (ctx.mounted) Navigator.pop(ctx, true);
-                                } catch (e) {
-                                  if (!ctx.mounted) return;
-                                  setDialogState(() {
-                                    saving = false;
-                                    errorMsg = e.toString().replaceAll(
-                                      'Exception: ',
-                                      '',
-                                    );
-                                  });
-                                }
-                              },
-                        icon: saving
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Icon(Icons.check_rounded, size: 18),
-                        label: Text(saving ? 'Saving...' : 'Save'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          textStyle: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    return result == true;
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -906,6 +845,7 @@ class _TodayScreenState extends State<TodayScreen>
                                           _studiedMinutes[lessonId] ?? 0,
                                       plannedMinutesForLesson:
                                           _plannedMinutesForLesson,
+                                      saving: _checklistSubmitting,
                                       blocksForDate: _blocksForDate,
                                       onMinutesChanged: (lessonId, value) =>
                                           setState(
@@ -988,7 +928,7 @@ class _TodayScreenState extends State<TodayScreen>
                 onClose: () => setState(() => _noticeDismissed = true),
               ),
             ),
-          if (!_sleepAsked)
+          if (!_sleepAsked && _checklistDisabled)
             Positioned(
               top: 14,
               right: 18,
@@ -1089,192 +1029,6 @@ class _TodayScreenState extends State<TodayScreen>
             ),
         ],
       ),
-    );
-  }
-}
-
-class _BatteryBlockSlider extends StatelessWidget {
-  const _BatteryBlockSlider({
-    required this.completed,
-    required this.planned,
-    required this.onChanged,
-  });
-
-  final int completed;
-  final int planned;
-  final ValueChanged<int> onChanged;
-
-  void _updateFromPosition(double dx, double width) {
-    if (planned <= 0 || width <= 0) return;
-    final ratio = (dx / width).clamp(0.0, 1.0);
-    onChanged((ratio * planned).round().clamp(0, planned));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final bodyWidth = width - 18;
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (details) =>
-                    _updateFromPosition(details.localPosition.dx, bodyWidth),
-                onHorizontalDragUpdate: (details) =>
-                    _updateFromPosition(details.localPosition.dx, bodyWidth),
-                child: SizedBox(
-                  height: 86,
-                  child: Stack(
-                    alignment: Alignment.centerLeft,
-                    children: [
-                      Positioned(
-                        left: 0,
-                        right: 18,
-                        child: SizedBox(
-                          height: 70,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Color(0xFF222222),
-                                width: 6,
-                              ),
-                            ),
-                            child: Row(
-                              children: List.generate(planned.clamp(1, 8), (i) {
-                                final filled = i < completed;
-                                return Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 3,
-                                      vertical: 5,
-                                    ),
-                                    child: AnimatedContainer(
-                                      duration: Duration(milliseconds: 130),
-                                      decoration: BoxDecoration(
-                                        color: filled
-                                            ? Color(0xFF18B354)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(3),
-                                        border: filled
-                                            ? null
-                                            : Border.all(
-                                                color: Color(
-                                                  0xFF18B354,
-                                                ).withAlpha(70),
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        child: Container(
-                          width: 22,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF222222),
-                            borderRadius: BorderRadius.horizontal(
-                              right: Radius.circular(4),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        SizedBox(width: 12),
-        SizedBox(
-          width: 54,
-          child: Text(
-            '$completed/$planned',
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StressQuestion extends StatelessWidget {
-  const _StressQuestion({required this.value, required this.onChanged});
-
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'How was your stress today?',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        SizedBox(height: 8),
-        Row(
-          children: List.generate(5, (i) {
-            final level = i + 1;
-            final selected = value == level;
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: i == 4 ? 0 : 7),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => onChanged(level),
-                  child: AnimatedContainer(
-                    duration: Duration(milliseconds: 150),
-                    height: 38,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.white
-                          : Colors.white.withAlpha(20),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withAlpha(selected ? 255 : 120),
-                      ),
-                    ),
-                    child: Text(
-                      '$level',
-                      style: TextStyle(
-                        color: selected ? Color(0xFF1B1B1B) : Colors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
-      ],
     );
   }
 }
@@ -1951,6 +1705,103 @@ class _QuickActionArrow extends StatelessWidget {
   }
 }
 
+class _ChecklistInlineMeter extends StatelessWidget {
+  const _ChecklistInlineMeter({
+    required this.label,
+    required this.value,
+    required this.lowLabel,
+    required this.highLabel,
+    required this.color,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final String lowLabel;
+  final String highLabel;
+  final Color color;
+  final ValueChanged<int>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onChanged != null;
+    return Opacity(
+      opacity: enabled ? 1 : 0.62,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: kText1,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          SizedBox(height: 8),
+          Row(
+            children: List.generate(5, (i) {
+              final level = i + 1;
+              final selected = value == level;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i == 4 ? 0 : 8),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: enabled ? () => onChanged!(level) : null,
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 150),
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? color.withAlpha(220)
+                            : kBorder.withAlpha(55),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected
+                              ? color.withAlpha(235)
+                              : kBorder.withAlpha(160),
+                          width: selected ? 1.5 : 1,
+                        ),
+                        boxShadow: selected
+                            ? [
+                                BoxShadow(
+                                  color: color.withAlpha(70),
+                                  blurRadius: 14,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Text(
+                        '$level',
+                        style: TextStyle(
+                          color: selected ? Colors.white : kText2,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+          SizedBox(height: 5),
+          Row(
+            children: [
+              Text(lowLabel, style: TextStyle(color: kText2, fontSize: 11)),
+              Spacer(),
+              Text(highLabel, style: TextStyle(color: kText2, fontSize: 11)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChecklistPanel extends StatelessWidget {
   const _ChecklistPanel({
     required this.blocks,
@@ -1965,6 +1816,7 @@ class _ChecklistPanel extends StatelessWidget {
     required this.progress,
     required this.studiedMinutesForLesson,
     required this.plannedMinutesForLesson,
+    required this.saving,
     required this.blocksForDate,
     required this.onMinutesChanged,
     required this.onMissingSaved,
@@ -1983,6 +1835,7 @@ class _ChecklistPanel extends StatelessWidget {
   final double progress;
   final int Function(int lessonId) studiedMinutesForLesson;
   final int Function(int lessonId) plannedMinutesForLesson;
+  final bool saving;
   final List<ScheduledBlock> Function(String date) blocksForDate;
   final void Function(int lessonId, int value) onMinutesChanged;
   final Future<void> Function() onMissingSaved;
@@ -2059,12 +1912,27 @@ class _ChecklistPanel extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: submitted ? null : onSaveChecklist,
-              icon: Icon(
-                submitted ? Icons.task_alt_rounded : Icons.check_rounded,
-                size: 18,
+              onPressed: submitted || saving ? null : onSaveChecklist,
+              icon: saving
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      submitted ? Icons.task_alt_rounded : Icons.check_rounded,
+                      size: 18,
+                    ),
+              label: Text(
+                saving
+                    ? 'Submitting...'
+                    : submitted
+                    ? 'Submitted'
+                    : 'Submit',
               ),
-              label: Text(submitted ? 'Submitted' : 'Submit'),
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
                 disabledBackgroundColor: kBorder,
@@ -2425,11 +2293,17 @@ class _ChecklistLessonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final checked = plannedMinutes > 0 && studiedMinutes >= plannedMinutes;
     final color = lessonColor(block.lessonId);
     final blockLabel =
         '${block.blockCount} block${block.blockCount > 1 ? 's' : ''}';
     final durationLabel = _formatMinutes(block.blockCount * 30);
+    final plannedBlocks = (plannedMinutes / 30).round().clamp(0, 24).toInt();
+    final completedBlocks = plannedBlocks == 0
+        ? 0
+        : (studiedMinutes / 30).round().clamp(0, plannedBlocks).toInt();
+    final completionLabel = plannedBlocks == 0
+        ? 'No planned blocks'
+        : '$completedBlocks / $plannedBlocks blocks completed';
 
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
@@ -2451,16 +2325,41 @@ class _ChecklistLessonRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    block.lessonName,
-                    style: TextStyle(
-                      color: kText1,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      height: 1.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          block.lessonName,
+                          style: TextStyle(
+                            color: kText1,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            height: 1.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          completionLabel,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color:
+                                completedBlocks == plannedBlocks &&
+                                    plannedBlocks > 0
+                                ? Color(0xFF18B85B)
+                                : kText2,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 8),
                   Text(
@@ -2474,25 +2373,119 @@ class _ChecklistLessonRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  SizedBox(height: 8),
+                  _ChecklistBlockMeter(
+                    value: completedBlocks,
+                    maxBlocks: plannedBlocks,
+                    enabled: enabled && plannedBlocks > 0,
+                    color: Color(0xFF18B85B),
+                    onChanged: (value) => onMinutesChanged(value * 30),
+                  ),
                 ],
               ),
-            ),
-            SizedBox(width: 12),
-            Checkbox(
-              value: checked,
-              activeColor: kAccent,
-              side: BorderSide(color: kText2, width: 1.4),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(5),
-              ),
-              onChanged: enabled
-                  ? (value) =>
-                        onMinutesChanged(value == true ? plannedMinutes : 0)
-                  : null,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ChecklistBlockMeter extends StatelessWidget {
+  const _ChecklistBlockMeter({
+    required this.value,
+    required this.maxBlocks,
+    required this.enabled,
+    required this.color,
+    required this.onChanged,
+  });
+
+  final int value;
+  final int maxBlocks;
+  final bool enabled;
+  final Color color;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final segmentCount = math.max(1, maxBlocks);
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: enabled ? () => onChanged(0) : null,
+          child: AnimatedContainer(
+            duration: Duration(milliseconds: 150),
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: value == 0 ? kText2.withAlpha(55) : kBorder.withAlpha(45),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: value == 0 ? kText2.withAlpha(140) : kBorder,
+              ),
+            ),
+            child: Text(
+              '0',
+              style: TextStyle(
+                color: value == 0 ? kText1 : kText2,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: Row(
+            children: List.generate(segmentCount, (i) {
+              final level = i + 1;
+              final filled = level <= value;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: i == segmentCount - 1 ? 0 : 7,
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(9),
+                    onTap: enabled ? () => onChanged(level) : null,
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 150),
+                      height: 30,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: filled ? color : kBorder.withAlpha(50),
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: filled ? color.withAlpha(240) : kBorder,
+                          width: filled ? 1.4 : 1,
+                        ),
+                        boxShadow: filled
+                            ? [
+                                BoxShadow(
+                                  color: color.withAlpha(85),
+                                  blurRadius: 13,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Text(
+                        '$level',
+                        style: TextStyle(
+                          color: filled ? Colors.white : kText2,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
     );
   }
 }

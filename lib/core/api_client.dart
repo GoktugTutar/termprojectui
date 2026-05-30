@@ -387,6 +387,7 @@ class ApiClient {
     String? date,
     required int stressLevel,
     required int fatigueLevel,
+    bool? sleptWell,
     required List<Map<String, dynamic>> items,
   }) async {
     final h = await _authHeaders();
@@ -397,6 +398,7 @@ class ApiClient {
         'date': ?date,
         'stressLevel': stressLevel,
         'fatigueLevel': fatigueLevel,
+        'sleptWell': ?sleptWell,
         'items': items,
       }),
     );
