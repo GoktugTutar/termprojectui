@@ -90,8 +90,13 @@ class ApiClient {
     int? gradeLevel,
     double? gpa,
     String? academicTerm,
+    int weeklyStudyHours = 14,
   }) async {
-    final body = <String, dynamic>{'email': email, 'password': password};
+    final body = <String, dynamic>{
+      'email': email,
+      'password': password,
+      'weeklyStudyHours': weeklyStudyHours,
+    };
     if (gradeLevel != null) {
       body['gradeLevel'] = gradeLevel;
     }
