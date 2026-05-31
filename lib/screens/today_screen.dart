@@ -912,7 +912,7 @@ class _TodayScreenState extends State<TodayScreen>
                 onClose: () => setState(() => _noticeDismissed = true),
               ),
             ),
-          if (!_sleepAsked && _checklistDisabled)
+          if (!_sleepAsked)
             Positioned(
               top: 14,
               right: 18,
