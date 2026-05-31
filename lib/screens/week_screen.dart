@@ -175,9 +175,14 @@ class _TopRightWeekNotice extends StatelessWidget {
 }
 
 class WeekScreen extends StatefulWidget {
-  const WeekScreen({super.key, this.reloadSignal = 0});
+  const WeekScreen({
+    super.key,
+    this.reloadSignal = 0,
+    this.fullscreenController,
+  });
 
   final int reloadSignal;
+  final ValueNotifier<bool>? fullscreenController;
 
   @override
   State<WeekScreen> createState() => _WeekScreenState();
@@ -688,6 +693,27 @@ class _WeekScreenState extends State<WeekScreen>
               ],
             ),
           ),
+          if (widget.fullscreenController != null)
+            ValueListenableBuilder<bool>(
+              valueListenable: widget.fullscreenController!,
+              builder: (context, fullscreen, _) => Tooltip(
+                message: fullscreen ? 'Küçült' : 'Büyüt',
+                child: IconButton(
+                  onPressed: () =>
+                      widget.fullscreenController!.value = !fullscreen,
+                  icon: Icon(
+                    fullscreen
+                        ? Icons.close_fullscreen_rounded
+                        : Icons.open_in_full_rounded,
+                    color: kAccent,
+                    size: 18,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(width: 34, height: 34),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -38,6 +38,270 @@ DateTime _localDateOnly(DateTime date) {
   return DateTime(local.year, local.month, local.day);
 }
 
+/// Custom takvim picker dialog
+class _CalendarPickerDialog extends StatefulWidget {
+  final DateTime initialDate;
+
+  const _CalendarPickerDialog({required this.initialDate});
+
+  @override
+  State<_CalendarPickerDialog> createState() => _CalendarPickerDialogState();
+}
+
+class _CalendarPickerDialogState extends State<_CalendarPickerDialog> {
+  late DateTime _selectedDate;
+  late DateTime _displayDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.initialDate;
+    _displayDate = DateTime(widget.initialDate.year, widget.initialDate.month);
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[month - 1];
+  }
+
+  String _getDayName(int dayOfWeek) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    // Dart DateTime.weekday: 1=Monday, 7=Sunday
+    return days[dayOfWeek - 1];
+  }
+
+  String _formatSelectedDate(DateTime date) {
+    const dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final dayName = dayNames[date.weekday - 1];
+    return '$dayName,\n${_getMonthName(date.month)} ${date.day}';
+  }
+
+  List<int> _getDaysInMonth(int year, int month) {
+    final firstDay = DateTime(year, month, 1);
+    final lastDay = DateTime(year, month + 1, 0);
+    final daysInMonth = lastDay.day;
+
+    // Get the starting day of week (1=Monday)
+    final firstDayOfWeek = firstDay.weekday;
+
+    List<int> days = [];
+
+    // Add empty slots for days before the first day
+    for (int i = 1; i < firstDayOfWeek; i++) {
+      days.add(0);
+    }
+
+    // Add all days of the month
+    for (int i = 1; i <= daysInMonth; i++) {
+      days.add(i);
+    }
+
+    return days;
+  }
+
+  void _previousMonth() {
+    setState(() {
+      _displayDate = DateTime(_displayDate.year, _displayDate.month - 1);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _displayDate = DateTime(_displayDate.year, _displayDate.month + 1);
+    });
+  }
+
+  void _selectDate(int day) {
+    if (day > 0) {
+      setState(() {
+        _selectedDate = DateTime(_displayDate.year, _displayDate.month, day);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final days = _getDaysInMonth(_displayDate.year, _displayDate.month);
+    final isCurrentMonth =
+        _displayDate.year == _selectedDate.year &&
+        _displayDate.month == _selectedDate.month;
+
+    return Dialog(
+      backgroundColor: kSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Selected date display
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: kBorder,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Select date',
+                    style: TextStyle(color: kText2, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _formatSelectedDate(_selectedDate),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: kText1,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Month/Year selector with navigation
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: _previousMonth,
+                  icon: Icon(Icons.chevron_left, color: kText1),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      '${_getMonthName(_displayDate.month)} ${_displayDate.year}',
+                      style: TextStyle(
+                        color: kText1,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _nextMonth,
+                  icon: Icon(Icons.chevron_right, color: kText1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Day headers
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                  .map(
+                    (day) => Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: TextStyle(
+                            color: kText2,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 8),
+
+            // Calendar grid
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                childAspectRatio: 1,
+              ),
+              itemCount: days.length,
+              itemBuilder: (context, index) {
+                final day = days[index];
+                final isSelectable = day > 0;
+                final isSelected =
+                    isSelectable && isCurrentMonth && day == _selectedDate.day;
+
+                return GestureDetector(
+                  onTap: isSelectable ? () => _selectDate(day) : null,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected ? kAccent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        day > 0 ? '$day' : '',
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : isSelectable
+                              ? kText1
+                              : kBorder,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+
+            // Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel', style: TextStyle(color: kText2)),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, _selectedDate),
+                  style: FilledButton.styleFrom(backgroundColor: kAccent),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileBusySlot {
   final int dayOfWeek;
   final String startTime;
@@ -298,6 +562,93 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  Future<void> _editLessonExamDate(Lesson lesson, LessonExam? exam) async {
+    final lessonId = int.tryParse(lesson.id);
+    if (lessonId == null) return;
+
+    final parsed = exam == null ? null : DateTime.tryParse(exam.examDate);
+    DateTime selected = parsed == null
+        ? AppTime.now().add(Duration(days: 30))
+        : _localDateOnly(parsed);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: kSurface,
+            title: Text(
+              exam == null ? 'Add exam date' : 'Edit exam date',
+              style: TextStyle(color: kText1, fontWeight: FontWeight.w900),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  lesson.lessonName,
+                  style: TextStyle(
+                    color: kText2,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await showDialog<DateTime>(
+                      context: dialogContext,
+                      builder: (context) =>
+                          _CalendarPickerDialog(initialDate: selected),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => selected = picked);
+                    }
+                  },
+                  icon: Icon(Icons.calendar_today_outlined, size: 16),
+                  label: Text(_dateKey(selected)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kAccent,
+                    side: BorderSide(color: kBorder),
+                    padding: EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text('Cancel', style: TextStyle(color: kText2)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(backgroundColor: kAccent),
+                child: Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (saved != true) return;
+    try {
+      if (exam == null) {
+        await ApiClient.addExam(lessonId, _dateKey(selected));
+      } else {
+        await ApiClient.updateExam(lessonId, exam.id, _dateKey(selected));
+      }
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      _snack(e.toString().replaceAll('Exception: ', ''), error: true);
+    }
+  }
+
   Future<void> _logout() async {
     await ApiClient.clearToken();
     if (!mounted) return;
@@ -413,6 +764,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   _ProfileLessonsPanel(
                     lessons: _lessons,
                     daysToExam: _daysToExam,
+                    onEditExamDate: _editLessonExamDate,
                   ),
                   SizedBox(height: 24),
                   // Preferred study time
@@ -941,10 +1293,15 @@ class _ProfileBusySlotRow extends StatelessWidget {
 }
 
 class _ProfileLessonsPanel extends StatefulWidget {
-  const _ProfileLessonsPanel({required this.lessons, required this.daysToExam});
+  const _ProfileLessonsPanel({
+    required this.lessons,
+    required this.daysToExam,
+    required this.onEditExamDate,
+  });
 
   final List<Lesson> lessons;
   final int? Function(Lesson lesson) daysToExam;
+  final Future<void> Function(Lesson lesson, LessonExam? exam) onEditExamDate;
 
   @override
   State<_ProfileLessonsPanel> createState() => _ProfileLessonsPanelState();
@@ -1346,8 +1703,10 @@ class _ProfileLessonsPanelState extends State<_ProfileLessonsPanel> {
                   return _ProfileLessonRow(
                     lesson: lesson,
                     daysToExam: widget.daysToExam(lesson),
+                    exam: _resultExamForLesson(lesson),
                     grade: _grades[lesson.id],
                     onGradeTap: () => _editGrade(lesson),
+                    onExamTap: (exam) => widget.onEditExamDate(lesson, exam),
                   );
                 },
               ),
@@ -1388,7 +1747,7 @@ const _examFailReasonOptions = [
     'I could not prepare enough',
   ),
   _ExamFailReasonOption(
-    'poor_unlessontanding',
+    'poor_understanding',
     'I studied, but I did not fully understand the topic',
   ),
   _ExamFailReasonOption(
@@ -1448,14 +1807,18 @@ class _ProfileLessonRow extends StatelessWidget {
   const _ProfileLessonRow({
     required this.lesson,
     required this.daysToExam,
+    required this.exam,
     required this.grade,
     required this.onGradeTap,
+    required this.onExamTap,
   });
 
   final Lesson lesson;
   final int? daysToExam;
+  final LessonExam? exam;
   final _LessonGradeEntry? grade;
   final VoidCallback onGradeTap;
+  final ValueChanged<LessonExam?> onExamTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1484,14 +1847,13 @@ class _ProfileLessonRow extends StatelessWidget {
       }
     }
 
-    final examValue = daysToExam == null || lesson.exams.isEmpty
-        ? '—'
-        : lesson.exams.first.dateOnly;
+    final examValue = exam?.dateOnly ?? 'Add';
     final needsMore = lesson.needsMoreTime == 1
         ? '+1'
         : lesson.needsMoreTime == -1
         ? '-1'
         : '0';
+    final totalDelay = lesson.keyfiDelayCount + lesson.zorunluDelayCount;
 
     return Container(
       padding: EdgeInsets.all(16),
@@ -1594,6 +1956,9 @@ class _ProfileLessonRow extends StatelessWidget {
                 icon: Icons.calendar_today_outlined,
                 label: 'Exam',
                 value: examValue,
+                sub: exam == null ? 'tap to set' : 'tap to edit',
+                tone: exam == null ? kAccent : null,
+                onTap: () => onExamTap(exam),
               ),
               _ProfilePico(
                 icon: Icons.workspace_premium_outlined,
@@ -1610,6 +1975,12 @@ class _ProfileLessonRow extends StatelessWidget {
                 icon: Icons.auto_awesome_outlined,
                 label: 'Need more',
                 value: needsMore,
+              ),
+              _ProfilePico(
+                icon: Icons.history_toggle_off_rounded,
+                label: 'Delay',
+                value: '$totalDelay',
+                tone: totalDelay > 0 ? _kWarning : null,
               ),
             ],
           ),
@@ -1740,6 +2111,7 @@ class _ProfilePico extends StatelessWidget {
     required this.value,
     this.sub,
     this.tone,
+    this.onTap,
   });
 
   final IconData icon;
@@ -1747,55 +2119,65 @@ class _ProfilePico extends StatelessWidget {
   final String value;
   final String? sub;
   final Color? tone;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 12, color: kText2),
-              SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label.toUpperCase(),
-                  style: TextStyle(
-                    color: kText2,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 12, color: kText2),
+            SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  color: kText2,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
+            ),
+          ],
+        ),
+        SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            color: tone ?? kText1,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
           ),
-          SizedBox(height: 3),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (sub != null)
           Text(
-            value,
+            sub!,
             style: TextStyle(
-              color: tone ?? kText1,
-              fontSize: 14,
+              color: kAccent,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (sub != null)
-            Text(
-              sub!,
-              style: TextStyle(
-                color: kAccent,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-        ],
+      ],
+    );
+
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: onTap == null ? 0 : 3),
+          child: content,
+        ),
       ),
     );
   }

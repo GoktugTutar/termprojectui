@@ -263,6 +263,20 @@ class ApiClient {
     return Map<String, dynamic>.from(await _handle(res) as Map);
   }
 
+  static Future<Map<String, dynamic>> updateExam(
+    int lessonId,
+    int examId,
+    String examDate,
+  ) async {
+    final h = await _authHeaders();
+    final res = await http.put(
+      Uri.parse('$_base/lesson/$lessonId/exam/$examId'),
+      headers: h,
+      body: json.encode({'examDate': examDate}),
+    );
+    return Map<String, dynamic>.from(await _handle(res) as Map);
+  }
+
   static Future<Map<String, dynamic>> addDeadline(
     int lessonId,
     String deadlineDate, {
@@ -399,7 +413,6 @@ class ApiClient {
     String? date,
     required int stressLevel,
     required int fatigueLevel,
-    bool? sleptWell,
     required List<Map<String, dynamic>> items,
   }) async {
     final h = await _authHeaders();
@@ -410,7 +423,6 @@ class ApiClient {
         'date': ?date,
         'stressLevel': stressLevel,
         'fatigueLevel': fatigueLevel,
-        'sleptWell': ?sleptWell,
         'items': items,
       }),
     );

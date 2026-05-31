@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../core/app_time.dart';
 import '../theme.dart';
@@ -19,6 +20,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _index = 0;
   int _weekReloadSignal = 0;
   bool _aiChatOpen = false;
+  final ValueNotifier<bool> _weekFullscreen = ValueNotifier(false);
   late final List<Widget?> _tabScreens;
 
   static const _destinations = [
@@ -31,8 +33,20 @@ class _MainScaffoldState extends State<MainScaffold> {
   @override
   void initState() {
     super.initState();
+    _weekFullscreen.addListener(_handleWeekFullscreenChanged);
     _tabScreens = List<Widget?>.filled(_destinations.length, null);
     _ensureTabBuilt(0);
+  }
+
+  @override
+  void dispose() {
+    _weekFullscreen.removeListener(_handleWeekFullscreenChanged);
+    _weekFullscreen.dispose();
+    super.dispose();
+  }
+
+  void _handleWeekFullscreenChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -56,6 +70,9 @@ class _MainScaffoldState extends State<MainScaffold> {
                 aiChatOpen: _aiChatOpen,
                 onToggleAiChat: _toggleAiChat,
                 onCloseAiChat: _closeAiChat,
+                contentFullscreenListenable: index == 1
+                    ? _weekFullscreen
+                    : null,
                 child: _tabScreens[index] ?? SizedBox.shrink(),
               );
             }),
@@ -70,8 +87,12 @@ class _MainScaffoldState extends State<MainScaffold> {
       _index = index;
       if (index == 1) {
         _weekReloadSignal++;
-        _tabScreens[1] = WeekScreen(reloadSignal: _weekReloadSignal);
+        _tabScreens[1] = WeekScreen(
+          reloadSignal: _weekReloadSignal,
+          fullscreenController: _weekFullscreen,
+        );
       } else {
+        _weekFullscreen.value = false;
         _ensureTabBuilt(index);
       }
     });
@@ -81,7 +102,10 @@ class _MainScaffoldState extends State<MainScaffold> {
     if (_tabScreens[index] != null) return;
     _tabScreens[index] = switch (index) {
       0 => TodayScreen(onOpenInsights: () => _selectTab(2)),
-      1 => WeekScreen(reloadSignal: _weekReloadSignal),
+      1 => WeekScreen(
+        reloadSignal: _weekReloadSignal,
+        fullscreenController: _weekFullscreen,
+      ),
       2 => InsightsScreen(),
       3 => ProfileScreen(),
       _ => SizedBox.shrink(),
@@ -834,6 +858,7 @@ class _FullScreenFrame extends StatelessWidget {
     required this.aiChatOpen,
     required this.onToggleAiChat,
     required this.onCloseAiChat,
+    this.contentFullscreenListenable,
   });
 
   static const _outerMargin = EdgeInsets.fromLTRB(54, 0, 32, 54);
@@ -846,6 +871,7 @@ class _FullScreenFrame extends StatelessWidget {
   final bool aiChatOpen;
   final VoidCallback onToggleAiChat;
   final VoidCallback onCloseAiChat;
+  final ValueListenable<bool>? contentFullscreenListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -871,6 +897,11 @@ class _FullScreenFrame extends StatelessWidget {
             constraints.maxWidth - outerMargin.right,
             constraints.maxHeight - outerMargin.bottom,
           );
+          final contentFullscreen = contentFullscreenListenable?.value ?? false;
+
+          if (contentFullscreen) {
+            return _FramedPanel(radius: 0, clipTop: false, child: child);
+          }
 
           return Stack(
             children: [

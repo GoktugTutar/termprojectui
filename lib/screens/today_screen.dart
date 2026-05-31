@@ -154,7 +154,6 @@ class _TodayScreenState extends State<TodayScreen>
   bool _sleepAsked = true;
   bool _checklistSubmitting = false;
   int _checklistStressLevel = 3;
-  int _checklistSleepLevel = 3;
   List<
     ({
       String lessonName,
@@ -567,8 +566,8 @@ class _TodayScreenState extends State<TodayScreen>
   Future<void> _saveTodayChecklist() async {
     if (_checklistSubmitting || _todayChecklistSubmitted) return;
 
-    final wellbeing = await _showChecklistWellbeingDialog();
-    if (wellbeing == null || !mounted) return;
+    final stress = await _showChecklistWellbeingDialog();
+    if (stress == null || !mounted) return;
 
     final uniqueBlocks = _primaryTodayBlocks;
     final items = uniqueBlocks.map((block) {
@@ -589,20 +588,16 @@ class _TodayScreenState extends State<TodayScreen>
     try {
       await ApiClient.submitChecklist(
         date: _today,
-        stressLevel: wellbeing.stress,
+        stressLevel: stress,
         fatigueLevel: 3,
-        sleptWell: wellbeing.sleep >= 3,
         items: items,
       );
       if (!mounted) return;
       setState(() {
-        _checklistStressLevel = wellbeing.stress;
-        _checklistSleepLevel = wellbeing.sleep;
+        _checklistStressLevel = stress;
         _todayChecklistSubmitted = true;
-        _sleepAsked = true;
         _checklistSubmitting = false;
       });
-      await _markSleepAnswered(_today);
       if (_isLastDayOfWeek) _maybeShowWeeklyFeedbackPrompt();
     } catch (e) {
       if (!mounted) return;
@@ -616,11 +611,10 @@ class _TodayScreenState extends State<TodayScreen>
     }
   }
 
-  Future<({int stress, int sleep})?> _showChecklistWellbeingDialog() {
+  Future<int?> _showChecklistWellbeingDialog() {
     var stress = _checklistStressLevel;
-    var sleep = _checklistSleepLevel;
 
-    return showDialog<({int stress, int sleep})>(
+    return showDialog<int>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
@@ -660,21 +654,11 @@ class _TodayScreenState extends State<TodayScreen>
                     color: kAccent,
                     onChanged: (value) => setDialogState(() => stress = value),
                   ),
-                  SizedBox(height: 16),
-                  _ChecklistInlineMeter(
-                    label: 'How was your sleep last night?',
-                    value: sleep,
-                    lowLabel: 'Poor',
-                    highLabel: 'Great',
-                    color: kWarning,
-                    onChanged: (value) => setDialogState(() => sleep = value),
-                  ),
                   SizedBox(height: 18),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () =>
-                          Navigator.pop(ctx, (stress: stress, sleep: sleep)),
+                      onPressed: () => Navigator.pop(ctx, stress),
                       icon: Icon(Icons.check_rounded, size: 18),
                       label: Text('Continue'),
                       style: FilledButton.styleFrom(
