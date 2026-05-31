@@ -213,15 +213,19 @@ debugPrint('[INSIGHTS] keys=${feedbackData.keys.toList()}');
   }
 
   Widget _buildCta() {
-    final submitted = _weeklySubmitted;
-    final checking = _weeklyStatusLoading;
-    final cardColor = submitted ? _kSuccess : kAccent;
+  final submitted = _weeklySubmitted;
+  final checking = _weeklyStatusLoading;
+  final isSunday = AppTime.now().weekday == DateTime.sunday;
+  final isEnabled = isSunday && !submitted && !checking;
+  final cardColor = submitted ? _kSuccess : isSunday ? kAccent : kText2;
 
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+  return SliverToBoxAdapter(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Opacity(
+        opacity: isSunday ? 1.0 : 0.4,
         child: GestureDetector(
-          onTap: submitted || checking ? null : _openWeeklySheet,
+          onTap: isEnabled ? _openWeeklySheet : null,
           child: Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -271,21 +275,24 @@ debugPrint('[INSIGHTS] keys=${feedbackData.keys.toList()}');
                             ? 'Checking this week...'
                             : submitted
                             ? 'Bu haftalık gönderdin — multiplier ayarlandı'
-                            : "Tells Step 1 what next week's multiplier should be",
+                            : isSunday
+                            ? "Tells Step 1 what next week's multiplier should be"
+                            : 'Available on Sundays',
                         style: TextStyle(color: kText2, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                if (!submitted && !checking)
+                if (!submitted && !checking && isSunday)
                   Icon(Icons.chevron_right, color: cardColor),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildProfileCard() {
     final p = _profile!;
