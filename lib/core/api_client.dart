@@ -18,9 +18,13 @@ class ApiClient {
   static DateTime? _feedbackCacheAt;
   static const _feedbackCacheTtl = Duration(minutes: 5);
 
+  // Uçuşta istek varsa ikinci çağrı onu bekler (race condition önleme)
+  static Future<Map<String, dynamic>>? _feedbackInFlight;
+
   static void invalidateFeedbackCache() {
     _feedbackCache = null;
     _feedbackCacheAt = null;
+    _feedbackInFlight = null;
   }
 
   /// Platforma göre uygun base URL'yi döndürür.
@@ -463,8 +467,9 @@ class ApiClient {
 
   /// Sistem feedback mesajlarını ve AI mesajını getirir (GET /system-feedback/message).
   /// Yanıt: { messages: [...], aiMessage: "..." }
-  /// 5 dakikalık cache: TodayScreen ve InsightsScreen aynı endpoint'i çağırır;
-  /// ikinci çağrı backend cooldown'una çarpmadan cache'den döner.
+  /// 5 dakikalık cache + in-flight dedup: IndexedStack nedeniyle TodayScreen ve
+  /// InsightsScreen aynı anda çağırır; eşzamanlı ikinci çağrı backend'e gitmez,
+  /// uçuştaki isteği bekler — cooldown tek seferinde yazılır, ikisi de mesajı alır.
   static Future<Map<String, dynamic>> getFeedbackMessages() async {
     final now = DateTime.now();
     if (_feedbackCache != null &&
@@ -472,6 +477,20 @@ class ApiClient {
         now.difference(_feedbackCacheAt!) < _feedbackCacheTtl) {
       return _feedbackCache!;
     }
+    if (_feedbackInFlight != null) return _feedbackInFlight!;
+
+    _feedbackInFlight = _fetchFeedbackMessages();
+    try {
+      final result = await _feedbackInFlight!;
+      _feedbackCache = result;
+      _feedbackCacheAt = now;
+      return result;
+    } finally {
+      _feedbackInFlight = null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> _fetchFeedbackMessages() async {
     final h = await _authHeaders();
     final res = await http.get(
       Uri.parse('$_base/system-feedback/message'),
@@ -479,12 +498,9 @@ class ApiClient {
     );
     final data = await _handle(res);
     // Backend düz liste dönerse (eski format) uyumlu hale getir
-    final result = data is List
+    return data is List
         ? {'messages': data, 'aiMessage': ''}
         : Map<String, dynamic>.from(data as Map);
-    _feedbackCache = result;
-    _feedbackCacheAt = now;
-    return result;
   }
 
   /// Insight sorusuna verilen cevabı kaydeder (POST /system-feedback/insight-answer)
