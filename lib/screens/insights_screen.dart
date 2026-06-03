@@ -342,10 +342,6 @@ debugPrint('[INSIGHTS] keys=${feedbackData.keys.toList()}');
                     ),
                   ),
                   Spacer(),
-                  Text(
-                    '$submissions submissions',
-                    style: TextStyle(color: kText2, fontSize: 11),
-                  ),
                 ],
               ),
               SizedBox(height: 14),
